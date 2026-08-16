@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { Role, AuthMode } from '../../types';
 import {
@@ -41,7 +41,18 @@ const generateStaffId = (role: Role) => {
 };
 
 export const AuthPage: React.FC = () => {
-  const { login, register, resetPassword, authUsers } = useSchool();
+  const { login, register, resetPassword, authUsers, students, marks } = useSchool();
+
+  // Dynamic live metric calculations from recorded entries
+  const enrolledStudentsCount = students ? students.length : 0;
+  const academicPassRate = useMemo(() => {
+    if (!marks || marks.length === 0) return 0;
+    const passedCount = marks.filter((m) => {
+      const score = m.totalScore ?? m.score ?? 0;
+      return score >= 50;
+    }).length;
+    return Math.round((passedCount / marks.length) * 100);
+  }, [marks]);
 
   const [mode, setMode] = useState<AuthMode>('login');
   const [loginType, setLoginType] = useState<'staff' | 'parent'>('staff');
@@ -272,11 +283,15 @@ export const AuthPage: React.FC = () => {
             {/* Quick Metrics */}
             <div className="grid grid-cols-2 gap-3 pt-2">
               <div className="bg-emerald-900/60 backdrop-blur-xs p-3 rounded-xl border border-emerald-700/50">
-                <span className="text-amber-400 font-extrabold text-lg font-['Outfit'] block">1,240+</span>
+                <span className="text-amber-400 font-extrabold text-lg font-['Outfit'] block">
+                  {enrolledStudentsCount.toLocaleString()}
+                </span>
                 <span className="text-[11px] text-emerald-200">Enrolled Students</span>
               </div>
               <div className="bg-emerald-900/60 backdrop-blur-xs p-3 rounded-xl border border-emerald-700/50">
-                <span className="text-amber-400 font-extrabold text-lg font-['Outfit'] block">99.4%</span>
+                <span className="text-amber-400 font-extrabold text-lg font-['Outfit'] block">
+                  {marks && marks.length > 0 ? `${academicPassRate}%` : '0%'}
+                </span>
                 <span className="text-[11px] text-emerald-200">Academic Pass Rate</span>
               </div>
             </div>
