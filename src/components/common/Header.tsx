@@ -18,7 +18,10 @@ import {
   Menu,
   Camera,
   X,
-  Check
+  Check,
+  Cloud,
+  CloudCheck,
+  RefreshCw
 } from 'lucide-react';
 import { StaffPhotoUploader } from './StaffPhotoUploader';
 
@@ -27,6 +30,9 @@ export const Header: React.FC<{ onOpenMobileSidebar?: () => void; onOpenPaystack
   onOpenGateScanner
 }) => {
   const {
+    isSyncing,
+    lastSyncedTime,
+    syncToCloudNow,
     academicYear,
     currentTerm,
     setCurrentTerm,
@@ -105,6 +111,19 @@ export const Header: React.FC<{ onOpenMobileSidebar?: () => void; onOpenPaystack
 
         {/* Term Switcher, Notifications & User Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2.5">
+          {/* Cloud Firestore Persistence Status */}
+          <button
+            onClick={syncToCloudNow}
+            title={isSyncing ? "Syncing with Cloud Firestore..." : `Cloud Firestore Connected. Last synced: ${lastSyncedTime || 'Just now'}. Click to sync now.`}
+            className="flex items-center gap-1.5 bg-emerald-950/70 hover:bg-emerald-950 border border-emerald-700/70 hover:border-emerald-600 px-2 sm:px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-emerald-200 transition-all cursor-pointer"
+          >
+            <Cloud className={`w-3.5 h-3.5 ${isSyncing ? 'text-amber-400 animate-pulse' : 'text-emerald-400'}`} />
+            <span className="hidden lg:inline">
+              {isSyncing ? 'Syncing...' : 'Firestore'}
+            </span>
+            <span className={`w-1.5 h-1.5 rounded-full ${isSyncing ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'}`} />
+          </button>
+
           {/* Term / Academic Year Pill */}
           <div className="hidden xl:flex items-center gap-1.5 bg-emerald-800/80 px-2.5 py-1.5 rounded-lg border border-emerald-700 text-xs">
             <Calendar className="w-3.5 h-3.5 text-amber-400" />

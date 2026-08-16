@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   Student,
   AdmissionApplication,
@@ -57,7 +57,18 @@ import {
   initialCalendarEvents
 } from '../data/seedData';
 
+import {
+  fetchCollectionFromFirestore,
+  batchSaveCollectionToFirestore,
+  saveDocumentToFirestore
+} from '../lib/firestoreService';
+
 interface SchoolContextType {
+  // Cloud Sync Status
+  isSyncing: boolean;
+  lastSyncedTime: string | null;
+  syncToCloudNow: () => Promise<void>;
+
   // Authentication & Session
   currentUser: AuthUser | null;
   isAuthenticated: boolean;
@@ -209,8 +220,12 @@ const STORAGE_PREFIX = 'gwd_fresh_db_v1_';
 function loadStorage<T>(key: string, fallback: T): T {
   try {
     const saved = localStorage.getItem(STORAGE_PREFIX + key);
-    if (saved) {
-      return JSON.parse(saved);
+    if (saved !== null && saved !== undefined && saved !== '') {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(fallback) && !Array.isArray(parsed)) {
+        return fallback;
+      }
+      return parsed;
     }
   } catch (e) {
     console.error(`Failed to load ${key} from storage:`, e);
@@ -235,13 +250,30 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Authentication State
   const [authUsers, setAuthUsers] = useState<AuthUser[]>(() => {
-    const saved = loadStorage('authUsers', initialAuthUsers);
-    const hasDiana = saved.some((u: AuthUser) => u.username === 'diana' || u.name === 'Diana Adu-Boahen');
-    if (!hasDiana) {
-      return initialAuthUsers;
+    const saved = loadStorage<AuthUser[]>('authUsers', initialAuthUsers);
+    const usersMap = new Map<string, AuthUser>();
+
+    // 1. Load initial seeds
+    initialAuthUsers.forEach((u) => {
+      usersMap.set(u.email.toLowerCase(), u);
+      if (u.username) usersMap.set(u.username.toLowerCase(), u);
+    });
+
+    // 2. Merge saved accounts without dropping user additions
+    if (Array.isArray(saved)) {
+      saved.forEach((u) => {
+        if (u && u.email) {
+          usersMap.set(u.email.toLowerCase(), u);
+        }
+        if (u && u.username) {
+          usersMap.set(u.username.toLowerCase(), u);
+        }
+      });
     }
-    return saved.map((u: AuthUser) => {
-      if (u.role === 'Admin' || u.username === 'diana' || u.username === 'grace' || u.email === 'admin@educore.edu.gh') {
+
+    const uniqueUsers = Array.from(new Set(usersMap.values()));
+    return uniqueUsers.map((u: AuthUser) => {
+      if (u.role === 'Admin' || u.username === 'diana' || u.username === 'grace' || u.email === 'admin@educore.edu.gh' || u.email === 'diana@educore.edu.gh') {
         return {
           ...u,
           name: 'Diana Adu-Boahen',
@@ -256,7 +288,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     const saved = loadStorage('currentUser', null);
-    if (saved && (saved.role === 'Admin' || saved.username === 'diana' || saved.username === 'grace' || saved.email === 'admin@educore.edu.gh')) {
+    if (saved && (saved.role === 'Admin' || saved.username === 'diana' || saved.username === 'grace' || saved.email === 'admin@educore.edu.gh' || saved.email === 'diana@educore.edu.gh')) {
       return {
         ...saved,
         name: 'Diana Adu-Boahen',
@@ -325,34 +357,297 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [documents, setDocuments] = useState<DocumentItem[]>(() => loadStorage('documents', initialDocuments));
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => loadStorage('auditLogs', initialAuditLogs));
 
-  // Sync to storage
-  useEffect(() => { saveStorage('authUsers', authUsers); }, [authUsers]);
+  // Sync to storage & Cloud Firestore
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
+  const hasInitializedFromCloud = useRef<boolean>(false);
+
+  // Initial Cloud Load: fetch collections if available on Firestore
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCloudData() {
+      if (hasInitializedFromCloud.current) return;
+      hasInitializedFromCloud.current = true;
+      setIsSyncing(true);
+
+      try {
+        const [
+          cloudStudents,
+          cloudAdmissions,
+          cloudClasses,
+          cloudSubjects,
+          cloudInvoices,
+          cloudPayments,
+          cloudAttendance,
+          cloudFeeStructures,
+          cloudExams,
+          cloudExamSchedules,
+          cloudMarks,
+          cloudTimetable,
+          cloudStaff,
+          cloudPayrolls,
+          cloudReimbursements,
+          cloudBooks,
+          cloudBookIssues,
+          cloudVehicles,
+          cloudRoutes,
+          cloudAnnouncements,
+          cloudCommunicationLogs,
+          cloudDocuments,
+          cloudAuditLogs,
+          cloudAuthUsers,
+          cloudCalendarEvents
+        ] = await Promise.all([
+          fetchCollectionFromFirestore<Student>('students'),
+          fetchCollectionFromFirestore<AdmissionApplication>('admissions'),
+          fetchCollectionFromFirestore<ClassRoom>('classes'),
+          fetchCollectionFromFirestore<Subject>('subjects'),
+          fetchCollectionFromFirestore<Invoice>('invoices'),
+          fetchCollectionFromFirestore<Payment>('payments'),
+          fetchCollectionFromFirestore<AttendanceRecord>('attendance'),
+          fetchCollectionFromFirestore<FeeStructure>('feeStructures'),
+          fetchCollectionFromFirestore<Exam>('exams'),
+          fetchCollectionFromFirestore<ExamSchedule>('examSchedules'),
+          fetchCollectionFromFirestore<MarkEntry>('marks'),
+          fetchCollectionFromFirestore<TimetableEntry>('timetable'),
+          fetchCollectionFromFirestore<StaffMember>('staff'),
+          fetchCollectionFromFirestore<PayrollRecord>('payrolls'),
+          fetchCollectionFromFirestore<Reimbursement>('reimbursements'),
+          fetchCollectionFromFirestore<Book>('books'),
+          fetchCollectionFromFirestore<BookIssue>('bookIssues'),
+          fetchCollectionFromFirestore<Vehicle>('vehicles'),
+          fetchCollectionFromFirestore<TransportRoute>('routes'),
+          fetchCollectionFromFirestore<Announcement>('announcements'),
+          fetchCollectionFromFirestore<CommunicationLog>('communicationLogs'),
+          fetchCollectionFromFirestore<DocumentItem>('documents'),
+          fetchCollectionFromFirestore<AuditLog>('auditLogs'),
+          fetchCollectionFromFirestore<AuthUser>('authUsers'),
+          fetchCollectionFromFirestore<CalendarEvent>('calendarEvents')
+        ]);
+
+        if (!isMounted) return;
+
+        if (cloudStudents.length > 0) setStudents(cloudStudents);
+        if (cloudAdmissions.length > 0) setAdmissions(cloudAdmissions);
+        if (cloudClasses.length > 0) setClasses(cloudClasses);
+        if (cloudSubjects.length > 0) setSubjects(cloudSubjects);
+        if (cloudInvoices.length > 0) setInvoices(cloudInvoices);
+        if (cloudPayments.length > 0) setPayments(cloudPayments);
+        if (cloudAttendance.length > 0) setAttendance(cloudAttendance);
+        if (cloudFeeStructures.length > 0) setFeeStructures(cloudFeeStructures);
+        if (cloudExams.length > 0) setExams(cloudExams);
+        if (cloudExamSchedules.length > 0) setExamSchedules(cloudExamSchedules);
+        if (cloudMarks.length > 0) setMarks(cloudMarks);
+        if (cloudTimetable.length > 0) setTimetable(cloudTimetable);
+        if (cloudStaff.length > 0) setStaff(cloudStaff);
+        if (cloudPayrolls.length > 0) setPayrolls(cloudPayrolls);
+        if (cloudReimbursements.length > 0) setReimbursements(cloudReimbursements);
+        if (cloudBooks.length > 0) setBooks(cloudBooks);
+        if (cloudBookIssues.length > 0) setBookIssues(cloudBookIssues);
+        if (cloudVehicles.length > 0) setVehicles(cloudVehicles);
+        if (cloudRoutes.length > 0) setRoutes(cloudRoutes);
+        if (cloudAnnouncements.length > 0) setAnnouncements(cloudAnnouncements);
+        if (cloudCommunicationLogs.length > 0) setCommunicationLogs(cloudCommunicationLogs);
+        if (cloudDocuments.length > 0) setDocuments(cloudDocuments);
+        if (cloudAuditLogs.length > 0) setAuditLogs(cloudAuditLogs);
+        if (cloudCalendarEvents.length > 0) setCalendarEvents(cloudCalendarEvents);
+
+        if (cloudAuthUsers.length > 0) {
+          setAuthUsers(prev => {
+            const map = new Map<string, AuthUser>();
+            prev.forEach(u => {
+              if (u.email) map.set(u.email.toLowerCase(), u);
+              if (u.username) map.set(u.username.toLowerCase(), u);
+            });
+            cloudAuthUsers.forEach(u => {
+              if (u.email) map.set(u.email.toLowerCase(), u);
+              if (u.username) map.set(u.username.toLowerCase(), u);
+            });
+            return Array.from(new Set(map.values()));
+          });
+        }
+
+        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      } catch (err) {
+        console.error('Firestore initial load error:', err);
+      } finally {
+        if (isMounted) setIsSyncing(false);
+      }
+    }
+
+    loadCloudData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Sync to local storage & background sync to Firestore
+  useEffect(() => {
+    saveStorage('authUsers', authUsers);
+    batchSaveCollectionToFirestore('authUsers', authUsers);
+  }, [authUsers]);
+
   useEffect(() => { saveStorage('currentUser', currentUser); }, [currentUser]);
   useEffect(() => { saveStorage('isAuthenticated', isAuthenticated); }, [isAuthenticated]);
-  useEffect(() => { saveStorage('classes', classes); }, [classes]);
-  useEffect(() => { saveStorage('subjects', subjects); }, [subjects]);
-  useEffect(() => { saveStorage('calendarEvents', calendarEvents); }, [calendarEvents]);
-  useEffect(() => { saveStorage('students', students); }, [students]);
-  useEffect(() => { saveStorage('admissions', admissions); }, [admissions]);
-  useEffect(() => { saveStorage('attendance', attendance); }, [attendance]);
-  useEffect(() => { saveStorage('feeStructures', feeStructures); }, [feeStructures]);
-  useEffect(() => { saveStorage('invoices', invoices); }, [invoices]);
-  useEffect(() => { saveStorage('payments', payments); }, [payments]);
-  useEffect(() => { saveStorage('exams', exams); }, [exams]);
-  useEffect(() => { saveStorage('examSchedules', examSchedules); }, [examSchedules]);
-  useEffect(() => { saveStorage('marks', marks); }, [marks]);
-  useEffect(() => { saveStorage('timetable', timetable); }, [timetable]);
-  useEffect(() => { saveStorage('staff', staff); }, [staff]);
-  useEffect(() => { saveStorage('payrolls', payrolls); }, [payrolls]);
-  useEffect(() => { saveStorage('reimbursements', reimbursements); }, [reimbursements]);
-  useEffect(() => { saveStorage('books', books); }, [books]);
-  useEffect(() => { saveStorage('bookIssues', bookIssues); }, [bookIssues]);
-  useEffect(() => { saveStorage('vehicles', vehicles); }, [vehicles]);
-  useEffect(() => { saveStorage('routes', routes); }, [routes]);
-  useEffect(() => { saveStorage('announcements', announcements); }, [announcements]);
-  useEffect(() => { saveStorage('communicationLogs', communicationLogs); }, [communicationLogs]);
-  useEffect(() => { saveStorage('documents', documents); }, [documents]);
-  useEffect(() => { saveStorage('auditLogs', auditLogs); }, [auditLogs]);
+
+  useEffect(() => {
+    saveStorage('classes', classes);
+    batchSaveCollectionToFirestore('classes', classes);
+  }, [classes]);
+
+  useEffect(() => {
+    saveStorage('subjects', subjects);
+    batchSaveCollectionToFirestore('subjects', subjects);
+  }, [subjects]);
+
+  useEffect(() => {
+    saveStorage('calendarEvents', calendarEvents);
+    batchSaveCollectionToFirestore('calendarEvents', calendarEvents);
+  }, [calendarEvents]);
+
+  useEffect(() => {
+    saveStorage('students', students);
+    batchSaveCollectionToFirestore('students', students);
+  }, [students]);
+
+  useEffect(() => {
+    saveStorage('admissions', admissions);
+    batchSaveCollectionToFirestore('admissions', admissions);
+  }, [admissions]);
+
+  useEffect(() => {
+    saveStorage('attendance', attendance);
+    batchSaveCollectionToFirestore('attendance', attendance);
+  }, [attendance]);
+
+  useEffect(() => {
+    saveStorage('feeStructures', feeStructures);
+    batchSaveCollectionToFirestore('feeStructures', feeStructures);
+  }, [feeStructures]);
+
+  useEffect(() => {
+    saveStorage('invoices', invoices);
+    batchSaveCollectionToFirestore('invoices', invoices);
+  }, [invoices]);
+
+  useEffect(() => {
+    saveStorage('payments', payments);
+    batchSaveCollectionToFirestore('payments', payments);
+  }, [payments]);
+
+  useEffect(() => {
+    saveStorage('exams', exams);
+    batchSaveCollectionToFirestore('exams', exams);
+  }, [exams]);
+
+  useEffect(() => {
+    saveStorage('examSchedules', examSchedules);
+    batchSaveCollectionToFirestore('examSchedules', examSchedules);
+  }, [examSchedules]);
+
+  useEffect(() => {
+    saveStorage('marks', marks);
+    batchSaveCollectionToFirestore('marks', marks);
+  }, [marks]);
+
+  useEffect(() => {
+    saveStorage('timetable', timetable);
+    batchSaveCollectionToFirestore('timetable', timetable);
+  }, [timetable]);
+
+  useEffect(() => {
+    saveStorage('staff', staff);
+    batchSaveCollectionToFirestore('staff', staff);
+  }, [staff]);
+
+  useEffect(() => {
+    saveStorage('payrolls', payrolls);
+    batchSaveCollectionToFirestore('payrolls', payrolls);
+  }, [payrolls]);
+
+  useEffect(() => {
+    saveStorage('reimbursements', reimbursements);
+    batchSaveCollectionToFirestore('reimbursements', reimbursements);
+  }, [reimbursements]);
+
+  useEffect(() => {
+    saveStorage('books', books);
+    batchSaveCollectionToFirestore('books', books);
+  }, [books]);
+
+  useEffect(() => {
+    saveStorage('bookIssues', bookIssues);
+    batchSaveCollectionToFirestore('bookIssues', bookIssues);
+  }, [bookIssues]);
+
+  useEffect(() => {
+    saveStorage('vehicles', vehicles);
+    batchSaveCollectionToFirestore('vehicles', vehicles);
+  }, [vehicles]);
+
+  useEffect(() => {
+    saveStorage('routes', routes);
+    batchSaveCollectionToFirestore('routes', routes);
+  }, [routes]);
+
+  useEffect(() => {
+    saveStorage('announcements', announcements);
+    batchSaveCollectionToFirestore('announcements', announcements);
+  }, [announcements]);
+
+  useEffect(() => {
+    saveStorage('communicationLogs', communicationLogs);
+    batchSaveCollectionToFirestore('communicationLogs', communicationLogs);
+  }, [communicationLogs]);
+
+  useEffect(() => {
+    saveStorage('documents', documents);
+    batchSaveCollectionToFirestore('documents', documents);
+  }, [documents]);
+
+  useEffect(() => {
+    saveStorage('auditLogs', auditLogs);
+    batchSaveCollectionToFirestore('auditLogs', auditLogs);
+  }, [auditLogs]);
+
+  const syncToCloudNow = async () => {
+    setIsSyncing(true);
+    try {
+      await Promise.all([
+        batchSaveCollectionToFirestore('students', students),
+        batchSaveCollectionToFirestore('admissions', admissions),
+        batchSaveCollectionToFirestore('classes', classes),
+        batchSaveCollectionToFirestore('subjects', subjects),
+        batchSaveCollectionToFirestore('invoices', invoices),
+        batchSaveCollectionToFirestore('payments', payments),
+        batchSaveCollectionToFirestore('attendance', attendance),
+        batchSaveCollectionToFirestore('feeStructures', feeStructures),
+        batchSaveCollectionToFirestore('exams', exams),
+        batchSaveCollectionToFirestore('examSchedules', examSchedules),
+        batchSaveCollectionToFirestore('marks', marks),
+        batchSaveCollectionToFirestore('timetable', timetable),
+        batchSaveCollectionToFirestore('staff', staff),
+        batchSaveCollectionToFirestore('payrolls', payrolls),
+        batchSaveCollectionToFirestore('reimbursements', reimbursements),
+        batchSaveCollectionToFirestore('books', books),
+        batchSaveCollectionToFirestore('bookIssues', bookIssues),
+        batchSaveCollectionToFirestore('vehicles', vehicles),
+        batchSaveCollectionToFirestore('routes', routes),
+        batchSaveCollectionToFirestore('announcements', announcements),
+        batchSaveCollectionToFirestore('communicationLogs', communicationLogs),
+        batchSaveCollectionToFirestore('documents', documents),
+        batchSaveCollectionToFirestore('auditLogs', auditLogs),
+        batchSaveCollectionToFirestore('authUsers', authUsers),
+        batchSaveCollectionToFirestore('calendarEvents', calendarEvents)
+      ]);
+      setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    } catch (e) {
+      console.error('Manual Firestore cloud sync failed:', e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const logAuditAction = (action: string, module: string, details: string) => {
     const newLog: AuditLog = {
@@ -365,13 +660,17 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       details,
       ipAddress: '192.168.1.45'
     };
-    setAuditLogs(prev => [newLog, ...prev]);
+    setAuditLogs((prev) => {
+      const updated = [newLog, ...prev];
+      saveStorage('auditLogs', updated);
+      return updated;
+    });
   };
 
   // Auth Operations
   const login = async (identifier: string, password?: string, overrideRole?: Role): Promise<{ success: boolean; message?: string }> => {
     // Simulate brief secure handshake
-    await new Promise(resolve => setTimeout(resolve, 350));
+    await new Promise(resolve => setTimeout(resolve, 250));
 
     const cleanInput = identifier.trim().toLowerCase();
 
@@ -380,60 +679,80 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       s.id.toLowerCase() === cleanInput ||
       s.admissionNo.toLowerCase() === cleanInput ||
       (s.rollNo && s.rollNo.toLowerCase() === cleanInput) ||
-      (cleanInput.startsWith('adm') && s.admissionNo.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanInput.replace(/[^a-z0-9]/g, ''))
+      (cleanInput.startsWith('adm') && s.admissionNo.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanInput.replace(/[^a-z0-9]/g, '')) ||
+      (cleanInput.startsWith('gwd') && s.admissionNo.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanInput.replace(/[^a-z0-9]/g, ''))
     );
 
-    if (matchedStudent) {
+    // Also check pending/reviewed admissions
+    const matchedAdmission = !matchedStudent ? admissions.find(a =>
+      (a.studentNumber && a.studentNumber.toLowerCase() === cleanInput) ||
+      a.applicationNo.toLowerCase() === cleanInput ||
+      (cleanInput.startsWith('adm') && (a.studentNumber || a.applicationNo).toLowerCase().replace(/[^a-z0-9]/g, '') === cleanInput.replace(/[^a-z0-9]/g, '')) ||
+      (cleanInput.startsWith('gwd') && (a.studentNumber || a.applicationNo).toLowerCase().replace(/[^a-z0-9]/g, '') === cleanInput.replace(/[^a-z0-9]/g, ''))
+    ) : null;
+
+    if (matchedStudent || matchedAdmission) {
+      const studentName = matchedStudent ? `${matchedStudent.firstName} ${matchedStudent.lastName}` : matchedAdmission!.applicantName;
+      const guardianPhone = matchedStudent ? matchedStudent.guardianPhone : matchedAdmission!.parentPhone;
+      const guardianName = matchedStudent ? matchedStudent.guardianName : matchedAdmission!.parentName;
+      const guardianEmail = matchedStudent ? matchedStudent.guardianEmail : matchedAdmission!.parentEmail;
+      const studentId = matchedStudent ? matchedStudent.id : matchedAdmission!.id;
+      const admissionNo = matchedStudent ? matchedStudent.admissionNo : (matchedAdmission!.studentNumber || matchedAdmission!.applicationNo);
+
       // Validate Parent Phone number as password
       const normalizePhoneDigits = (str?: string) => (str || '').replace(/[^0-9]/g, '');
       const enteredDigits = normalizePhoneDigits(password);
-      const guardianDigits = normalizePhoneDigits(matchedStudent.guardianPhone);
+      const guardianDigits = normalizePhoneDigits(guardianPhone);
 
       const isValidParentAuth =
         Boolean(password) && (
-          password.trim() === matchedStudent.guardianPhone.trim() ||
+          password!.trim() === guardianPhone.trim() ||
           (enteredDigits.length >= 7 && (
             guardianDigits.endsWith(enteredDigits) ||
             enteredDigits.endsWith(guardianDigits) ||
             guardianDigits === enteredDigits
           )) ||
-          password.trim() === 'password123' ||
-          password.trim() === 'whitedove'
+          password!.trim() === 'password123' ||
+          password!.trim() === 'whitedove'
         );
 
       if (!isValidParentAuth) {
         return {
           success: false,
-          message: `Invalid password. For student ${matchedStudent.firstName} ${matchedStudent.lastName} (${matchedStudent.admissionNo}), please enter your registered guardian phone number (e.g. ${matchedStudent.guardianPhone}).`
+          message: `Invalid password. For student ${studentName} (${admissionNo}), please enter your registered guardian phone number (e.g. ${guardianPhone}).`
         };
       }
 
       const parentUser: AuthUser = {
-        id: `usr-parent-${matchedStudent.id}`,
-        name: matchedStudent.guardianName || `Parent of ${matchedStudent.firstName} ${matchedStudent.lastName}`,
-        username: matchedStudent.admissionNo,
-        password: matchedStudent.guardianPhone,
-        email: matchedStudent.guardianEmail || `parent.${matchedStudent.id}@educore.edu.gh`,
+        id: `usr-parent-${studentId}`,
+        name: guardianName || `Parent of ${studentName}`,
+        username: admissionNo,
+        password: guardianPhone,
+        email: guardianEmail || `parent.${studentId}@educore.edu.gh`,
         role: 'Parent',
-        phone: matchedStudent.guardianPhone,
-        studentId: matchedStudent.id,
+        phone: guardianPhone,
+        studentId: studentId,
         avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
         lastLogin: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' today'
       };
 
       setAuthUsers(prev => {
-        const filtered = prev.filter(u => u.studentId !== matchedStudent.id && u.id !== parentUser.id);
-        return [parentUser, ...filtered];
+        const filtered = prev.filter(u => u.studentId !== studentId && u.id !== parentUser.id);
+        const updated = [parentUser, ...filtered];
+        saveStorage('authUsers', updated);
+        return updated;
       });
 
       setCurrentUser(parentUser);
       setIsAuthenticated(true);
       setActiveRole('Parent');
-      logAuditAction('USER_LOGIN', 'Authentication', `Parent login via Student ID: ${matchedStudent.admissionNo} (${matchedStudent.firstName} ${matchedStudent.lastName})`);
+      saveStorage('currentUser', parentUser);
+      saveStorage('isAuthenticated', true);
+      logAuditAction('USER_LOGIN', 'Authentication', `Parent login via Student ID: ${admissionNo} (${studentName})`);
 
       return {
         success: true,
-        message: `Welcome to Parent Portal, ${parentUser.name}! Viewing profile for ${matchedStudent.firstName} ${matchedStudent.lastName}.`
+        message: `Welcome to Parent Portal, ${parentUser.name}! Viewing profile for ${studentName}.`
       };
     }
 
@@ -507,7 +826,11 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${cleanInput}`,
           lastLogin: 'Just now'
         };
-        setAuthUsers(prev => [matchedUser!, ...prev]);
+        setAuthUsers(prev => {
+          const updated = [matchedUser!, ...prev];
+          saveStorage('authUsers', updated);
+          return updated;
+        });
       }
     }
 
@@ -519,6 +842,8 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentUser(updatedUser);
     setIsAuthenticated(true);
     setActiveRole(updatedUser.role);
+    saveStorage('currentUser', updatedUser);
+    saveStorage('isAuthenticated', true);
     logAuditAction('USER_LOGIN', 'Authentication', `User signed in successfully: ${updatedUser.username || updatedUser.email} [${updatedUser.role}]`);
 
     return { success: true, message: `Welcome back, ${updatedUser.name}!` };
@@ -652,6 +977,8 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     setCurrentUser(null);
     setIsAuthenticated(false);
+    saveStorage('currentUser', null);
+    saveStorage('isAuthenticated', false);
   };
 
   const switchRoleQuick = (role: Role) => {
@@ -666,29 +993,49 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const addClass = (newCls: Omit<ClassRoom, 'id'>) => {
     const id = `cls-${Date.now().toString().slice(-4)}`;
     const cls: ClassRoom = { ...newCls, id };
-    setClasses(prev => [...prev, cls]);
+    setClasses(prev => {
+      const next = [...prev, cls];
+      saveStorage('classes', next);
+      return next;
+    });
     logAuditAction('CLASS_CREATED', 'Classes', `Created class: ${cls.name} (${cls.level}) with capacity of ${cls.capacity} desks and assigned teacher ${cls.classTeacher || 'Unassigned'}`);
   };
 
   const updateClass = (id: string, updated: Partial<ClassRoom>) => {
-    setClasses(prev => prev.map(c => c.id === id ? { ...c, ...updated } : c));
+    setClasses(prev => {
+      const next = prev.map(c => c.id === id ? { ...c, ...updated } : c);
+      saveStorage('classes', next);
+      return next;
+    });
     logAuditAction('CLASS_UPDATED', 'Classes', `Updated class ID: ${id}`);
   };
 
   const deleteClass = (id: string) => {
     const target = classes.find(c => c.id === id);
-    setClasses(prev => prev.filter(c => c.id !== id));
+    setClasses(prev => {
+      const next = prev.filter(c => c.id !== id);
+      saveStorage('classes', next);
+      return next;
+    });
     logAuditAction('CLASS_DELETED', 'Classes', `Removed class: ${target?.name || id}`);
   };
 
   const assignClassTeacher = (classId: string, teacherName: string) => {
-    setClasses(prev => prev.map(c => c.id === classId ? { ...c, classTeacher: teacherName } : c));
+    setClasses(prev => {
+      const next = prev.map(c => c.id === classId ? { ...c, classTeacher: teacherName } : c);
+      saveStorage('classes', next);
+      return next;
+    });
     const targetCls = classes.find(c => c.id === classId);
     logAuditAction('CLASS_TEACHER_ASSIGNED', 'Classes', `Assigned teacher ${teacherName} to ${targetCls?.name || classId}`);
   };
 
   const updateClassCapacity = (classId: string, capacity: number) => {
-    setClasses(prev => prev.map(c => c.id === classId ? { ...c, capacity: Math.max(0, capacity) } : c));
+    setClasses(prev => {
+      const next = prev.map(c => c.id === classId ? { ...c, capacity: Math.max(0, capacity) } : c);
+      saveStorage('classes', next);
+      return next;
+    });
     const targetCls = classes.find(c => c.id === classId);
     logAuditAction('CLASS_CAPACITY_UPDATED', 'Classes', `Updated desk capacity for ${targetCls?.name || classId} to ${capacity} desks`);
   };
@@ -697,12 +1044,20 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const addSubject = (newSubj: Omit<Subject, 'id'>) => {
     const id = `subj-${Date.now().toString().slice(-4)}`;
     const subj: Subject = { ...newSubj, id };
-    setSubjects(prev => [...prev, subj]);
+    setSubjects(prev => {
+      const next = [...prev, subj];
+      saveStorage('subjects', next);
+      return next;
+    });
     logAuditAction('SUBJECT_CREATED', 'Subjects', `Created subject: ${subj.name} (${subj.code})`);
   };
 
   const updateSubject = (id: string, updated: Partial<Subject>) => {
-    setSubjects(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s));
+    setSubjects(prev => {
+      const next = prev.map(s => s.id === id ? { ...s, ...updated } : s);
+      saveStorage('subjects', next);
+      return next;
+    });
     logAuditAction('SUBJECT_UPDATED', 'Subjects', `Updated subject ID: ${id}`);
   };
 
@@ -710,13 +1065,21 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const addCalendarEvent = (newEvent: Omit<CalendarEvent, 'id'>) => {
     const id = `ev-${Date.now().toString().slice(-4)}`;
     const event: CalendarEvent = { ...newEvent, id };
-    setCalendarEvents(prev => [event, ...prev]);
+    setCalendarEvents(prev => {
+      const next = [event, ...prev];
+      saveStorage('calendarEvents', next);
+      return next;
+    });
     logAuditAction('CALENDAR_EVENT_ADDED', 'Calendar', `Added calendar event: ${event.title}`);
   };
 
   const deleteCalendarEvent = (id: string) => {
     const ev = calendarEvents.find(e => e.id === id);
-    setCalendarEvents(prev => prev.filter(e => e.id !== id));
+    setCalendarEvents(prev => {
+      const next = prev.filter(e => e.id !== id);
+      saveStorage('calendarEvents', next);
+      return next;
+    });
     logAuditAction('CALENDAR_EVENT_DELETED', 'Calendar', `Removed event: ${ev?.title}`);
   };
 
@@ -756,18 +1119,69 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       joinedDate: newStd.enrollmentDate || new Date().toISOString().split('T')[0],
       enrollmentDate: newStd.enrollmentDate || new Date().toISOString().split('T')[0]
     };
-    setStudents(prev => [student, ...prev]);
+    
+    // Save student synchronously
+    setStudents(prev => {
+      const updated = [student, ...prev];
+      saveStorage('students', updated);
+      return updated;
+    });
+
+    // Auto-create / update Parent account in authUsers for instant parent portal login
+    if (student.guardianPhone) {
+      const parentUser: AuthUser = {
+        id: `usr-parent-${student.id}`,
+        name: student.guardianName || `Parent of ${student.firstName} ${student.lastName}`,
+        username: student.admissionNo,
+        password: student.guardianPhone,
+        email: student.guardianEmail || `parent.${student.id}@educore.edu.gh`,
+        role: 'Parent',
+        phone: student.guardianPhone,
+        studentId: student.id,
+        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        lastLogin: 'Never'
+      };
+      setAuthUsers(prev => {
+        const filtered = prev.filter(u => u.studentId !== student.id && u.username !== student.admissionNo);
+        const updated = [parentUser, ...filtered];
+        saveStorage('authUsers', updated);
+        return updated;
+      });
+    }
+
+    // Update class enrolledCount
+    if (student.className) {
+      setClasses(prev => {
+        const updated = prev.map(c => {
+          if (c.name.toLowerCase() === student.className.toLowerCase() || c.id === student.classId) {
+            return { ...c, enrolledCount: (c.enrolledCount || 0) + 1 };
+          }
+          return c;
+        });
+        saveStorage('classes', updated);
+        return updated;
+      });
+    }
+
     logAuditAction('STUDENT_ENROLLED', 'Students', `Enrolled student: ${student.firstName} ${student.lastName} (${admissionNo})`);
   };
 
   const updateStudent = (id: string, updated: Partial<Student>) => {
-    setStudents(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s));
+    setStudents(prev => {
+      const next = prev.map(s => s.id === id ? { ...s, ...updated } : s);
+      saveStorage('students', next);
+      return next;
+    });
     logAuditAction('STUDENT_UPDATED', 'Students', `Updated details for student ID: ${id}`);
   };
 
   const deleteStudent = (id: string) => {
     const std = students.find(s => s.id === id);
-    setStudents(prev => prev.filter(s => s.id !== id));
+    setStudents(prev => {
+      const next = prev.filter(s => s.id !== id);
+      saveStorage('students', next);
+      return next;
+    });
     logAuditAction('STUDENT_DELETED', 'Students', `Removed student: ${std?.firstName} ${std?.lastName}`);
   };
 
@@ -785,43 +1199,75 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       enrollmentDate: adm.enrollmentDate || new Date().toISOString().split('T')[0],
       submissionDate: new Date().toISOString().split('T')[0]
     };
-    setAdmissions(prev => [application, ...prev]);
+    
+    setAdmissions(prev => {
+      const updated = [application, ...prev];
+      saveStorage('admissions', updated);
+      return updated;
+    });
+
+    // Auto-create parent user account for applicant
+    if (application.parentPhone) {
+      const parentUser: AuthUser = {
+        id: `usr-parent-${application.id}`,
+        name: application.parentName || `Parent of ${application.applicantName}`,
+        username: studentNumber,
+        password: application.parentPhone,
+        email: application.parentEmail || `parent.${application.id}@educore.edu.gh`,
+        role: 'Parent',
+        phone: application.parentPhone,
+        studentId: application.id,
+        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        lastLogin: 'Never'
+      };
+      setAuthUsers(prev => {
+        const filtered = prev.filter(u => u.studentId !== application.id && u.username !== studentNumber);
+        const updated = [parentUser, ...filtered];
+        saveStorage('authUsers', updated);
+        return updated;
+      });
+    }
+
     logAuditAction('ADMISSION_SUBMITTED', 'Admissions', `Received application #${studentNumber} for ${application.applicantName}`);
   };
 
   const updateAdmissionStatus = (id: string, status: AdmissionApplication['status'], notes?: string) => {
-    setAdmissions(prev => prev.map(a => {
-      if (a.id === id) {
-        const updated = { ...a, status, notes: notes || a.notes };
-        // If approved and converted to enrolled, automatically add to students
-        if (status === 'Enrolled') {
-          const names = a.applicantName.trim().split(/\s+/);
-          const firstName = names[0] || 'New';
-          const lastName = names.slice(1).join(' ') || 'Student';
-          addStudent({
-            admissionNo: a.studentNumber || a.applicationNo,
-            firstName,
-            lastName,
-            gender: a.gender,
-            dateOfBirth: a.dateOfBirth,
-            enrollmentDate: a.enrollmentDate || new Date().toISOString().split('T')[0],
-            classId: `cls-${a.appliedClass.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-            className: a.appliedClass,
-            section: 'A',
-            rollNo: `${Math.floor(1 + Math.random() * 45)}`,
-            guardianName: a.parentName,
-            guardianEmail: a.parentEmail,
-            guardianPhone: a.parentPhone,
-            address: a.parentAddress || 'Accra, Ghana',
-            status: 'Active',
-            photoUrl: `https://api.dicebear.com/7.x/micah/svg?seed=${encodeURIComponent(a.applicantName)}`,
-            balanceDue: 0
-          });
+    setAdmissions(prev => {
+      const next = prev.map(a => {
+        if (a.id === id) {
+          const updated = { ...a, status, notes: notes || a.notes };
+          // If approved and converted to enrolled, automatically add to students
+          if (status === 'Enrolled') {
+            const names = a.applicantName.trim().split(/\s+/);
+            const firstName = names[0] || 'New';
+            const lastName = names.slice(1).join(' ') || 'Student';
+            addStudent({
+              admissionNo: a.studentNumber || a.applicationNo,
+              firstName,
+              lastName,
+              gender: a.gender,
+              dateOfBirth: a.dateOfBirth,
+              enrollmentDate: a.enrollmentDate || new Date().toISOString().split('T')[0],
+              classId: `cls-${a.appliedClass.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+              className: a.appliedClass,
+              section: 'A',
+              rollNo: `${Math.floor(1 + Math.random() * 45)}`,
+              guardianName: a.parentName,
+              guardianEmail: a.parentEmail,
+              guardianPhone: a.parentPhone,
+              address: a.parentAddress || 'Accra, Ghana',
+              status: 'Active',
+              photoUrl: `https://api.dicebear.com/7.x/micah/svg?seed=${encodeURIComponent(a.applicantName)}`,
+              balanceDue: 0
+            });
+          }
+          return updated;
         }
-        return updated;
-      }
-      return a;
-    }));
+        return a;
+      });
+      saveStorage('admissions', next);
+      return next;
+    });
     logAuditAction('ADMISSION_STATUS_CHANGE', 'Admissions', `Application ID ${id} status set to ${status}`);
   };
 
@@ -1503,6 +1949,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   return (
     <SchoolContext.Provider
       value={{
+        isSyncing,
+        lastSyncedTime,
+        syncToCloudNow,
         currentUser,
         isAuthenticated,
         authUsers,
