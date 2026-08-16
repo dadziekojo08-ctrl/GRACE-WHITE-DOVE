@@ -112,11 +112,14 @@ export interface CalendarEvent {
 export interface AdmissionApplication {
   id: string;
   applicationNo: string;
+  studentNumber?: string;
   applicantName: string;
   gender: 'Male' | 'Female' | 'Other';
   dateOfBirth: string;
+  enrollmentDate?: string;
   appliedClass: string;
   parentName: string;
+  parentAddress?: string;
   parentEmail: string;
   parentPhone: string;
   submissionDate: string;

@@ -109,11 +109,12 @@ interface SchoolContextType {
 
   // Students & Admissions
   students: Student[];
-  addStudent: (student: Omit<Student, 'id' | 'admissionNo' | 'joinedDate'>) => void;
+  generateNextStudentNumber: () => string;
+  addStudent: (student: Omit<Student, 'id' | 'admissionNo' | 'joinedDate'> & { admissionNo?: string }) => void;
   updateStudent: (id: string, student: Partial<Student>) => void;
   deleteStudent: (id: string) => void;
   admissions: AdmissionApplication[];
-  addAdmission: (admission: Omit<AdmissionApplication, 'id' | 'applicationNo' | 'submissionDate'>) => void;
+  addAdmission: (admission: Omit<AdmissionApplication, 'id' | 'applicationNo' | 'submissionDate'> & { applicationNo?: string; studentNumber?: string }) => void;
   updateAdmissionStatus: (id: string, status: AdmissionApplication['status'], notes?: string) => void;
 
   // Attendance
@@ -719,15 +720,41 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAuditAction('CALENDAR_EVENT_DELETED', 'Calendar', `Removed event: ${ev?.title}`);
   };
 
+  // Helper to generate sequential student number in the format GWD-0000-00001
+  const generateNextStudentNumber = (): string => {
+    let maxSeq = 0;
+    const allNumbers = [
+      ...students.map(s => s.admissionNo),
+      ...admissions.map(a => a.studentNumber || a.applicationNo)
+    ].filter(Boolean);
+
+    for (const num of allNumbers) {
+      if (typeof num === 'string') {
+        const match = num.match(/GWD-\d+-(\d+)/i) || num.match(/GWD-(\d+)/i) || num.match(/ADM-\d+-(\d+)/i);
+        if (match) {
+          const val = parseInt(match[1], 10);
+          if (!isNaN(val) && val > maxSeq) {
+            maxSeq = val;
+          }
+        }
+      }
+    }
+
+    const nextSeq = maxSeq + 1;
+    return `GWD-0000-${String(nextSeq).padStart(5, '0')}`;
+  };
+
   // Student Actions
-  const addStudent = (newStd: Omit<Student, 'id' | 'admissionNo' | 'joinedDate'>) => {
+  const addStudent = (newStd: Omit<Student, 'id' | 'admissionNo' | 'joinedDate'> & { admissionNo?: string }) => {
     const id = `std-${Date.now().toString().slice(-4)}`;
-    const admissionNo = `ADM-2026-${Math.floor(100 + Math.random() * 900)}`;
+    const autoAdmissionNo = generateNextStudentNumber();
+    const admissionNo = newStd.admissionNo && newStd.admissionNo.trim() !== '' ? newStd.admissionNo.trim() : autoAdmissionNo;
     const student: Student = {
       ...newStd,
       id,
       admissionNo,
-      joinedDate: new Date().toISOString().split('T')[0]
+      joinedDate: newStd.enrollmentDate || new Date().toISOString().split('T')[0],
+      enrollmentDate: newStd.enrollmentDate || new Date().toISOString().split('T')[0]
     };
     setStudents(prev => [student, ...prev]);
     logAuditAction('STUDENT_ENROLLED', 'Students', `Enrolled student: ${student.firstName} ${student.lastName} (${admissionNo})`);
@@ -745,17 +772,21 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Admissions
-  const addAdmission = (adm: Omit<AdmissionApplication, 'id' | 'applicationNo' | 'submissionDate'>) => {
+  const addAdmission = (adm: Omit<AdmissionApplication, 'id' | 'applicationNo' | 'submissionDate'> & { applicationNo?: string; studentNumber?: string }) => {
     const id = `adm-app-${Date.now().toString().slice(-4)}`;
-    const applicationNo = `APP-2026-${Math.floor(200 + Math.random() * 800)}`;
+    const autoStudentNumber = generateNextStudentNumber();
+    const studentNumber = adm.studentNumber && adm.studentNumber.trim() !== '' ? adm.studentNumber.trim() : autoStudentNumber;
+    const applicationNo = adm.applicationNo || studentNumber;
     const application: AdmissionApplication = {
       ...adm,
       id,
       applicationNo,
+      studentNumber,
+      enrollmentDate: adm.enrollmentDate || new Date().toISOString().split('T')[0],
       submissionDate: new Date().toISOString().split('T')[0]
     };
     setAdmissions(prev => [application, ...prev]);
-    logAuditAction('ADMISSION_SUBMITTED', 'Admissions', `Received application #${applicationNo} for ${application.applicantName}`);
+    logAuditAction('ADMISSION_SUBMITTED', 'Admissions', `Received application #${studentNumber} for ${application.applicantName}`);
   };
 
   const updateAdmissionStatus = (id: string, status: AdmissionApplication['status'], notes?: string) => {
@@ -764,25 +795,27 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const updated = { ...a, status, notes: notes || a.notes };
         // If approved and converted to enrolled, automatically add to students
         if (status === 'Enrolled') {
-          const names = a.applicantName.split(' ');
+          const names = a.applicantName.trim().split(/\s+/);
           const firstName = names[0] || 'New';
           const lastName = names.slice(1).join(' ') || 'Student';
           addStudent({
+            admissionNo: a.studentNumber || a.applicationNo,
             firstName,
             lastName,
             gender: a.gender,
             dateOfBirth: a.dateOfBirth,
-            classId: 'cls-new',
+            enrollmentDate: a.enrollmentDate || new Date().toISOString().split('T')[0],
+            classId: `cls-${a.appliedClass.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
             className: a.appliedClass,
             section: 'A',
-            rollNo: `${Math.floor(10 + Math.random() * 40)}`,
+            rollNo: `${Math.floor(1 + Math.random() * 45)}`,
             guardianName: a.parentName,
             guardianEmail: a.parentEmail,
             guardianPhone: a.parentPhone,
-            address: 'Accra, Ghana',
+            address: a.parentAddress || 'Accra, Ghana',
             status: 'Active',
-            photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-            balanceDue: 3300
+            photoUrl: `https://api.dicebear.com/7.x/micah/svg?seed=${encodeURIComponent(a.applicantName)}`,
+            balanceDue: 0
           });
         }
         return updated;
@@ -1502,6 +1535,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addCalendarEvent,
         deleteCalendarEvent,
         students,
+        generateNextStudentNumber,
         addStudent,
         updateStudent,
         deleteStudent,

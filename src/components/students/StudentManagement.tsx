@@ -28,7 +28,7 @@ import { DigitalIdCardGenerator } from './DigitalIdCardGenerator';
 export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: Student) => void }> = ({
   onOpenPaystackForStudent
 }) => {
-  const { students, addStudent, updateStudent, deleteStudent, searchQuery, marks, attendance, invoices, classes } = useSchool();
+  const { students, addStudent, updateStudent, deleteStudent, searchQuery, marks, attendance, invoices, classes, generateNextStudentNumber } = useSchool();
 
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -42,6 +42,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
 
   // Form State
   const [formData, setFormData] = useState<{
+    admissionNo: string;
     firstName: string;
     lastName: string;
     gender: 'Male' | 'Female';
@@ -58,6 +59,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
     balanceDue: number;
     photoUrl: string;
   }>({
+    admissionNo: '',
     firstName: '',
     lastName: '',
     gender: 'Male',
@@ -120,6 +122,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
     e.preventDefault();
     if (editingStudent) {
       updateStudent(editingStudent.id, {
+        admissionNo: formData.admissionNo.trim() || editingStudent.admissionNo,
         firstName: formData.firstName,
         lastName: formData.lastName,
         gender: formData.gender,
@@ -139,6 +142,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       setEditingStudent(null);
     } else {
       addStudent({
+        admissionNo: formData.admissionNo.trim() || undefined,
         firstName: formData.firstName,
         lastName: formData.lastName,
         gender: formData.gender,
@@ -154,7 +158,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
         guardianEmail: formData.guardianEmail,
         address: formData.address,
         status: 'Active',
-        photoUrl: formData.photoUrl,
+        photoUrl: formData.photoUrl || `https://api.dicebear.com/7.x/micah/svg?seed=${encodeURIComponent(formData.firstName + ' ' + formData.lastName)}`,
         balanceDue: Number(formData.balanceDue)
       });
       setIsAddModalOpen(false);
@@ -162,11 +166,12 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
 
     // Reset
     setFormData({
+      admissionNo: '',
       firstName: '',
       lastName: '',
       gender: 'Male',
       dateOfBirth: '',
-      className: 'Primary 1 (Grade 1)',
+      className: classes[0]?.name || 'Creche',
       classTeacher: '',
       enrollmentDate: new Date().toISOString().split('T')[0],
       section: 'A',
@@ -183,6 +188,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
   const handleOpenEdit = (std: Student) => {
     setEditingStudent(std);
     setFormData({
+      admissionNo: std.admissionNo,
       firstName: std.firstName,
       lastName: std.lastName,
       gender: std.gender as 'Male' | 'Female',
@@ -613,6 +619,33 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
             </div>
 
             <form onSubmit={handleSaveStudent} className="p-6 space-y-4 text-xs">
+              <div className="bg-emerald-50/70 p-3.5 rounded-xl border border-emerald-200">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-bold text-emerald-950 flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-emerald-700" /> Student Number (ID / Admission No)
+                  </label>
+                  {!editingStudent && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, admissionNo: generateNextStudentNumber() }))}
+                      className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 bg-white hover:bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-500" /> Auto-Generate ID
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={formData.admissionNo}
+                  onChange={(e) => setFormData({ ...formData, admissionNo: e.target.value })}
+                  placeholder="GWD-0000-00001"
+                  className="w-full bg-white border border-emerald-300 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                />
+                <p className="text-[10px] text-emerald-800 mt-1">
+                  Enter manually or leave blank to automatically generate as <span className="font-mono font-bold">GWD-0000-00001</span>.
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">First Name *</label>

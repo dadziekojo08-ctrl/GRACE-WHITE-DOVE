@@ -15,7 +15,11 @@ import {
   QrCode,
   FileSpreadsheet,
   Layers,
-  Building
+  Building,
+  GraduationCap,
+  Sparkles,
+  BadgeCheck,
+  School
 } from 'lucide-react';
 import {
   AreaChart,
@@ -40,6 +44,7 @@ export const DashboardOverview: React.FC<{
     students,
     staff,
     classes,
+    admissions,
     attendance,
     payments,
     invoices,
@@ -52,11 +57,25 @@ export const DashboardOverview: React.FC<{
     academicYear
   } = useSchool();
 
-  // Metrics calculations
+  // Dynamic Real-time Metrics calculations from SchoolContext
   const totalStudents = students.length;
+  const activeStudents = students.filter((s) => s.status === 'Active').length;
+  const maleStudents = students.filter((s) => s.gender === 'Male').length;
+  const femaleStudents = students.filter((s) => s.gender === 'Female').length;
+  const pendingAdmissions = admissions.filter((a) => a.status === 'Pending' || a.status === 'Interview Scheduled').length;
+
   const totalStaff = staff.length;
+  const activeStaff = staff.filter((s) => s.status === 'Active').length;
+  const teachingStaff = staff.filter((s) => s.role === 'Teacher').length;
+  const nonTeachingStaff = staff.filter((s) => s.role !== 'Teacher').length;
+  const staffOnLeave = staff.filter((s) => s.status === 'On Leave').length;
+
   const totalClassesCount = classes.length;
   const totalDeskCapacity = classes.reduce((sum, c) => sum + (Number(c.capacity) || 0), 0);
+  const enrolledClassCount = classes.reduce((sum, c) => sum + (Number(c.enrolledCount) || 0), 0);
+  const totalEnrolled = totalStudents > 0 ? totalStudents : enrolledClassCount;
+  const occupancyRate = totalDeskCapacity > 0 ? Math.round((totalEnrolled / totalDeskCapacity) * 100) : 0;
+
   const totalFeesCollected = payments.reduce((acc, curr) => acc + curr.amount, 0);
   const totalOutstandingFees = invoices.reduce((acc, curr) => acc + curr.balance, 0);
   const activeRoutesCount = routes.length;
@@ -86,9 +105,11 @@ export const DashboardOverview: React.FC<{
     { class: 'JHS 3', rate: 99 }
   ];
 
+  const femaleRatio = totalStudents > 0 ? Math.round((femaleStudents / totalStudents) * 100) : 52;
+  const maleRatio = totalStudents > 0 ? 100 - femaleRatio : 48;
   const genderData = [
-    { name: 'Female Students', value: 52, color: '#059669' },
-    { name: 'Male Students', value: 48, color: '#f59e0b' }
+    { name: 'Female Students', value: femaleRatio, count: femaleStudents, color: '#059669' },
+    { name: 'Male Students', value: maleRatio, count: maleStudents, color: '#f59e0b' }
   ];
 
   return (
@@ -158,97 +179,127 @@ export const DashboardOverview: React.FC<{
         {/* Total Students */}
         <div 
           onClick={() => setActiveTab('students')}
-          className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-emerald-300 transition-all cursor-pointer"
+          className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Students</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center transition-all">
               <Users className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
+          <div className="mt-3 flex items-baseline justify-between gap-2">
             <span className="text-2xl font-black text-slate-900 font-['Outfit']">{totalStudents}</span>
-            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center">
-              Enrolled
+            <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+              {activeStudents} Active
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">Across all grade levels</p>
-        </div>
-
-        {/* Active Classes & Total Desk Capacity */}
-        <div 
-          onClick={() => setActiveTab('classes')}
-          className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Desk Capacity</span>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 group-hover:bg-amber-100 flex items-center justify-center transition-colors">
-              <Building className="w-5 h-5" />
-            </div>
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>{maleStudents} Male • {femaleStudents} Female</span>
+            {pendingAdmissions > 0 ? (
+              <span className="text-amber-700 font-semibold">{pendingAdmissions} Pending Adm</span>
+            ) : (
+              <span className="text-slate-400">Creche - JHS 3</span>
+            )}
           </div>
-          <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-slate-900 font-['Outfit']">{totalDeskCapacity}</span>
-            <span className="text-[11px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">
-              {totalClassesCount} Classes
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            {Math.max(0, totalDeskCapacity - totalStudents)} vacant desk seats
-          </p>
         </div>
 
         {/* Total Staff */}
         <div 
           onClick={() => setActiveTab('staff')}
-          className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-emerald-400 transition-all cursor-pointer group"
+          className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Teaching Staff</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 group-hover:bg-emerald-100 flex items-center justify-center transition-colors">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Staff</span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center transition-all">
               <Briefcase className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
+          <div className="mt-3 flex items-baseline justify-between gap-2">
             <span className="text-2xl font-black text-slate-900 font-['Outfit']">{totalStaff}</span>
-            <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded">
-              Faculty
+            <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+              {activeStaff} Active Faculty
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">Teaching & Administration</p>
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>{teachingStaff} Teaching • {nonTeachingStaff} Support</span>
+            {staffOnLeave > 0 ? (
+              <span className="text-amber-700 font-semibold">{staffOnLeave} on leave</span>
+            ) : (
+              <span className="text-emerald-700 font-semibold">100% Present</span>
+            )}
+          </div>
+        </div>
+
+        {/* Active Classes */}
+        <div 
+          onClick={() => setActiveTab('classes')}
+          className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Classes</span>
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 group-hover:bg-amber-500 group-hover:text-emerald-950 flex items-center justify-center transition-all">
+              <Layers className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline justify-between gap-2">
+            <span className="text-2xl font-black text-slate-900 font-['Outfit']">{totalClassesCount}</span>
+            <span className="text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+              {totalDeskCapacity} Total Desks
+            </span>
+          </div>
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>{occupancyRate}% Capacity Filled</span>
+            <span>{Math.max(0, totalDeskCapacity - totalStudents)} Desks Left</span>
+          </div>
         </div>
 
         {/* Daily Attendance Rate */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-emerald-300 transition-all">
+        <div 
+          onClick={() => setActiveTab('attendance')}
+          className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer group"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Attendance</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center transition-all">
               <CheckCircle className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
+          <div className="mt-3 flex items-baseline justify-between gap-2">
             <span className="text-2xl font-black text-emerald-800 font-['Outfit']">{attendanceRate}%</span>
-            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">Optimal</span>
+            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+              Today
+            </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">{todayPresentCount} of {totalStudents} scanned</p>
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>{todayPresentCount} of {totalStudents} scanned</span>
+            <span className="text-emerald-700 font-semibold">{totalStudents - todayPresentCount > 0 ? `${totalStudents - todayPresentCount} Absent` : 'Full Attendance'}</span>
+          </div>
         </div>
 
         {/* Fee Collection & Paystack */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-amber-300 transition-all">
+        <div 
+          onClick={onOpenPaystack}
+          className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fee Collection</span>
-            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-900 group-hover:bg-amber-400 group-hover:text-emerald-950 flex items-center justify-center transition-all">
               <CreditCard className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-emerald-900 font-['Outfit']">
+          <div className="mt-3 flex items-baseline justify-between gap-2">
+            <span className="text-2xl font-black text-emerald-950 font-['Outfit']">
               GHS {(totalFeesCollected / 1000).toFixed(1)}k
             </span>
-            <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
-              Bal: GHS {totalOutstandingFees.toLocaleString()}
+            <span className="text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+              Paystack
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">Paystack sync active</p>
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>Bal: GHS {totalOutstandingFees.toLocaleString()}</span>
+            <span className="text-amber-800 font-semibold flex items-center gap-0.5">Pay Online →</span>
+          </div>
         </div>
       </div>
 
