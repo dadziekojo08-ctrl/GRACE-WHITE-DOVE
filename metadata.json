@@ -1,0 +1,8 @@
+{
+  "name": "Grace White Dove School Complex",
+  "description": "Enterprise School Management Platform for Grace White Dove School Complex, powered by BenDaz IT Consult.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
