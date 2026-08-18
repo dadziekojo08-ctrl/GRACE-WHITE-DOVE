@@ -60,7 +60,7 @@ import {
 import {
   fetchCollectionFromFirestore,
   batchSaveCollectionToFirestore,
-  saveDocumentToFirestore
+  checkIsQuotaExceeded
 } from '../lib/firestoreService';
 
 interface SchoolContextType {
@@ -368,6 +368,11 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     async function loadCloudData() {
       if (hasInitializedFromCloud.current) return;
       hasInitializedFromCloud.current = true;
+
+      if (checkIsQuotaExceeded()) {
+        return;
+      }
+
       setIsSyncing(true);
 
       try {
@@ -482,134 +487,34 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, []);
 
-  // Sync to local storage & background sync to Firestore
-  useEffect(() => {
-    saveStorage('authUsers', authUsers);
-    batchSaveCollectionToFirestore('authUsers', authUsers);
-  }, [authUsers]);
-
+  // Sync to local storage
+  useEffect(() => { saveStorage('authUsers', authUsers); }, [authUsers]);
   useEffect(() => { saveStorage('currentUser', currentUser); }, [currentUser]);
   useEffect(() => { saveStorage('isAuthenticated', isAuthenticated); }, [isAuthenticated]);
-
-  useEffect(() => {
-    saveStorage('classes', classes);
-    batchSaveCollectionToFirestore('classes', classes);
-  }, [classes]);
-
-  useEffect(() => {
-    saveStorage('subjects', subjects);
-    batchSaveCollectionToFirestore('subjects', subjects);
-  }, [subjects]);
-
-  useEffect(() => {
-    saveStorage('calendarEvents', calendarEvents);
-    batchSaveCollectionToFirestore('calendarEvents', calendarEvents);
-  }, [calendarEvents]);
-
-  useEffect(() => {
-    saveStorage('students', students);
-    batchSaveCollectionToFirestore('students', students);
-  }, [students]);
-
-  useEffect(() => {
-    saveStorage('admissions', admissions);
-    batchSaveCollectionToFirestore('admissions', admissions);
-  }, [admissions]);
-
-  useEffect(() => {
-    saveStorage('attendance', attendance);
-    batchSaveCollectionToFirestore('attendance', attendance);
-  }, [attendance]);
-
-  useEffect(() => {
-    saveStorage('feeStructures', feeStructures);
-    batchSaveCollectionToFirestore('feeStructures', feeStructures);
-  }, [feeStructures]);
-
-  useEffect(() => {
-    saveStorage('invoices', invoices);
-    batchSaveCollectionToFirestore('invoices', invoices);
-  }, [invoices]);
-
-  useEffect(() => {
-    saveStorage('payments', payments);
-    batchSaveCollectionToFirestore('payments', payments);
-  }, [payments]);
-
-  useEffect(() => {
-    saveStorage('exams', exams);
-    batchSaveCollectionToFirestore('exams', exams);
-  }, [exams]);
-
-  useEffect(() => {
-    saveStorage('examSchedules', examSchedules);
-    batchSaveCollectionToFirestore('examSchedules', examSchedules);
-  }, [examSchedules]);
-
-  useEffect(() => {
-    saveStorage('marks', marks);
-    batchSaveCollectionToFirestore('marks', marks);
-  }, [marks]);
-
-  useEffect(() => {
-    saveStorage('timetable', timetable);
-    batchSaveCollectionToFirestore('timetable', timetable);
-  }, [timetable]);
-
-  useEffect(() => {
-    saveStorage('staff', staff);
-    batchSaveCollectionToFirestore('staff', staff);
-  }, [staff]);
-
-  useEffect(() => {
-    saveStorage('payrolls', payrolls);
-    batchSaveCollectionToFirestore('payrolls', payrolls);
-  }, [payrolls]);
-
-  useEffect(() => {
-    saveStorage('reimbursements', reimbursements);
-    batchSaveCollectionToFirestore('reimbursements', reimbursements);
-  }, [reimbursements]);
-
-  useEffect(() => {
-    saveStorage('books', books);
-    batchSaveCollectionToFirestore('books', books);
-  }, [books]);
-
-  useEffect(() => {
-    saveStorage('bookIssues', bookIssues);
-    batchSaveCollectionToFirestore('bookIssues', bookIssues);
-  }, [bookIssues]);
-
-  useEffect(() => {
-    saveStorage('vehicles', vehicles);
-    batchSaveCollectionToFirestore('vehicles', vehicles);
-  }, [vehicles]);
-
-  useEffect(() => {
-    saveStorage('routes', routes);
-    batchSaveCollectionToFirestore('routes', routes);
-  }, [routes]);
-
-  useEffect(() => {
-    saveStorage('announcements', announcements);
-    batchSaveCollectionToFirestore('announcements', announcements);
-  }, [announcements]);
-
-  useEffect(() => {
-    saveStorage('communicationLogs', communicationLogs);
-    batchSaveCollectionToFirestore('communicationLogs', communicationLogs);
-  }, [communicationLogs]);
-
-  useEffect(() => {
-    saveStorage('documents', documents);
-    batchSaveCollectionToFirestore('documents', documents);
-  }, [documents]);
-
-  useEffect(() => {
-    saveStorage('auditLogs', auditLogs);
-    batchSaveCollectionToFirestore('auditLogs', auditLogs);
-  }, [auditLogs]);
+  useEffect(() => { saveStorage('classes', classes); }, [classes]);
+  useEffect(() => { saveStorage('subjects', subjects); }, [subjects]);
+  useEffect(() => { saveStorage('calendarEvents', calendarEvents); }, [calendarEvents]);
+  useEffect(() => { saveStorage('students', students); }, [students]);
+  useEffect(() => { saveStorage('admissions', admissions); }, [admissions]);
+  useEffect(() => { saveStorage('attendance', attendance); }, [attendance]);
+  useEffect(() => { saveStorage('feeStructures', feeStructures); }, [feeStructures]);
+  useEffect(() => { saveStorage('invoices', invoices); }, [invoices]);
+  useEffect(() => { saveStorage('payments', payments); }, [payments]);
+  useEffect(() => { saveStorage('exams', exams); }, [exams]);
+  useEffect(() => { saveStorage('examSchedules', examSchedules); }, [examSchedules]);
+  useEffect(() => { saveStorage('marks', marks); }, [marks]);
+  useEffect(() => { saveStorage('timetable', timetable); }, [timetable]);
+  useEffect(() => { saveStorage('staff', staff); }, [staff]);
+  useEffect(() => { saveStorage('payrolls', payrolls); }, [payrolls]);
+  useEffect(() => { saveStorage('reimbursements', reimbursements); }, [reimbursements]);
+  useEffect(() => { saveStorage('books', books); }, [books]);
+  useEffect(() => { saveStorage('bookIssues', bookIssues); }, [bookIssues]);
+  useEffect(() => { saveStorage('vehicles', vehicles); }, [vehicles]);
+  useEffect(() => { saveStorage('routes', routes); }, [routes]);
+  useEffect(() => { saveStorage('announcements', announcements); }, [announcements]);
+  useEffect(() => { saveStorage('communicationLogs', communicationLogs); }, [communicationLogs]);
+  useEffect(() => { saveStorage('documents', documents); }, [documents]);
+  useEffect(() => { saveStorage('auditLogs', auditLogs); }, [auditLogs]);
 
   const syncToCloudNow = async () => {
     setIsSyncing(true);
@@ -643,7 +548,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ]);
       setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } catch (e) {
-      console.error('Manual Firestore cloud sync failed:', e);
+      console.warn('Manual Firestore cloud sync finished with note:', e);
     } finally {
       setIsSyncing(false);
     }

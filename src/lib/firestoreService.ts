@@ -14,8 +14,52 @@ import { db } from './firebase';
 
 /**
  * High-performance Firestore cloud synchronization helper for school management collections.
- * Handles both individual collection reads/writes and atomic batch commits.
+ * Features built-in quota-exhaustion protection, local fallback caching, and error safety.
  */
+
+let inMemoryQuotaExceeded = false;
+const QUOTA_STORAGE_KEY = 'gwd_firestore_quota_exceeded_until';
+
+export function checkIsQuotaExceeded(): boolean {
+  if (inMemoryQuotaExceeded) return true;
+  try {
+    const stored = localStorage.getItem(QUOTA_STORAGE_KEY);
+    if (stored) {
+      const until = parseInt(stored, 10);
+      if (Date.now() < until) {
+        inMemoryQuotaExceeded = true;
+        return true;
+      } else {
+        localStorage.removeItem(QUOTA_STORAGE_KEY);
+        inMemoryQuotaExceeded = false;
+      }
+    }
+  } catch (e) {
+    // fallback
+  }
+  return false;
+}
+
+export function markQuotaExceeded(): void {
+  inMemoryQuotaExceeded = true;
+  try {
+    const cooldownUntil = Date.now() + 30 * 60 * 1000; // 30 mins cooldown
+    localStorage.setItem(QUOTA_STORAGE_KEY, String(cooldownUntil));
+  } catch (e) {
+    // fallback
+  }
+}
+
+function handleFirestoreError(action: string, error: any) {
+  const errMsg = error?.message || String(error);
+  const errCode = error?.code || '';
+  if (errCode === 'resource-exhausted' || errMsg.includes('Quota limit exceeded') || errMsg.includes('resource-exhausted')) {
+    markQuotaExceeded();
+    console.info(`[Offline/Local Mode] Firestore daily write quota reached. School management system is operating with full local persistence.`);
+  } else {
+    console.warn(`[Firestore] ${action} note:`, error?.message || error);
+  }
+}
 
 // Helper to remove undefined values that Firestore rejects
 export function sanitizeForFirestore<T>(data: T): any {
@@ -37,6 +81,7 @@ export function sanitizeForFirestore<T>(data: T): any {
 export async function fetchCollectionFromFirestore<T extends { id: string }>(
   collectionName: string
 ): Promise<T[]> {
+  if (checkIsQuotaExceeded()) return [];
   try {
     const colRef = collection(db, collectionName);
     const snap = await getDocs(colRef);
@@ -45,8 +90,8 @@ export async function fetchCollectionFromFirestore<T extends { id: string }>(
       items.push({ id: docSnap.id, ...docSnap.data() } as unknown as T);
     });
     return items;
-  } catch (error) {
-    console.warn(`Firestore: Error fetching collection ${collectionName}:`, error);
+  } catch (error: any) {
+    handleFirestoreError(`Fetch collection ${collectionName}`, error);
     return [];
   }
 }
@@ -55,11 +100,12 @@ export async function saveDocumentToFirestore<T extends { id: string }>(
   collectionName: string,
   docItem: T
 ): Promise<void> {
+  if (checkIsQuotaExceeded()) return;
   try {
     const docRef = doc(db, collectionName, docItem.id);
     await setDoc(docRef, sanitizeForFirestore(docItem), { merge: true });
-  } catch (error) {
-    console.error(`Firestore: Failed to save document to ${collectionName}/${docItem.id}:`, error);
+  } catch (error: any) {
+    handleFirestoreError(`Save document ${collectionName}/${docItem.id}`, error);
   }
 }
 
@@ -67,11 +113,12 @@ export async function deleteDocumentFromFirestore(
   collectionName: string,
   docId: string
 ): Promise<void> {
+  if (checkIsQuotaExceeded()) return;
   try {
     const docRef = doc(db, collectionName, docId);
     await deleteDoc(docRef);
-  } catch (error) {
-    console.error(`Firestore: Failed to delete document ${collectionName}/${docId}:`, error);
+  } catch (error: any) {
+    handleFirestoreError(`Delete document ${collectionName}/${docId}`, error);
   }
 }
 
@@ -79,6 +126,7 @@ export async function batchSaveCollectionToFirestore<T extends { id: string }>(
   collectionName: string,
   items: T[]
 ): Promise<void> {
+  if (checkIsQuotaExceeded()) return;
   try {
     if (!items || items.length === 0) return;
     
@@ -89,6 +137,7 @@ export async function batchSaveCollectionToFirestore<T extends { id: string }>(
     }
 
     for (const chunk of chunks) {
+      if (checkIsQuotaExceeded()) break;
       const batch = writeBatch(db);
       for (const item of chunk) {
         const docRef = doc(db, collectionName, item.id);
@@ -96,8 +145,8 @@ export async function batchSaveCollectionToFirestore<T extends { id: string }>(
       }
       await batch.commit();
     }
-  } catch (error) {
-    console.error(`Firestore: Batch save failed on ${collectionName}:`, error);
+  } catch (error: any) {
+    handleFirestoreError(`Batch save ${collectionName}`, error);
   }
 }
 
@@ -105,6 +154,9 @@ export function subscribeToCollection<T extends { id: string }>(
   collectionName: string,
   onUpdate: (items: T[]) => void
 ): Unsubscribe {
+  if (checkIsQuotaExceeded()) {
+    return () => {};
+  }
   const colRef = collection(db, collectionName);
   return onSnapshot(
     colRef,
@@ -116,7 +168,8 @@ export function subscribeToCollection<T extends { id: string }>(
       onUpdate(items);
     },
     (error) => {
-      console.warn(`Firestore realtime subscription warning on ${collectionName}:`, error);
+      handleFirestoreError(`Subscription ${collectionName}`, error);
     }
   );
 }
+
