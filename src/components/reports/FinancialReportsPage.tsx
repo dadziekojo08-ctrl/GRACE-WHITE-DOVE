@@ -573,15 +573,6 @@ export const FinancialReportsPage: React.FC<{
                 <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">Standard Fee Structures by Class</h3>
                 <p className="text-xs text-slate-500">Termly tuition, accessories, books, and levies breakdown</p>
               </div>
-              {onOpenPaystack && (
-                <button
-                  onClick={() => onOpenPaystack()}
-                  className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                >
-                  <CreditCard className="w-4 h-4" />
-                  Open Paystack Checkout
-                </button>
-              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -722,15 +713,6 @@ export const FinancialReportsPage: React.FC<{
                             <FileText className="w-3.5 h-3.5 text-emerald-700" />
                             View Invoice
                           </button>
-                          {onOpenPaystack && inv.balance > 0 && (
-                            <button
-                              onClick={() => onOpenPaystack(inv, inv.balance, inv.studentName, inv.studentId)}
-                              className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold rounded-lg text-[11px] inline-flex items-center gap-1 cursor-pointer transition-colors"
-                            >
-                              <CreditCard className="w-3.5 h-3.5" />
-                              Pay
-                            </button>
-                          )}
                         </td>
                       </tr>
                     );

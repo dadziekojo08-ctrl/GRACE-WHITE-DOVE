@@ -12,6 +12,7 @@ export interface AuthUser {
   phone?: string;
   staffCode?: string;
   studentId?: string;
+  assignedClass?: string;
   lastLogin?: string;
 }
 
@@ -304,6 +305,7 @@ export interface StaffMember {
   joinedDate: string;
   basicSalary: number;
   status: 'Active' | 'On Leave' | 'Terminated';
+  assignedClass?: string;
   photoUrl?: string;
   avatarUrl?: string;
 }

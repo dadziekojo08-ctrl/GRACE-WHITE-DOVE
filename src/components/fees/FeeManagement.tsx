@@ -382,26 +382,13 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
       return;
     }
 
-    // If payment method is Paystack, trigger Paystack modal if requested
-    if (processFeeForm.paymentMethod === 'Paystack' && onOpenPaystack) {
-      const inv = invoices.find(i => i.id === processFeeForm.invoiceId);
-      setIsProcessFeeOpen(false);
-      onOpenPaystack(
-        inv,
-        payAmount,
-        `${selectedProcessStudent.firstName} ${selectedProcessStudent.lastName}`,
-        selectedProcessStudent.id
-      );
-      return;
-    }
-
     const newPayment = recordPayment({
       invoiceId: processFeeForm.invoiceId || (studentOutstandingInvoices[0]?.id || `direct-${Date.now()}`),
       studentId: selectedProcessStudent.id,
       studentName: `${selectedProcessStudent.firstName} ${selectedProcessStudent.lastName}`,
       amount: payAmount,
-      paymentMethod: processFeeForm.paymentMethod,
-      channel: `${processFeeForm.paymentMethod} (${processFeeForm.channel})`,
+      paymentMethod: 'Cash',
+      channel: 'Cash Desk',
       payerPhone: processFeeForm.payerPhone,
       receivedBy: currentUser?.name || 'School Bursar',
       remarks: `${processFeeForm.paymentPurpose ? `[${processFeeForm.paymentPurpose}] ` : ''}${processFeeForm.remarks}`,
@@ -1740,35 +1727,25 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                 />
               </div>
 
-              {/* Payment Method Selector */}
+              {/* Payment Method - Exclusive to Cash Desk */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Payment Method / Channel *</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {[
-                    { id: 'Cash', label: 'Cash Desk', icon: Banknote },
-                    { id: 'Mobile Money', label: 'Mobile Money (MoMo)', icon: Smartphone },
-                    { id: 'Bank Transfer', label: 'Bank Wire / Deposit', icon: Building2 },
-                    { id: 'Cheque', label: 'Bank Cheque', icon: FileText },
-                    { id: 'Paystack', label: 'Paystack Card / Online', icon: CreditCard }
-                  ].map((m) => {
-                    const Icon = m.icon;
-                    const isSelected = processFeeForm.paymentMethod === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => setProcessFeeForm({ ...processFeeForm, paymentMethod: m.id as any })}
-                        className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition-all ${
-                          isSelected
-                            ? 'border-emerald-800 bg-emerald-50/80 text-emerald-950 font-bold shadow-xs'
-                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <Icon className={`w-4 h-4 ${isSelected ? 'text-emerald-800' : 'text-slate-400'}`} />
-                        <span className="text-[11px] truncate">{m.label}</span>
-                      </button>
-                    );
-                  })}
+                <label className="block font-semibold text-slate-700 mb-1">Payment Method / Collection Channel *</label>
+                <div className="p-3 rounded-xl border border-emerald-700 bg-emerald-50/90 text-emerald-950 flex items-center justify-between shadow-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-800 text-amber-300 flex items-center justify-center shadow-xs">
+                      <Banknote className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900">Cash Desk</span>
+                        <span className="text-[10px] font-extrabold bg-emerald-700 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          Cashier Active
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">Official cash collection at school accounts counter</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold text-emerald-800 font-mono">GHS {Number(processFeeForm.amount || 0).toLocaleString()}</span>
                 </div>
               </div>
 

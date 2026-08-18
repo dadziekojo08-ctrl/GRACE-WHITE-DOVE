@@ -171,11 +171,11 @@ export const DashboardOverview: React.FC<{
               New Admission
             </button>
             <button
-              onClick={onOpenPaystack}
+              onClick={() => setActiveTab('fees')}
               className="bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
             >
               <CreditCard className="w-4 h-4 text-emerald-950" />
-              Pay Fees (Paystack)
+              Fee Management
             </button>
             <button
               onClick={onOpenGateScanner}
@@ -291,9 +291,9 @@ export const DashboardOverview: React.FC<{
           </div>
         </div>
 
-        {/* Fee Collection & Paystack */}
+        {/* Fee Collection Card */}
         <div 
-          onClick={onOpenPaystack}
+          onClick={() => setActiveTab('fees')}
           className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
@@ -307,12 +307,12 @@ export const DashboardOverview: React.FC<{
               GHS {(totalFeesCollected / 1000).toFixed(1)}k
             </span>
             <span className="text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
-              Paystack
+              Cash Desk & Online
             </span>
           </div>
           <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
             <span>Bal: GHS {totalOutstandingFees.toLocaleString()}</span>
-            <span className="text-amber-800 font-semibold flex items-center gap-0.5">Pay Online →</span>
+            <span className="text-amber-800 font-semibold flex items-center gap-0.5">Manage Fees →</span>
           </div>
         </div>
       </div>

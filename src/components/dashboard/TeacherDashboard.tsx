@@ -78,6 +78,10 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     amount: ''
   });
 
+  const teacherName = currentUser?.name || 'Teacher / Staff';
+  const teacherEmail = currentUser?.email || '';
+  const teacherAssignedClass = currentUser?.assignedClass;
+
   // Pupil Registration within Teacher Portal
   const [isAdmitModalOpen, setIsAdmitModalOpen] = useState(false);
   const [admitSuccessBanner, setAdmitSuccessBanner] = useState<string | null>(null);
@@ -85,8 +89,8 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     firstName: '',
     lastName: '',
     gender: 'Male' as 'Male' | 'Female',
-    dateOfBirth: '2012-05-15',
-    className: 'JHS 2 (Basic 8)',
+    dateOfBirth: '2015-05-15',
+    className: teacherAssignedClass || 'Primary 1 (Grade 1)',
     section: 'A',
     rollNo: '',
     guardianName: '',
@@ -96,15 +100,15 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     photoUrl: ''
   });
 
-  const teacherName = currentUser?.name || 'Teacher / Staff';
-  const teacherEmail = currentUser?.email || '';
-
-  // Teacher's assigned students (e.g. assigned as classTeacher or matching className)
+  // Teacher's assigned students (matching teacherAssignedClass or classTeacher name)
   const myStudents = students.filter(
-    (s) => s.classTeacher === teacherName || (currentUser?.name && s.classTeacher?.includes(currentUser.name))
+    (s) =>
+      (teacherAssignedClass && (s.className === teacherAssignedClass || s.className?.toLowerCase().includes(teacherAssignedClass.toLowerCase()))) ||
+      s.classTeacher === teacherName ||
+      (currentUser?.name && s.classTeacher?.includes(currentUser.name))
   );
 
-  const displayStudents = myStudents.length > 0 ? myStudents : students;
+  const displayStudents = myStudents.length > 0 ? myStudents : (teacherAssignedClass ? students.filter(s => s.className === teacherAssignedClass) : students);
 
   const filteredMyStudents = displayStudents.filter(
     (s) =>
@@ -260,10 +264,16 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
               <GraduationCap className="w-8 h-8" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="bg-amber-400 text-emerald-950 font-extrabold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full">
                   Teacher Workspace
                 </span>
+                {teacherAssignedClass && (
+                  <span className="bg-emerald-800/90 text-amber-300 border border-amber-400/40 font-bold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <GraduationCap className="w-3 h-3 text-amber-400" />
+                    Class: {teacherAssignedClass}
+                  </span>
+                )}
                 <span className="text-emerald-300 text-xs font-medium">
                   {academicYear} • {currentTerm}
                 </span>

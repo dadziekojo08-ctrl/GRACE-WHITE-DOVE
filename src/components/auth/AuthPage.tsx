@@ -41,7 +41,7 @@ const generateStaffId = (role: Role) => {
 };
 
 export const AuthPage: React.FC = () => {
-  const { login, register, resetPassword, authUsers, students, marks } = useSchool();
+  const { login, register, resetPassword, authUsers, students, marks, classes } = useSchool();
 
   // Dynamic live metric calculations from recorded entries
   const enrolledStudentsCount = students ? students.length : 0;
@@ -62,6 +62,7 @@ export const AuthPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState<Role>('Admin');
+  const [assignedClass, setAssignedClass] = useState<string>('Primary 1 (Grade 1)');
   const [photoUrl, setPhotoUrl] = useState('');
   const [staffCodeOrStudentId, setStaffCodeOrStudentId] = useState(() => generateStaffId('Admin'));
   const [rememberMe, setRememberMe] = useState(true);
@@ -142,6 +143,11 @@ export const AuthPage: React.FC = () => {
       return;
     }
 
+    if (selectedRole === 'Teacher' && !assignedClass) {
+      setErrorMessage('Please select the classroom / grade level where you teach.');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await register({
@@ -152,6 +158,7 @@ export const AuthPage: React.FC = () => {
         phone,
         staffCode: staffCodeOrStudentId || undefined,
         studentId: undefined,
+        assignedClass: selectedRole === 'Teacher' ? assignedClass : undefined,
         photoUrl: photoUrl || undefined,
         avatarUrl: photoUrl || undefined
       });
@@ -582,6 +589,55 @@ export const AuthPage: React.FC = () => {
                     })}
                   </div>
                 </div>
+
+                {/* Teacher Class Assignment Selector */}
+                {selectedRole === 'Teacher' && (
+                  <div className="bg-amber-50/80 border border-amber-200/90 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                        <GraduationCap className="w-4 h-4 text-emerald-800" />
+                        Select Class / Grade Level You Teach <span className="text-rose-600">*</span>
+                      </label>
+                      <span className="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                        Assigned Class
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-800/90 mb-2">
+                      Please specify the primary classroom you are assigned to. This links your teacher portal with your students and attendance roster.
+                    </p>
+                    <select
+                      value={assignedClass}
+                      onChange={(e) => setAssignedClass(e.target.value)}
+                      required
+                      className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 shadow-sm cursor-pointer"
+                    >
+                      {classes && classes.length > 0 ? (
+                        classes.map((cls) => (
+                          <option key={cls.id || cls.name} value={cls.name}>
+                            {cls.name} ({cls.level || 'General'})
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="Creche">Creche</option>
+                          <option value="Nursery 1">Nursery 1</option>
+                          <option value="Nursery 2">Nursery 2</option>
+                          <option value="Kindergarten 1 (KG 1)">Kindergarten 1 (KG 1)</option>
+                          <option value="Kindergarten 2 (KG 2)">Kindergarten 2 (KG 2)</option>
+                          <option value="Primary 1 (Grade 1)">Primary 1 (Grade 1)</option>
+                          <option value="Primary 2 (Grade 2)">Primary 2 (Grade 2)</option>
+                          <option value="Primary 3 (Grade 3)">Primary 3 (Grade 3)</option>
+                          <option value="Primary 4 (Grade 4)">Primary 4 (Grade 4)</option>
+                          <option value="Primary 5 (Grade 5)">Primary 5 (Grade 5)</option>
+                          <option value="Primary 6 (Grade 6)">Primary 6 (Grade 6)</option>
+                          <option value="JHS 1 (Grade 7)">JHS 1 (Grade 7)</option>
+                          <option value="JHS 2 (Grade 8)">JHS 2 (Grade 8)</option>
+                          <option value="JHS 3 (Grade 9)">JHS 3 (Grade 9)</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                )}
 
                 {/* Staff Profile Photo Studio */}
                 <div className="pt-1">

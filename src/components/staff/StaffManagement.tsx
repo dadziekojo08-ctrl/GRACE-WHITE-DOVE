@@ -33,7 +33,7 @@ import {
 import { StaffPhotoUploader } from '../common/StaffPhotoUploader';
 
 export const StaffManagement: React.FC = () => {
-  const { staff, addStaff, updateStaff, deleteStaff, academicYear } = useSchool();
+  const { staff, addStaff, updateStaff, deleteStaff, academicYear, classes, purgeAllTeachers } = useSchool();
 
   // Filter & Search State
   const [searchTerm, setSearchTerm] = useState('');
@@ -60,7 +60,8 @@ export const StaffManagement: React.FC = () => {
     qualification: '',
     basicSalary: 0,
     status: 'Active' as StaffMember['status'],
-    photoUrl: ''
+    photoUrl: '',
+    assignedClass: 'Primary 1 (Grade 1)'
   };
 
   const [form, setForm] = useState(initialFormState);
@@ -140,6 +141,7 @@ export const StaffManagement: React.FC = () => {
       qualification: form.qualification || 'Higher Education Certificate',
       basicSalary: Number(form.basicSalary) || 2500,
       status: form.status,
+      assignedClass: form.role === 'Teacher' ? form.assignedClass : undefined,
       photoUrl: form.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(form.name)}`
     });
 
@@ -160,6 +162,7 @@ export const StaffManagement: React.FC = () => {
       qualification: stf.qualification,
       basicSalary: stf.basicSalary,
       status: stf.status,
+      assignedClass: stf.assignedClass || 'Primary 1 (Grade 1)',
       photoUrl: stf.photoUrl || stf.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(stf.name)}`
     });
   };
@@ -178,6 +181,7 @@ export const StaffManagement: React.FC = () => {
       qualification: form.qualification,
       basicSalary: Number(form.basicSalary),
       status: form.status,
+      assignedClass: form.role === 'Teacher' ? form.assignedClass : undefined,
       photoUrl: form.photoUrl
     });
 
@@ -189,6 +193,16 @@ export const StaffManagement: React.FC = () => {
     deleteStaff(stf.id);
     setDeleteCandidate(null);
     alert(`Staff record for ${stf.name} has been removed.`);
+  };
+
+  const handlePurgeAllTeachers = () => {
+    const confirmReset = window.confirm(
+      'Are you sure you want to remove all teacher accounts? This will clear all legacy teachers from the registry and allow teachers to create their fresh accounts with assigned classrooms.'
+    );
+    if (confirmReset) {
+      purgeAllTeachers();
+      alert('All teacher records have been cleared from the system. Teachers may now create their new accounts with their assigned class.');
+    }
   };
 
   const handleExportCSV = () => {
@@ -234,6 +248,14 @@ export const StaffManagement: React.FC = () => {
 
         {/* Global Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handlePurgeAllTeachers}
+            className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+            title="Remove all legacy teacher accounts so teachers can re-register with their assigned class"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-rose-600" />
+            Reset / Clear Teachers
+          </button>
           <button
             onClick={handleExportCSV}
             className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
@@ -753,6 +775,51 @@ export const StaffManagement: React.FC = () => {
                 </div>
               </div>
 
+              {/* Conditional Assigned Class for Teachers */}
+              {form.role === 'Teacher' && (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-amber-950 text-xs flex items-center gap-1.5">
+                      <GraduationCap className="w-4 h-4 text-emerald-800" />
+                      Assigned Classroom / Grade Level *
+                    </label>
+                    <span className="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                      Primary Class
+                    </span>
+                  </div>
+                  <select
+                    value={form.assignedClass}
+                    onChange={(e) => setForm({ ...form, assignedClass: e.target.value })}
+                    className="w-full bg-white border border-amber-300 rounded-lg px-3 py-2 text-slate-900 font-semibold focus:ring-2 focus:ring-emerald-700"
+                  >
+                    {classes && classes.length > 0 ? (
+                      classes.map((cls) => (
+                        <option key={cls.id || cls.name} value={cls.name}>
+                          {cls.name} ({cls.level || 'General'})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Creche">Creche</option>
+                        <option value="Nursery 1">Nursery 1</option>
+                        <option value="Nursery 2">Nursery 2</option>
+                        <option value="Kindergarten 1 (KG 1)">Kindergarten 1 (KG 1)</option>
+                        <option value="Kindergarten 2 (KG 2)">Kindergarten 2 (KG 2)</option>
+                        <option value="Primary 1 (Grade 1)">Primary 1 (Grade 1)</option>
+                        <option value="Primary 2 (Grade 2)">Primary 2 (Grade 2)</option>
+                        <option value="Primary 3 (Grade 3)">Primary 3 (Grade 3)</option>
+                        <option value="Primary 4 (Grade 4)">Primary 4 (Grade 4)</option>
+                        <option value="Primary 5 (Grade 5)">Primary 5 (Grade 5)</option>
+                        <option value="Primary 6 (Grade 6)">Primary 6 (Grade 6)</option>
+                        <option value="JHS 1 (Grade 7)">JHS 1 (Grade 7)</option>
+                        <option value="JHS 2 (Grade 8)">JHS 2 (Grade 8)</option>
+                        <option value="JHS 3 (Grade 9)">JHS 3 (Grade 9)</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Designation / Title</label>
@@ -927,6 +994,51 @@ export const StaffManagement: React.FC = () => {
                   </select>
                 </div>
               </div>
+
+              {/* Conditional Assigned Class for Teachers in Edit Modal */}
+              {form.role === 'Teacher' && (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-amber-950 text-xs flex items-center gap-1.5">
+                      <GraduationCap className="w-4 h-4 text-emerald-800" />
+                      Assigned Classroom / Grade Level *
+                    </label>
+                    <span className="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                      Primary Class
+                    </span>
+                  </div>
+                  <select
+                    value={form.assignedClass}
+                    onChange={(e) => setForm({ ...form, assignedClass: e.target.value })}
+                    className="w-full bg-white border border-amber-300 rounded-lg px-3 py-2 text-slate-900 font-semibold focus:ring-2 focus:ring-emerald-700"
+                  >
+                    {classes && classes.length > 0 ? (
+                      classes.map((cls) => (
+                        <option key={cls.id || cls.name} value={cls.name}>
+                          {cls.name} ({cls.level || 'General'})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Creche">Creche</option>
+                        <option value="Nursery 1">Nursery 1</option>
+                        <option value="Nursery 2">Nursery 2</option>
+                        <option value="Kindergarten 1 (KG 1)">Kindergarten 1 (KG 1)</option>
+                        <option value="Kindergarten 2 (KG 2)">Kindergarten 2 (KG 2)</option>
+                        <option value="Primary 1 (Grade 1)">Primary 1 (Grade 1)</option>
+                        <option value="Primary 2 (Grade 2)">Primary 2 (Grade 2)</option>
+                        <option value="Primary 3 (Grade 3)">Primary 3 (Grade 3)</option>
+                        <option value="Primary 4 (Grade 4)">Primary 4 (Grade 4)</option>
+                        <option value="Primary 5 (Grade 5)">Primary 5 (Grade 5)</option>
+                        <option value="Primary 6 (Grade 6)">Primary 6 (Grade 6)</option>
+                        <option value="JHS 1 (Grade 7)">JHS 1 (Grade 7)</option>
+                        <option value="JHS 2 (Grade 8)">JHS 2 (Grade 8)</option>
+                        <option value="JHS 3 (Grade 9)">JHS 3 (Grade 9)</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>

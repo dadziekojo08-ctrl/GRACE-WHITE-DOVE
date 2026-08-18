@@ -3,6 +3,7 @@ import { useSchool } from '../../context/SchoolContext';
 import { Student, Invoice, Payment } from '../../types';
 import {
   CreditCard,
+  Banknote,
   FileSpreadsheet,
   Receipt,
   RotateCcw,
@@ -75,7 +76,7 @@ export const AccountantDashboard: React.FC<{
   const [processFeeForm, setProcessFeeForm] = useState({
     studentId: '',
     amount: 0,
-    method: 'Mobile Money' as 'Paystack' | 'Mobile Money' | 'Cash' | 'Bank Transfer',
+    method: 'Cash' as 'Cash',
     reference: `RCP-${Date.now().toString().slice(-6)}`,
     remarks: 'School Fees Term Installment'
   });
@@ -174,12 +175,6 @@ export const AccountantDashboard: React.FC<{
       return;
     }
 
-    if (processFeeForm.method === 'Paystack') {
-      setIsProcessFeeModalOpen(false);
-      onOpenPaystack(undefined, Number(processFeeForm.amount), `${student.firstName} ${student.lastName}`, student.id);
-      return;
-    }
-
     const studentInvoice = invoices.find((i) => i.studentId === student.id && i.balance > 0) || invoices.find((i) => i.studentId === student.id);
 
     recordPayment({
@@ -187,13 +182,14 @@ export const AccountantDashboard: React.FC<{
       studentName: `${student.firstName} ${student.lastName}`,
       invoiceId: studentInvoice?.id || `inv-direct-${Date.now().toString().slice(-4)}`,
       amount: Number(processFeeForm.amount),
-      paymentMethod: processFeeForm.method,
+      paymentMethod: 'Cash',
+      channel: 'Cash Desk',
       reference: processFeeForm.reference || `RCP-${Date.now().toString().slice(-6)}`,
       remarks: processFeeForm.remarks,
       status: 'Success'
     });
 
-    alert(`Payment of GHS ${processFeeForm.amount} recorded successfully for ${student.firstName} ${student.lastName}!`);
+    alert(`Payment of GHS ${processFeeForm.amount} recorded at Cash Desk successfully for ${student.firstName} ${student.lastName}!`);
     setIsProcessFeeModalOpen(false);
   };
 
@@ -414,42 +410,42 @@ export const AccountantDashboard: React.FC<{
           </div>
         </div>
 
-        {/* Quick Fee Shortcuts & Paystack Integration Card */}
+        {/* Quick Fee Shortcuts & Cash Desk Processing Card */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-400 text-emerald-950 flex items-center justify-center font-black text-sm">
-                ₵
+              <div className="w-8 h-8 rounded-lg bg-emerald-800 text-amber-300 flex items-center justify-center font-black text-sm shadow-xs">
+                <Banknote className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">Instant Paystack Gateway</h3>
-                <p className="text-[11px] text-slate-500">Live Ghana Card, MoMo & Bank card collection</p>
+                <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">Cash Desk Counter</h3>
+                <p className="text-[11px] text-slate-500">Physical receipting & parent online payment tracking</p>
               </div>
             </div>
 
             <div className="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-100 mb-4 text-xs space-y-2">
               <div className="flex justify-between items-center text-emerald-900">
-                <span className="font-medium">Gateway Status:</span>
-                <span className="font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full text-[10px]">Connected (Live)</span>
+                <span className="font-medium">Cash Desk Status:</span>
+                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full text-[10px]">Cashier Ready</span>
               </div>
               <div className="flex justify-between items-center text-emerald-900">
-                <span className="font-medium">Supported Channels:</span>
-                <span className="font-bold text-slate-800 text-[10px]">MTN, Telecel, AT & Visa</span>
+                <span className="font-medium">Parent Portal MoMo:</span>
+                <span className="font-bold text-slate-800 text-[10px]">Live Paystack Gateway</span>
               </div>
               <div className="flex justify-between items-center text-emerald-900">
                 <span className="font-medium">Instant Receipts:</span>
-                <span className="font-bold text-emerald-800 text-[10px]">Auto-Generated</span>
+                <span className="font-bold text-emerald-800 text-[10px]">Auto-Stamped & SMS</span>
               </div>
             </div>
           </div>
 
           <div className="space-y-2">
             <button
-              onClick={() => onOpenPaystack()}
-              className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+              onClick={() => setIsProcessFeeModalOpen(true)}
+              className="w-full py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
             >
-              <CreditCard className="w-4 h-4" />
-              Launch Paystack Terminal
+              <Banknote className="w-4 h-4 text-amber-300" />
+              Open Cash Desk Counter
             </button>
             <button
               onClick={() => setActiveTab('reports')}
@@ -702,7 +698,7 @@ export const AccountantDashboard: React.FC<{
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Payment Amount (GHS) *</label>
                   <input
@@ -714,17 +710,11 @@ export const AccountantDashboard: React.FC<{
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Method *</label>
-                  <select
-                    value={processFeeForm.method}
-                    onChange={(e) => setProcessFeeForm({ ...processFeeForm, method: e.target.value as any })}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold focus:ring-2 focus:ring-emerald-600 outline-none"
-                  >
-                    <option value="Mobile Money">Mobile Money (MTN/Telecel/AT)</option>
-                    <option value="Paystack">Paystack Online (Card/MoMo)</option>
-                    <option value="Cash">Cash at Counter</option>
-                    <option value="Bank Transfer">Bank Transfer / Deposit</option>
-                  </select>
+                  <label className="block font-semibold text-slate-700 mb-1">Payment Method / Channel</label>
+                  <div className="flex items-center gap-2 p-2 border border-emerald-300 bg-emerald-50 rounded-lg text-emerald-950 font-bold text-xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                    <span>Cash Desk (Physical Counter)</span>
+                  </div>
                 </div>
               </div>
 

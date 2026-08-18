@@ -82,9 +82,11 @@ interface SchoolContextType {
     phone?: string;
     staffCode?: string;
     studentId?: string;
+    assignedClass?: string;
     photoUrl?: string;
     avatarUrl?: string;
   }) => Promise<{ success: boolean; message?: string }>;
+  purgeAllTeachers: () => void;
   resetPassword: (email: string, newPassword?: string) => Promise<{ success: boolean; message?: string }>;
   updateUserProfile: (data: { name?: string; phone?: string; avatarUrl?: string; photoUrl?: string }) => void;
   logout: () => void;
@@ -249,7 +251,16 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Authentication State
   const [authUsers, setAuthUsers] = useState<AuthUser[]>(() => {
-    const saved = loadStorage<AuthUser[]>('authUsers', initialAuthUsers);
+    const isPurged = loadStorage<boolean>('teachers_purged_for_class_v1', false);
+    let saved = loadStorage<AuthUser[]>('authUsers', initialAuthUsers);
+    
+    // Purge previous teachers so faculty can re-register freshly and select their class
+    if (!isPurged && Array.isArray(saved)) {
+      saved = saved.filter(u => u.role !== 'Teacher');
+      saveStorage('teachers_purged_for_class_v1', true);
+      saveStorage('authUsers', saved);
+    }
+
     const usersMap = new Map<string, AuthUser>();
 
     // 1. Load initial seeds
@@ -287,6 +298,10 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     const saved = loadStorage<AuthUser | null>('currentUser', null);
+    if (saved && saved.role === 'Teacher' && !saved.assignedClass) {
+      // Legacy unassigned teacher session cleared for clean re-registration
+      return null;
+    }
     if (saved && (saved.role === 'Admin' || saved.username === 'diana' || saved.username === 'grace' || saved.email === 'admin@educore.edu.gh' || saved.email === 'diana@educore.edu.gh')) {
       return {
         ...saved,
@@ -351,7 +366,16 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [marks, setMarks] = useState<MarkEntry[]>(() => loadStorage('marks', initialMarks));
   const [timetable, setTimetable] = useState<TimetableEntry[]>(() => loadStorage('timetable', initialTimetable));
   const [selectedTimetableClass, setSelectedTimetableClass] = useState<string>('Creche');
-  const [staff, setStaff] = useState<StaffMember[]>(() => loadStorage('staff', initialStaff));
+  const [staff, setStaff] = useState<StaffMember[]>(() => {
+    const isPurged = loadStorage<boolean>('staff_teachers_purged_for_class_v1', false);
+    let saved = loadStorage<StaffMember[]>('staff', initialStaff);
+    if (!isPurged && Array.isArray(saved)) {
+      saved = saved.filter(s => s.role !== 'Teacher');
+      saveStorage('staff_teachers_purged_for_class_v1', true);
+      saveStorage('staff', saved);
+    }
+    return saved;
+  });
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>(() => loadStorage('payrolls', initialPayrolls));
   const [reimbursements, setReimbursements] = useState<Reimbursement[]>(() => loadStorage('reimbursements', initialReimbursements));
   const [books, setBooks] = useState<Book[]>(() => loadStorage('books', initialBooks));
@@ -776,6 +800,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     phone?: string;
     staffCode?: string;
     studentId?: string;
+    assignedClass?: string;
     photoUrl?: string;
     avatarUrl?: string;
   }): Promise<{ success: boolean; message?: string }> => {
@@ -785,6 +810,13 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return {
         success: false,
         message: 'Parents do not need to create an account. Please sign in directly using your child\'s Student ID (e.g. ADM-2024-001) and your registered guardian phone number.'
+      };
+    }
+
+    if (data.role === 'Teacher' && !data.assignedClass) {
+      return {
+        success: false,
+        message: 'Please select the class where you teach to complete teacher account creation.'
       };
     }
 
@@ -811,6 +843,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       phone: data.phone || '+233 24 000 0000',
       staffCode: autoStaffCode,
       studentId: data.studentId,
+      assignedClass: data.role === 'Teacher' ? data.assignedClass : undefined,
       avatarUrl: chosenPicture,
       photoUrl: chosenPicture,
       lastLogin: 'Just now'
@@ -834,19 +867,56 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         phone: newUser.phone || '+233 20 000 0000',
         role: (data.role === 'Transport' ? 'Transport' : data.role) as StaffMember['role'],
         department: data.role === 'Teacher' ? 'Academic Department' : data.role === 'Accountant' ? 'Accounts & Bursary' : data.role === 'Librarian' ? 'Library & Media' : data.role === 'Admin' ? 'Administration & Registry' : 'Transport Services',
-        designation: `${data.role} Specialist`,
-        qualification: 'Registered Certified Professional',
+        designation: data.role === 'Teacher' && data.assignedClass ? `Class Teacher (${data.assignedClass})` : `${data.role} Specialist`,
+        qualification: 'Registered Certified Teacher',
         joinedDate: new Date().toISOString().split('T')[0],
         basicSalary: data.role === 'Admin' ? 6500 : data.role === 'Accountant' ? 5200 : data.role === 'Teacher' ? 4100 : 3500,
         status: 'Active',
+        assignedClass: data.role === 'Teacher' ? data.assignedClass : undefined,
         avatarUrl: chosenPicture,
         photoUrl: chosenPicture
       };
       setStaff(prev => [newStaffEntry, ...prev]);
+
+      // If Teacher with assigned class, assign them to that class and its enrolled students
+      if (data.role === 'Teacher' && data.assignedClass) {
+        setClasses(prevClasses =>
+          prevClasses.map(cls =>
+            cls.name === data.assignedClass || cls.level === data.assignedClass
+              ? { ...cls, classTeacher: newUser.name }
+              : cls
+          )
+        );
+        setStudents(prevStudents =>
+          prevStudents.map(std =>
+            std.className === data.assignedClass
+              ? { ...std, classTeacher: newUser.name }
+              : std
+          )
+        );
+      }
     }
 
-    logAuditAction('USER_REGISTERED', 'Authentication', `New user account created: ${newUser.name} (${newUser.email}) as ${newUser.role} [${newUser.staffCode}]`);
-    return { success: true, message: `Account created successfully! Welcome to Grace White Dove School Complex, ${newUser.name}.` };
+    logAuditAction(
+      'USER_REGISTERED',
+      'Authentication',
+      `New user account created: ${newUser.name} (${newUser.email}) as ${newUser.role} [${newUser.staffCode}]${data.assignedClass ? ` for class ${data.assignedClass}` : ''}`
+    );
+    return {
+      success: true,
+      message: `Account created successfully! Welcome to Grace White Dove School Complex, ${newUser.name}${data.assignedClass ? ` (${data.assignedClass} Teacher)` : ''}.`
+    };
+  };
+
+  const purgeAllTeachers = () => {
+    setAuthUsers(prev => prev.filter(u => u.role !== 'Teacher'));
+    setStaff(prev => prev.filter(s => s.role !== 'Teacher'));
+    setClasses(prev => prev.map(c => ({ ...c, classTeacher: '' })));
+    setStudents(prev => prev.map(s => ({ ...s, classTeacher: '' })));
+    if (currentUser?.role === 'Teacher') {
+      logout();
+    }
+    logAuditAction('TEACHERS_PURGED', 'System Security', 'All teacher accounts have been cleared to allow fresh registration with class assignments.');
   };
 
   const updateUserProfile = (data: { name?: string; phone?: string; avatarUrl?: string; photoUrl?: string }) => {
@@ -1898,6 +1968,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         authUsers,
         login,
         register,
+        purgeAllTeachers,
         resetPassword,
         updateUserProfile,
         logout,
