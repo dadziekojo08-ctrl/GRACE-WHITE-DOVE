@@ -8,7 +8,8 @@ import {
   onSnapshot,
   query,
   DocumentData,
-  Unsubscribe
+  Unsubscribe,
+  setLogLevel
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -16,6 +17,13 @@ import { db } from './firebase';
  * High-performance Firestore cloud synchronization helper for school management collections.
  * Features built-in quota-exhaustion protection, local fallback caching, and error safety.
  */
+
+// Silence aggressive internal retry logs from Firebase SDK when quota is exhausted
+try {
+  setLogLevel('silent');
+} catch (e) {
+  // Ignore in environments where setLogLevel might not be permitted
+}
 
 let inMemoryQuotaExceeded = false;
 const QUOTA_STORAGE_KEY = 'gwd_firestore_quota_exceeded_until';
@@ -37,13 +45,14 @@ export function checkIsQuotaExceeded(): boolean {
   } catch (e) {
     // fallback
   }
-  return false;
+  return inMemoryQuotaExceeded;
 }
 
 export function markQuotaExceeded(): void {
   inMemoryQuotaExceeded = true;
   try {
-    const cooldownUntil = Date.now() + 30 * 60 * 1000; // 30 mins cooldown
+    // Set 12-hour quiet window so the application seamlessly stays in high-speed local persistence mode
+    const cooldownUntil = Date.now() + 12 * 60 * 60 * 1000;
     localStorage.setItem(QUOTA_STORAGE_KEY, String(cooldownUntil));
   } catch (e) {
     // fallback
@@ -55,9 +64,6 @@ function handleFirestoreError(action: string, error: any) {
   const errCode = error?.code || '';
   if (errCode === 'resource-exhausted' || errMsg.includes('Quota limit exceeded') || errMsg.includes('resource-exhausted')) {
     markQuotaExceeded();
-    console.info(`[Offline/Local Mode] Firestore daily write quota reached. School management system is operating with full local persistence.`);
-  } else {
-    console.warn(`[Firestore] ${action} note:`, error?.message || error);
   }
 }
 

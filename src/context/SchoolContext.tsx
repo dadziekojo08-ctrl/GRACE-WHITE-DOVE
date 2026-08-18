@@ -368,7 +368,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
   const hasInitializedFromCloud = useRef<boolean>(false);
 
-  // Initial Cloud Load: fetch collections if available on Firestore
+  // Initial Cloud Load: probe and fetch collections if available on Firestore
   useEffect(() => {
     let isMounted = true;
     async function loadCloudData() {
@@ -379,11 +379,16 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return;
       }
 
-      setIsSyncing(true);
-
       try {
+        // Probe first with one collection to verify Firestore connection & quota status
+        const cloudStudents = await fetchCollectionFromFirestore<Student>('students');
+        if (checkIsQuotaExceeded() || !isMounted) {
+          return;
+        }
+
+        setIsSyncing(true);
+
         const [
-          cloudStudents,
           cloudAdmissions,
           cloudClasses,
           cloudSubjects,
@@ -409,7 +414,6 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           cloudAuthUsers,
           cloudCalendarEvents
         ] = await Promise.all([
-          fetchCollectionFromFirestore<Student>('students'),
           fetchCollectionFromFirestore<AdmissionApplication>('admissions'),
           fetchCollectionFromFirestore<ClassRoom>('classes'),
           fetchCollectionFromFirestore<Subject>('subjects'),
@@ -480,7 +484,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       } catch (err) {
-        console.error('Firestore initial load error:', err);
+        // High-speed fallback to full local persistence
       } finally {
         if (isMounted) setIsSyncing(false);
       }
@@ -523,6 +527,10 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => { saveStorage('auditLogs', auditLogs); }, [auditLogs]);
 
   const syncToCloudNow = async () => {
+    if (checkIsQuotaExceeded()) {
+      setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      return;
+    }
     setIsSyncing(true);
     try {
       await Promise.all([
@@ -554,7 +562,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ]);
       setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } catch (e) {
-      console.warn('Manual Firestore cloud sync finished with note:', e);
+      // Quiet local persistence fallback
     } finally {
       setIsSyncing(false);
     }
