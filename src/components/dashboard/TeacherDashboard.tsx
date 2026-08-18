@@ -47,6 +47,8 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     currentUser,
     activeRole,
     students,
+    addStudent,
+    generateNextStudentNumber,
     attendance,
     markAttendance,
     bulkMarkAttendance,
@@ -74,6 +76,24 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     title: '',
     category: 'Class Supplies',
     amount: ''
+  });
+
+  // Pupil Registration within Teacher Portal
+  const [isAdmitModalOpen, setIsAdmitModalOpen] = useState(false);
+  const [admitSuccessBanner, setAdmitSuccessBanner] = useState<string | null>(null);
+  const [admitFormData, setAdmitFormData] = useState({
+    firstName: '',
+    lastName: '',
+    gender: 'Male' as 'Male' | 'Female',
+    dateOfBirth: '2012-05-15',
+    className: 'JHS 2 (Basic 8)',
+    section: 'A',
+    rollNo: '',
+    guardianName: '',
+    guardianPhone: '',
+    guardianEmail: '',
+    address: 'Accra, Ghana',
+    photoUrl: ''
   });
 
   const teacherName = currentUser?.name || 'Teacher / Staff';
@@ -180,6 +200,53 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     });
     setReimburseForm({ title: '', category: 'Class Supplies', amount: '' });
     setIsReimburseModalOpen(false);
+  };
+
+  const handleAdmitStudentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!admitFormData.firstName || !admitFormData.lastName) return;
+
+    const matchedClass = classes.find(c => c.name === admitFormData.className);
+    const classId = matchedClass?.id || 'cls-008';
+    const autoRollNo = admitFormData.rollNo || `${displayStudents.length + 1}`.padStart(2, '0');
+    const autoPhoto = admitFormData.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(admitFormData.firstName + admitFormData.lastName)}`;
+
+    addStudent({
+      firstName: admitFormData.firstName.trim(),
+      lastName: admitFormData.lastName.trim(),
+      gender: admitFormData.gender,
+      dateOfBirth: admitFormData.dateOfBirth,
+      classId,
+      className: admitFormData.className,
+      classTeacher: teacherName,
+      section: admitFormData.section || 'A',
+      rollNo: autoRollNo,
+      guardianName: admitFormData.guardianName || 'Parent / Guardian',
+      guardianPhone: admitFormData.guardianPhone || '+233 24 100 0000',
+      guardianEmail: admitFormData.guardianEmail || '',
+      address: admitFormData.address || 'Accra, Ghana',
+      status: 'Active',
+      photoUrl: autoPhoto,
+      balanceDue: 0,
+      enrollmentDate: new Date().toISOString().split('T')[0]
+    });
+
+    setAdmitSuccessBanner(`Pupil ${admitFormData.firstName} ${admitFormData.lastName} successfully registered & admitted to ${admitFormData.className}!`);
+    setIsAdmitModalOpen(false);
+    setAdmitFormData({
+      firstName: '',
+      lastName: '',
+      gender: 'Male',
+      dateOfBirth: '2012-05-15',
+      className: 'JHS 2 (Basic 8)',
+      section: 'A',
+      rollNo: '',
+      guardianName: '',
+      guardianPhone: '',
+      guardianEmail: '',
+      address: 'Accra, Ghana',
+      photoUrl: ''
+    });
   };
 
   return (
@@ -434,13 +501,28 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
       {/* 2. MY STUDENTS TAB (Requested Component) */}
       {currentTab === 'my-students' && (
         <div className="space-y-4">
+          {admitSuccessBanner && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-4 py-3 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span className="text-xs font-bold">{admitSuccessBanner}</span>
+              </div>
+              <button
+                onClick={() => setAdmitSuccessBanner(null)}
+                className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="font-bold text-sm text-slate-900">Class Student Directory • JHS 2 (Stream A)</h3>
                 <p className="text-xs text-slate-400">Manage enrolled pupils, parents contact, and performance records</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="relative">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
@@ -451,6 +533,13 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                     className="pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-800"
                   />
                 </div>
+                <button
+                  onClick={() => setIsAdmitModalOpen(true)}
+                  className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 text-amber-300" />
+                  Admit / Register Pupil
+                </button>
               </div>
             </div>
 
@@ -1000,6 +1089,176 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs cursor-pointer"
                 >
                   Submit Claim
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Teacher Pupil Registration / Admission Modal */}
+      {isAdmitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">Admit Pupil to Class Roster</h3>
+                  <p className="text-xs text-slate-400">Teacher Portal • Grace White Dove School Complex</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAdmitModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdmitStudentSubmit} className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">First Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Kwabena"
+                    value={admitFormData.firstName}
+                    onChange={(e) => setAdmitFormData({ ...admitFormData, firstName: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Last Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Mensah"
+                    value={admitFormData.lastName}
+                    onChange={(e) => setAdmitFormData({ ...admitFormData, lastName: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Gender *</label>
+                  <select
+                    value={admitFormData.gender}
+                    onChange={(e) => setAdmitFormData({ ...admitFormData, gender: e.target.value as 'Male' | 'Female' })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Date of Birth</label>
+                  <input
+                    type="date"
+                    value={admitFormData.dateOfBirth}
+                    onChange={(e) => setAdmitFormData({ ...admitFormData, dateOfBirth: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Class Assigned *</label>
+                  <select
+                    value={admitFormData.className}
+                    onChange={(e) => setAdmitFormData({ ...admitFormData, className: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  >
+                    {classes.map((cls) => (
+                      <option key={cls.id} value={cls.name}>
+                        {cls.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Section / Stream</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. A"
+                    value={admitFormData.section}
+                    onChange={(e) => setAdmitFormData({ ...admitFormData, section: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Roll / Desk Number</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 15"
+                    value={admitFormData.rollNo}
+                    onChange={(e) => setAdmitFormData({ ...admitFormData, rollNo: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 space-y-3">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Parent / Guardian Details
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Guardian Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Dr. Kwame Mensah"
+                      value={admitFormData.guardianName}
+                      onChange={(e) => setAdmitFormData({ ...admitFormData, guardianName: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Guardian Phone (Login Key) *</label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="e.g. +233 24 456 7890"
+                      value={admitFormData.guardianPhone}
+                      onChange={(e) => setAdmitFormData({ ...admitFormData, guardianPhone: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Residential Address</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Hse No 14, East Legon, Accra"
+                    value={admitFormData.address}
+                    onChange={(e) => setAdmitFormData({ ...admitFormData, address: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAdmitModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <CheckCircle className="w-4 h-4 text-amber-300" />
+                  Admit to Class
                 </button>
               </div>
             </form>

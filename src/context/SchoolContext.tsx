@@ -243,7 +243,6 @@ function saveStorage<T>(key: string, data: T) {
 
 export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('dashboard');
-  const [activeRole, setActiveRole] = useState<Role>('Admin');
   const [academicYear, setAcademicYear] = useState<string>('2026/2027');
   const [currentTerm, setCurrentTerm] = useState<string>('Term 1');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -287,7 +286,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
 
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
-    const saved = loadStorage('currentUser', null);
+    const saved = loadStorage<AuthUser | null>('currentUser', null);
     if (saved && (saved.role === 'Admin' || saved.username === 'diana' || saved.username === 'grace' || saved.email === 'admin@educore.edu.gh' || saved.email === 'diana@educore.edu.gh')) {
       return {
         ...saved,
@@ -298,6 +297,13 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
     }
     return saved;
+  });
+  const [activeRole, setActiveRole] = useState<Role>(() => {
+    const saved = loadStorage<AuthUser | null>('currentUser', null);
+    if (saved && saved.role) {
+      return saved.role;
+    }
+    return 'Admin';
   });
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => loadStorage('isAuthenticated', false));
 
@@ -806,6 +812,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentUser(newUser);
     setIsAuthenticated(true);
     setActiveRole(newUser.role);
+    setActiveTab('dashboard');
+    saveStorage('currentUser', newUser);
+    saveStorage('isAuthenticated', true);
 
     // If teacher/accountant/librarian/driver/admin, also link to staff registry
     if (['Teacher', 'Accountant', 'Librarian', 'Transport', 'Driver', 'Admin'].includes(data.role)) {
@@ -886,8 +895,27 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     saveStorage('isAuthenticated', false);
   };
 
-  const switchRoleQuick = (role: Role) => {
+  const safeSetActiveRole = (role: Role) => {
+    if (currentUser && currentUser.role === 'Teacher' && role !== 'Teacher') {
+      return;
+    }
+    if (currentUser && currentUser.role === 'Parent' && role !== 'Parent') {
+      return;
+    }
+    if (currentUser && currentUser.role === 'Accountant' && role === 'Admin') {
+      return;
+    }
     setActiveRole(role);
+  };
+
+  const switchRoleQuick = (role: Role) => {
+    if (currentUser && currentUser.role === 'Teacher' && role !== 'Teacher') {
+      return;
+    }
+    if (currentUser && currentUser.role === 'Parent' && role !== 'Parent') {
+      return;
+    }
+    safeSetActiveRole(role);
     const targetUser = authUsers.find(u => u.role === role);
     if (targetUser) {
       setCurrentUser(targetUser);
@@ -1869,7 +1897,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         activeTab,
         setActiveTab,
         activeRole,
-        setActiveRole,
+        setActiveRole: safeSetActiveRole,
         academicYear,
         currentTerm,
         setAcademicYear,

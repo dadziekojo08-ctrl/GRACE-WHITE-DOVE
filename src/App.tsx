@@ -96,10 +96,37 @@ const MainContent: React.FC = () => {
       }
     }
 
-    // 3. Teacher & Admin View Routing
+    // 3. Teacher Portal View Routing (Strict Role-Based Isolation: Teachers only have access to their teacher portal)
+    if (activeRole === 'Teacher') {
+      switch (activeTab) {
+        case 'students':
+          return <StudentManagement onOpenPaystackForStudent={(std) => handleOpenPaystack(undefined, std.balanceDue, `${std.firstName} ${std.lastName}`, std.id)} />;
+        case 'library':
+          return <LibraryManagement />;
+        case 'classes':
+          return <ClassManagement />;
+        case 'subjects':
+          return <SubjectManagement />;
+        case 'timetable':
+          return <TimetableManagement />;
+        case 'attendance':
+          return <AttendanceManagement />;
+        case 'exams':
+          return <ExamManagement />;
+        case 'calendar':
+          return <AcademicCalendar />;
+        case 'announcements':
+          return <AnnouncementCenter />;
+        case 'dashboard':
+        default:
+          return <TeacherDashboard />;
+      }
+    }
+
+    // 4. Admin & Management View Routing
     switch (activeTab) {
       case 'dashboard':
-        return activeRole === 'Teacher' ? <TeacherDashboard /> : <DashboardOverview onOpenPaystack={() => handleOpenPaystack()} onOpenGateScanner={() => {}} />;
+        return <DashboardOverview onOpenPaystack={() => handleOpenPaystack()} onOpenGateScanner={() => {}} />;
       case 'my-child':
         return <ParentMyChild onOpenPaystackForStudent={(std) => handleOpenPaystack(undefined, std.balanceDue, `${std.firstName} ${std.lastName}`, std.id)} />;
       case 'students':
@@ -139,7 +166,7 @@ const MainContent: React.FC = () => {
       case 'security':
         return <BackupSecurity />;
       default:
-        return activeRole === 'Teacher' ? <TeacherDashboard /> : <DashboardOverview onOpenPaystack={() => handleOpenPaystack()} onOpenGateScanner={() => {}} />;
+        return <DashboardOverview onOpenPaystack={() => handleOpenPaystack()} onOpenGateScanner={() => {}} />;
     }
   };
 

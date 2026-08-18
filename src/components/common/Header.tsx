@@ -233,7 +233,17 @@ export const Header: React.FC<{ onOpenMobileSidebar?: () => void; onOpenPaystack
                     </div>
                   ))}
                 </div>
-                {activeRole !== 'Parent' ? (
+                {activeRole === 'Teacher' ? (
+                  <button
+                    onClick={() => {
+                      setActiveTab('announcements');
+                      setShowNotifications(false);
+                    }}
+                    className="w-full mt-2 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-semibold text-center block transition-colors cursor-pointer"
+                  >
+                    View School Announcements →
+                  </button>
+                ) : activeRole !== 'Parent' && activeRole !== 'Accountant' ? (
                   <button
                     onClick={() => {
                       setActiveTab('communication');
@@ -335,30 +345,42 @@ export const Header: React.FC<{ onOpenMobileSidebar?: () => void; onOpenPaystack
                   </button>
                 </div>
 
-                {/* Role Switcher in Menu */}
-                <div className="p-2 border-b border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block px-2 pb-1">
-                    Switch Active Role
-                  </span>
-                  <div className="grid grid-cols-2 gap-1">
-                    {roles.map((r) => (
-                      <button
-                        key={r}
-                        onClick={() => {
-                          setActiveRole(r);
-                          setShowUserMenu(false);
-                        }}
-                        className={`text-left px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                          activeRole === r
-                            ? 'bg-emerald-900 text-white font-bold'
-                            : 'text-slate-700 hover:bg-slate-100'
-                        }`}
-                      >
-                        {r}
-                      </button>
-                    ))}
+                {/* Role Switcher in Menu (Only available for Admin accounts) */}
+                {currentUser?.role === 'Admin' ? (
+                  <div className="p-2 border-b border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block px-2 pb-1">
+                      Switch Active Role (Admin Control)
+                    </span>
+                    <div className="grid grid-cols-2 gap-1">
+                      {roles.map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => {
+                            setActiveRole(r);
+                            setShowUserMenu(false);
+                          }}
+                          className={`text-left px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                            activeRole === r
+                              ? 'bg-emerald-900 text-white font-bold'
+                              : 'text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-2.5 border-b border-slate-100 bg-slate-50/50">
+                    <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                      <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span>{activeRole} Portal Access</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5 pl-6">
+                      Role access is managed by School Administration.
+                    </p>
+                  </div>
+                )}
 
                 {/* Sign Out Action */}
                 <div className="px-2 pt-1">
