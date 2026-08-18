@@ -485,7 +485,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
     const studentName = inv.studentName;
     const balance = inv.balance > 0 ? inv.balance : (student?.balanceDue || 0);
 
-    const defaultMsg = `Dear ${guardianName}, this is a gentle reminder from Greenwood Academy regarding the outstanding fee balance of GHS ${balance.toLocaleString()} for your ward ${studentName} (${inv.className}) for ${inv.term || currentTerm}. Invoice #${inv.invoiceNo} is due on ${inv.dueDate}. Kindly make payments via Mobile Money, Bank Deposit, or Online Paystack portal. Thank you for your continued partnership.`;
+    const defaultMsg = `Dear ${guardianName}, this is a gentle reminder from Grace White Dove School Complex regarding the outstanding fee balance of GHS ${balance.toLocaleString()} for your ward ${studentName} (${inv.className}) for ${inv.term || currentTerm}. Invoice #${inv.invoiceNo} is due on ${inv.dueDate}. Kindly make payments via Mobile Money, Bank Deposit, or Online Paystack portal. For inquiries, email gracewhitedoveschool@gmail.com or call 0244403541. Thank you.`;
 
     setReminderTarget({
       studentId: inv.studentId,
@@ -503,7 +503,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
       channel: 'WhatsApp',
       recipient: guardianPhone,
       recipientName: guardianName,
-      subject: `Fee Payment Reminder: ${studentName} - Greenwood Academy`,
+      subject: `Fee Payment Reminder: ${studentName} - Grace White Dove School Complex`,
       message: defaultMsg
     });
 
@@ -523,7 +523,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
     const guardianPhone = student?.guardianPhone || '0244123456';
     const guardianEmail = student?.guardianEmail || 'parents@educore.edu.gh';
 
-    const defaultMsg = `Dear Parent/Guardian, this is a fee notice from Greenwood Academy regarding the outstanding school fees for ${currentTerm} (${academicYear}). Kindly ensure all outstanding term fees, books, and accessories balances are cleared before the due date. For inquiries or payment assistance, contact the Accounts Office. Thank you.`;
+    const defaultMsg = `Dear Parent/Guardian, this is a fee notice from Grace White Dove School Complex regarding the outstanding school fees for ${currentTerm} (${academicYear}). Kindly ensure all outstanding term fees, books, and accessories balances are cleared before the due date. For inquiries, contact gracewhitedoveschool@gmail.com or 0244403541. Thank you.`;
 
     setReminderTarget({
       studentId: 'bulk_all_debtors',
@@ -1926,8 +1926,8 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
               {/* Official Header */}
               <div className="border-b-2 border-emerald-900 pb-4 flex items-center justify-between">
                 <div>
-                  <h1 className="text-2xl font-black text-emerald-950 font-['Outfit']">Greenwood Academy International</h1>
-                  <p className="text-xs text-slate-600 font-medium">P.O. Box GP 4402, Accra, Ghana • Tel: +233 (0) 302 987 654</p>
+                  <h1 className="text-2xl font-black text-emerald-950 font-['Outfit']">Grace White Dove School Complex</h1>
+                  <p className="text-xs text-slate-600 font-medium">Email: gracewhitedoveschool@gmail.com • Tel: 0244403541</p>
                   <p className="text-xs text-emerald-800 font-bold mt-1">OFFICIAL FINANCIAL & FEE RECOVERY AUDIT REPORT</p>
                 </div>
                 <div className="text-right font-mono">
@@ -2022,7 +2022,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                 <div>
                   <div className="border-b border-slate-400 w-48 mb-1" />
                   <span className="font-bold block text-slate-900">Head of Accounts / Bursar</span>
-                  <span className="text-slate-500">Greenwood Academy Financial Directorate</span>
+                  <span className="text-slate-500">Grace White Dove School Complex Financial Directorate</span>
                 </div>
                 <div className="text-right">
                   <div className="border-b border-slate-400 w-48 ml-auto mb-1" />
@@ -2043,7 +2043,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
             <div className="bg-emerald-900 text-white p-6 flex items-center justify-between">
               <div>
-                <h3 className="text-xl font-bold font-['Outfit']">Greenwood Academy Official Invoice</h3>
+                <h3 className="text-xl font-bold font-['Outfit']">Grace White Dove School Complex Official Invoice</h3>
                 <p className="text-xs text-emerald-200">Invoice #{selectedInvoice.invoiceNo}</p>
               </div>
               <button
@@ -2324,7 +2324,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                   onClick={() => {
                     setReminderForm(prev => ({
                       ...prev,
-                      message: `Dear ${reminderForm.recipientName || 'Parent'}, gentle reminder from Greenwood Academy: Outstanding fee balance of GHS ${reminderTarget.balanceDue.toLocaleString()} for ${reminderTarget.studentName} is due. Please settle via Mobile Money or at the bursar's desk. Thank you.`
+                      message: `Dear ${reminderForm.recipientName || 'Parent'}, gentle reminder from Grace White Dove School Complex: Outstanding fee balance of GHS ${reminderTarget.balanceDue.toLocaleString()} for ${reminderTarget.studentName} is due. Please settle via Mobile Money or at the bursar's desk. For inquiries: gracewhitedoveschool@gmail.com / 0244403541. Thank you.`
                     }));
                   }}
                   className="text-[10px] px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium cursor-pointer"
@@ -2336,7 +2336,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                   onClick={() => {
                     setReminderForm(prev => ({
                       ...prev,
-                      message: `URGENT NOTICE: Dear ${reminderForm.recipientName || 'Parent'}, school fees for ${reminderTarget.studentName} with outstanding amount GHS ${reminderTarget.balanceDue.toLocaleString()} is overdue. Please settle immediately to avoid disruption in student academic activities.`
+                      message: `URGENT NOTICE: Dear ${reminderForm.recipientName || 'Parent'}, school fees for ${reminderTarget.studentName} at Grace White Dove School Complex with outstanding amount GHS ${reminderTarget.balanceDue.toLocaleString()} is overdue. Please settle immediately to avoid disruption in student academic activities.`
                     }));
                   }}
                   className="text-[10px] px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-md font-medium cursor-pointer"
@@ -2392,8 +2392,11 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
 
             <div className="p-6 space-y-4 text-xs">
               <div className="text-center pb-2 border-b border-slate-200">
-                <h4 className="font-bold text-base text-slate-900 font-['Outfit']">Greenwood Academy International</h4>
-                <p className="text-[11px] text-slate-500">Student Tuition & Fee Payment Voucher</p>
+                <h4 className="font-bold text-base text-slate-900 font-['Outfit']">Grace White Dove School Complex</h4>
+                <p className="text-[11px] text-slate-500 font-medium">Student Tuition & Fee Payment Voucher</p>
+                <p className="text-[11px] text-emerald-900 font-medium mt-0.5">
+                  Email: <span className="font-semibold">gracewhitedoveschool@gmail.com</span> • Phone: <span className="font-semibold font-mono">0244403541</span>
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
@@ -2410,7 +2413,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                   <span className="font-bold text-emerald-800">{selectedPaymentReceipt.paymentMethod || selectedPaymentReceipt.channel}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[10px]">Cashier:</span>
+                  <span className="text-slate-500 block text-[10px]">Cashier / Received By:</span>
                   <span className="font-bold text-slate-700">{selectedPaymentReceipt.receivedBy || 'Bursar'}</span>
                 </div>
               </div>

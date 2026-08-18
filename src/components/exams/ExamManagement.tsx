@@ -340,10 +340,10 @@ export const ExamManagement: React.FC = () => {
                   <GraduationCap className="w-6 h-6" />
                 </div>
                 <h1 className="text-2xl font-black text-emerald-950 uppercase tracking-tight font-['Outfit']">
-                  Greenwood International Academy
+                  Grace White Dove School Complex
                 </h1>
               </div>
-              <p className="text-slate-600 text-xs">P.O. Box 450, Airport Residential Area, Accra • Tel: +233 30 200 4882</p>
+              <p className="text-slate-600 text-xs">Email: gracewhitedoveschool@gmail.com • Tel: 0244403541</p>
               <p className="font-bold text-amber-900 mt-1 uppercase tracking-widest text-[11px]">
                 Terminal Academic Assessment Report Card
               </p>

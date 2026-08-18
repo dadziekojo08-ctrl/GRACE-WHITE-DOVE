@@ -20,7 +20,9 @@ import {
   Sparkles,
   Phone,
   Mail,
-  MapPin
+  MapPin,
+  X,
+  CheckCircle
 } from 'lucide-react';
 import { PaystackModal } from '../paystack/PaystackModal';
 import { Payment, Student } from '../../types';
@@ -41,6 +43,7 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
 
   const [currentTab, setCurrentTab] = useState<ChildTab>(initialTab);
   const [isPaystackOpen, setIsPaystackOpen] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState<Payment | null>(null);
 
   const fallbackWard: Student = {
     id: 'std-ward-01',
@@ -439,10 +442,10 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                             <p className="text-xs text-slate-600 mt-1">{p.channel || p.paymentMethod}</p>
                           </div>
                           <button
-                            onClick={handlePrint}
+                            onClick={() => setSelectedReceipt(p)}
                             className="p-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:text-emerald-800 hover:border-emerald-600 transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
                           >
-                            <Printer className="w-3.5 h-3.5 text-emerald-700" />
+                            <Receipt className="w-3.5 h-3.5 text-emerald-700" />
                             <span>Receipt</span>
                           </button>
                         </div>
@@ -485,6 +488,81 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
         studentName={`${ward.firstName} ${ward.lastName}`}
         studentId={ward.id}
       />
+
+      {/* Official Payment Receipt Modal */}
+      {selectedReceipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+            <div className="bg-emerald-950 text-white p-6 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold font-['Outfit'] flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-amber-300" />
+                  Official Payment Receipt
+                </h3>
+                <p className="text-xs text-emerald-200">Receipt Ref #{selectedReceipt.paymentRef || selectedReceipt.reference || selectedReceipt.id}</p>
+              </div>
+              <button
+                onClick={() => setSelectedReceipt(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <div className="text-center pb-2 border-b border-slate-200">
+                <h4 className="font-bold text-base text-slate-900 font-['Outfit']">Grace White Dove School Complex</h4>
+                <p className="text-[11px] text-slate-500 font-medium">Student Tuition & Fee Payment Voucher</p>
+                <p className="text-[11px] text-emerald-900 font-medium mt-0.5">
+                  Email: <span className="font-semibold">gracewhitedoveschool@gmail.com</span> • Phone: <span className="font-semibold font-mono">0244403541</span>
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                <div>
+                  <span className="text-slate-500 block text-[10px]">Student Name:</span>
+                  <span className="font-bold text-slate-900">{selectedReceipt.studentName || `${ward.firstName} ${ward.lastName}`}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px]">Payment Date:</span>
+                  <span className="font-mono font-bold text-slate-900">{selectedReceipt.paymentDate || selectedReceipt.date}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px]">Payment Channel:</span>
+                  <span className="font-bold text-emerald-800">{selectedReceipt.channel || selectedReceipt.paymentMethod}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px]">Ward ID / Class:</span>
+                  <span className="font-bold text-slate-700">{ward.admissionNo} • {ward.className}</span>
+                </div>
+              </div>
+
+              <div className="bg-emerald-950 text-white p-4 rounded-xl text-center space-y-1">
+                <span className="text-[11px] text-amber-300 uppercase tracking-wider font-semibold">Amount Paid</span>
+                <div className="text-2xl font-black font-mono text-white">
+                  GHS {selectedReceipt.amount.toLocaleString()}
+                </div>
+                <span className="text-[10px] text-emerald-300 block">Status: Verified & Processed</span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  onClick={() => setSelectedReceipt(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" /> Print Official Slip
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

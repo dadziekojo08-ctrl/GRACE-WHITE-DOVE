@@ -815,6 +815,9 @@ export const AccountantDashboard: React.FC<{
               <div>
                 <h3 className="font-bold text-base font-['Outfit']">Grace White Dove School Complex</h3>
                 <p className="text-xs text-emerald-200">Official Student Fee Receipt</p>
+                <p className="text-[10px] text-emerald-300 mt-0.5 font-medium">
+                  gracewhitedoveschool@gmail.com • 0244403541
+                </p>
               </div>
               <button
                 onClick={() => setSelectedReceiptPayment(null)}

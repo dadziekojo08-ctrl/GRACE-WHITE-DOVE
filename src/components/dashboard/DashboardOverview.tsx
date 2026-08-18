@@ -82,31 +82,45 @@ export const DashboardOverview: React.FC<{
   const activeBookIssues = bookIssues.filter((i) => i.status === 'Issued' || i.status === 'Overdue').length;
 
   const todayPresentCount = attendance.filter((a) => a.status === 'Present' || a.status === 'Late').length;
-  const attendanceRate = totalStudents > 0 ? Math.round((todayPresentCount / totalStudents) * 100) : 95;
+  const attendanceRate = attendance.length > 0 ? Math.round((todayPresentCount / attendance.length) * 100) : 0;
 
-  // Chart Data for Fee collections by month
-  const monthlyRevenueData = [
-    { month: 'Jan', collected: 42000, target: 45000 },
-    { month: 'Feb', collected: 38500, target: 40000 },
-    { month: 'Mar', collected: 51200, target: 50000 },
-    { month: 'Apr', collected: 46000, target: 45000 },
-    { month: 'May', collected: 62000, target: 60000 },
-    { month: 'Jun', collected: 58900, target: 55000 },
-    { month: 'Jul', collected: 69500, target: 65000 },
-    { month: 'Aug', collected: 74200, target: 70000 }
-  ];
+  // Dynamically calculate Monthly Revenue Data from live payments & invoices
+  const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
+  const monthlyRevenueData = monthLabels.map((month, idx) => {
+    const monthPayments = payments.filter((p) => {
+      const dateStr = p.date || p.paymentDate || '';
+      const d = new Date(dateStr);
+      return !isNaN(d.getTime()) && d.getMonth() === idx;
+    });
+    const collected = monthPayments.reduce((acc, p) => acc + p.amount, 0);
+    const target = invoices.length > 0 ? Math.round(invoices.reduce((acc, i) => acc + i.totalAmount, 0) / 8) : 0;
+    return { month, collected, target };
+  });
 
-  const classAttendanceData = [
-    { class: 'KG 1-2', rate: 94 },
-    { class: 'Pri 1-3', rate: 97 },
-    { class: 'Pri 4-6', rate: 98 },
-    { class: 'JHS 1', rate: 93 },
-    { class: 'JHS 2', rate: 96 },
-    { class: 'JHS 3', rate: 99 }
-  ];
+  // Dynamically calculate class attendance from live attendance records
+  const classAttendanceData = classes.length > 0
+    ? classes.slice(0, 6).map((cls) => {
+        const classStudents = students.filter((s) => s.className?.toLowerCase() === cls.name.toLowerCase() || s.classId === cls.id);
+        const studentIds = new Set(classStudents.map((s) => s.id));
+        const classAtt = attendance.filter((a) => studentIds.has(a.studentId));
+        const presentCount = classAtt.filter((a) => a.status === 'Present' || a.status === 'Late').length;
+        const rate = classAtt.length > 0 ? Math.round((presentCount / classAtt.length) * 100) : 0;
+        return {
+          class: cls.name.replace(/Primary /i, 'Pri ').replace(/Junior High School /i, 'JHS '),
+          rate
+        };
+      })
+    : [
+        { class: 'KG 1-2', rate: 0 },
+        { class: 'Pri 1-3', rate: 0 },
+        { class: 'Pri 4-6', rate: 0 },
+        { class: 'JHS 1', rate: 0 },
+        { class: 'JHS 2', rate: 0 },
+        { class: 'JHS 3', rate: 0 }
+      ];
 
-  const femaleRatio = totalStudents > 0 ? Math.round((femaleStudents / totalStudents) * 100) : 52;
-  const maleRatio = totalStudents > 0 ? 100 - femaleRatio : 48;
+  const femaleRatio = totalStudents > 0 ? Math.round((femaleStudents / totalStudents) * 100) : 0;
+  const maleRatio = totalStudents > 0 ? Math.round((maleStudents / totalStudents) * 100) : 0;
   const genderData = [
     { name: 'Female Students', value: femaleRatio, count: femaleStudents, color: '#059669' },
     { name: 'Male Students', value: maleRatio, count: maleStudents, color: '#f59e0b' }
@@ -363,7 +377,7 @@ export const DashboardOverview: React.FC<{
                 <BarChart data={classAttendanceData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="class" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                  <YAxis domain={[80, 100]} stroke="#94a3b8" fontSize={10} tickLine={false} />
+                  <YAxis domain={[0, 100]} stroke="#94a3b8" fontSize={10} tickLine={false} />
                   <Tooltip
                     formatter={(val: number) => [`${val}% Attendance`, '']}
                     contentStyle={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '12px' }}
@@ -376,7 +390,7 @@ export const DashboardOverview: React.FC<{
 
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
             <span className="text-slate-500">Overall Average:</span>
-            <span className="font-bold text-emerald-800">96.2%</span>
+            <span className="font-bold text-emerald-800">{attendanceRate}%</span>
           </div>
         </div>
       </div>

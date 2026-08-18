@@ -299,10 +299,10 @@ export const CommunicationSuite: React.FC = () => {
                 {/* WhatsApp Header */}
                 <div className="px-3 py-2 bg-[#1f2c34] border-b border-slate-700 flex items-center gap-2">
                   <div className="w-7 h-7 rounded-full bg-emerald-700 text-amber-300 font-bold flex items-center justify-center text-[10px]">
-                    GA
+                    GWD
                   </div>
                   <div>
-                    <span className="font-bold text-[11px] block leading-tight">Greenwood Academy</span>
+                    <span className="font-bold text-[11px] block leading-tight">Grace White Dove School Complex</span>
                     <span className="text-[9px] text-emerald-400">Official Notification Hub</span>
                   </div>
                 </div>

@@ -72,7 +72,7 @@ export const AttendanceManagement: React.FC<{ initialOpenScanner?: boolean }> = 
         recipient: std.guardianPhone,
         recipientName: std.guardianName,
         subject: 'Attendance Notification',
-        message: `Dear ${std.guardianName}, your child ${std.firstName} ${std.lastName} was recorded absent from Greenwood Academy on ${selectedDate}. If this is an excused absence, kindly reach out to school administration.`
+        message: `Dear ${std.guardianName}, your child ${std.firstName} ${std.lastName} was recorded absent from Grace White Dove School Complex on ${selectedDate}. If this is an excused absence, kindly reach out to school administration at 0244403541.`
       });
     });
     alert(`Dispatched automated WhatsApp / SMS absentee alerts to ${absentStudents.length} parent(s).`);

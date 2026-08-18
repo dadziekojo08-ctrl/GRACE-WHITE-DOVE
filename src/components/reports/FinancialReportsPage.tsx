@@ -126,7 +126,7 @@ export const FinancialReportsPage: React.FC<{
     const gEmail = std?.guardianEmail || 'parent@educore.edu.gh';
     const bal = inv.balance > 0 ? inv.balance : (std?.balanceDue || 0);
 
-    const defaultMsg = `Dear ${gName}, this is a gentle reminder from Greenwood Academy regarding the outstanding fee balance of GHS ${bal.toLocaleString()} for your ward ${inv.studentName} (${inv.className}) for ${inv.term || currentTerm}. Invoice #${inv.invoiceNo} is due on ${inv.dueDate}. Kindly make payment via Mobile Money, Bank, or Online Portal. Thank you.`;
+    const defaultMsg = `Dear ${gName}, this is a gentle reminder from Grace White Dove School Complex regarding the outstanding fee balance of GHS ${bal.toLocaleString()} for your ward ${inv.studentName} (${inv.className}) for ${inv.term || currentTerm}. Invoice #${inv.invoiceNo} is due on ${inv.dueDate}. Kindly make payment via Mobile Money, Bank, or Online Portal. For inquiries: gracewhitedoveschool@gmail.com or 0244403541. Thank you.`;
 
     setReminderTarget({
       studentId: inv.studentId,
@@ -144,7 +144,7 @@ export const FinancialReportsPage: React.FC<{
       channel: 'WhatsApp',
       recipient: gPhone,
       recipientName: gName,
-      subject: `Fee Payment Reminder: ${inv.studentName} - Greenwood Academy`,
+      subject: `Fee Payment Reminder: ${inv.studentName} - Grace White Dove School Complex`,
       message: defaultMsg
     });
 
