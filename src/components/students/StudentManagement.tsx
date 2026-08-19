@@ -25,7 +25,11 @@ import {
   UserCheck,
   AlertCircle,
   RefreshCw,
-  GraduationCap
+  GraduationCap,
+  Banknote,
+  DollarSign,
+  Save,
+  Clock
 } from 'lucide-react';
 import { DigitalIdCardGenerator } from './DigitalIdCardGenerator';
 
@@ -43,7 +47,9 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
     invoices,
     classes,
     generateNextStudentNumber,
-    suggestTeacherForClass
+    suggestTeacherForClass,
+    currentUser,
+    updateStudentArrears
   } = useSchool();
 
   const [selectedClass, setSelectedClass] = useState<string>('all');
@@ -52,6 +58,11 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+
+  // Manual Arrears Override in Profile Modal State
+  const [profileManualArrears, setProfileManualArrears] = useState<number | string>(0);
+  const [profileArrearsReason, setProfileArrearsReason] = useState<string>('');
+  const [arrearsSaveFeedback, setArrearsSaveFeedback] = useState<string | null>(null);
 
   // Digital ID Card Generator State
   const [isIdGeneratorOpen, setIsIdGeneratorOpen] = useState<boolean>(false);
@@ -74,6 +85,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
     guardianEmail: string;
     address: string;
     balanceDue: number;
+    manualArrears: number;
     photoUrl: string;
   }>({
     admissionNo: '',
@@ -91,6 +103,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
     guardianEmail: '',
     address: '',
     balanceDue: 0,
+    manualArrears: 0,
     photoUrl: ''
   });
 
@@ -206,7 +219,8 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
         guardianEmail: formData.guardianEmail,
         address: formData.address,
         photoUrl: formData.photoUrl,
-        balanceDue: Number(formData.balanceDue)
+        balanceDue: Number(formData.balanceDue),
+        manualArrears: Number(formData.manualArrears) || 0
       });
       setEditingStudent(null);
     } else {
@@ -228,7 +242,8 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
         address: formData.address,
         status: 'Active',
         photoUrl: formData.photoUrl || `https://api.dicebear.com/7.x/micah/svg?seed=${encodeURIComponent(formData.firstName + ' ' + formData.lastName)}`,
-        balanceDue: Number(formData.balanceDue)
+        balanceDue: Number(formData.balanceDue),
+        manualArrears: Number(formData.manualArrears) || 0
       });
       setIsAddModalOpen(false);
     }
@@ -250,6 +265,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       guardianEmail: '',
       address: '',
       balanceDue: 0,
+      manualArrears: 0,
       photoUrl: ''
     });
   };
@@ -272,9 +288,40 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       guardianEmail: std.guardianEmail,
       address: std.address,
       balanceDue: std.balanceDue,
+      manualArrears: std.manualArrears || 0,
       photoUrl: std.photoUrl
     });
     setIsAddModalOpen(true);
+  };
+
+  const handleOpenProfile = (std: Student) => {
+    setActiveStudentProfile(std);
+    setProfileManualArrears(std.manualArrears || 0);
+    setProfileArrearsReason('');
+    setArrearsSaveFeedback(null);
+  };
+
+  const handleSaveProfileManualArrears = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeStudentProfile) return;
+
+    const newAmount = Math.max(0, Number(profileManualArrears) || 0);
+    updateStudentArrears(
+      activeStudentProfile.id,
+      newAmount,
+      profileArrearsReason.trim() || 'Manual Arrears Override via Student Finance Profile'
+    );
+
+    const oldArrears = activeStudentProfile.manualArrears || 0;
+    const diff = newAmount - oldArrears;
+    const updated: Student = {
+      ...activeStudentProfile,
+      manualArrears: newAmount,
+      balanceDue: Math.max(0, (activeStudentProfile.balanceDue || 0) + diff)
+    };
+    setActiveStudentProfile(updated);
+    setArrearsSaveFeedback(`Manual arrears override of GHS ${newAmount.toLocaleString()} saved successfully to database!`);
+    setTimeout(() => setArrearsSaveFeedback(null), 4000);
   };
 
   const handleExportCSV = () => {
@@ -643,20 +690,160 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                   <div className="flex justify-between"><span className="text-slate-500">Address:</span><span className="font-semibold text-right max-w-[150px] truncate">{activeStudentProfile.address}</span></div>
                 </div>
 
-                {/* Guardian Info & Fees */}
+                {/* Guardian Info */}
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
                   <h4 className="font-bold text-emerald-950 border-b border-slate-200 pb-1.5 flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-emerald-700" /> Guardian & Billing
+                    <Phone className="w-3.5 h-3.5 text-emerald-700" /> Guardian & Family
                   </h4>
                   <div className="flex justify-between"><span className="text-slate-500">Guardian:</span><span className="font-semibold">{activeStudentProfile.guardianName}</span></div>
                   <div className="flex justify-between"><span className="text-slate-500">Phone:</span><span className="font-semibold font-mono">{activeStudentProfile.guardianPhone}</span></div>
                   <div className="flex justify-between"><span className="text-slate-500">Email:</span><span className="font-semibold truncate max-w-[150px]">{activeStudentProfile.guardianEmail}</span></div>
-                  <div className="flex justify-between pt-1 border-t border-slate-200">
-                    <span className="text-slate-500">Fee Balance:</span>
-                    <span className="font-bold text-amber-700 text-sm">GHS {activeStudentProfile.balanceDue.toLocaleString()}</span>
-                  </div>
+                  <div className="flex justify-between"><span className="text-slate-500">Address:</span><span className="font-semibold text-right max-w-[150px] truncate">{activeStudentProfile.address}</span></div>
                 </div>
               </div>
+
+              {/* Student Financial Profile & Manual Arrears Override */}
+              {(() => {
+                const studentInvoice = invoices.find((i) => i.studentId === activeStudentProfile.id);
+                const termFees = studentInvoice?.termFees || 0;
+                const books = studentInvoice?.books || 0;
+                const accessories = studentInvoice?.accessories || 0;
+                const currentTermTotal = studentInvoice?.currentTermAmount ?? (termFees + books + accessories > 0 ? (termFees + books + accessories) : Math.max(0, (studentInvoice?.totalAmount || 0) - (studentInvoice?.arrears || 0)));
+                const manualArrears = activeStudentProfile.manualArrears || 0;
+                const totalBalance = activeStudentProfile.balanceDue;
+                const isAdminOrAccountant = currentUser?.role === 'Admin' || currentUser?.role === 'Accountant' || currentUser?.role === 'System' || !currentUser?.role;
+
+                return (
+                  <div className="bg-gradient-to-br from-slate-50 to-emerald-50/40 p-4 sm:p-5 rounded-2xl border border-emerald-200/80 space-y-4">
+                    <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2.5 flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-800 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                          <Banknote className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-emerald-950 text-sm">Student Finance Profile & Arrears</h4>
+                          <p className="text-[11px] text-slate-500">Separated billing of current term fees from manual previous arrears</p>
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">
+                        {studentInvoice ? `Invoice: ${studentInvoice.invoiceNo}` : 'No Active Term Invoice'}
+                      </span>
+                    </div>
+
+                    {/* 3 Metric Summary Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                          Current Term Bill
+                        </span>
+                        <span className="text-base font-extrabold text-slate-900">
+                          GHS {currentTermTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          Term Fees, Books & Accessories
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-3 rounded-xl border border-amber-200 shadow-2xs">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-amber-700 block mb-1 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-amber-600" /> Manual Arrears
+                        </span>
+                        <span className="text-base font-extrabold text-amber-700">
+                          GHS {manualArrears.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                        <div className="text-[10px] text-amber-600/80 mt-0.5">
+                          Prior Terms Unpaid Debt
+                        </div>
+                      </div>
+
+                      <div className="bg-emerald-900 text-white p-3 rounded-xl shadow-2xs">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-200 block mb-1">
+                          Total Balance Due
+                        </span>
+                        <span className="text-base font-extrabold text-white">
+                          GHS {totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                        <div className="text-[10px] text-emerald-300 mt-0.5">
+                          Current Bill + Arrears - Payments
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Manual Arrears Override Interactive Form */}
+                    {isAdminOrAccountant ? (
+                      <form onSubmit={handleSaveProfileManualArrears} className="bg-white p-4 rounded-xl border border-emerald-300 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-1">
+                          <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <DollarSign className="w-4 h-4 text-emerald-700" />
+                            Manual Arrears Override (Admin / Accountant Control)
+                          </label>
+                          <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-semibold">
+                            Persists to Database
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] font-semibold text-slate-700">Manual Arrears Override (GHS)</span>
+                            </div>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">GHS</span>
+                              <input
+                                type="number"
+                                step="any"
+                                min="0"
+                                value={profileManualArrears}
+                                onChange={(e) => setProfileManualArrears(e.target.value)}
+                                className="w-full pl-12 pr-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] font-semibold text-slate-700">Ledger Audit Reason / Note</span>
+                            </div>
+                            <input
+                              type="text"
+                              value={profileArrearsReason}
+                              onChange={(e) => setProfileArrearsReason(e.target.value)}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                              placeholder="e.g. Carried forward from previous academic year"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-2">
+                          <p className="text-[11px] text-slate-500 max-w-sm">
+                            Adjusting this value updates the student&apos;s manual arrears balance independently of current term fee calculations.
+                          </p>
+                          <button
+                            type="submit"
+                            className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                          >
+                            <Save className="w-3.5 h-3.5 text-amber-300" />
+                            Save Arrears Override
+                          </button>
+                        </div>
+
+                        {arrearsSaveFeedback && (
+                          <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 p-2.5 rounded-lg text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                            <CheckCircle className="w-4 h-4 text-emerald-700 shrink-0" />
+                            <span>{arrearsSaveFeedback}</span>
+                          </div>
+                        )}
+                      </form>
+                    ) : (
+                      <div className="bg-slate-100 p-3 rounded-xl text-xs text-slate-600 flex items-center justify-between">
+                        <span>Manual arrears can only be modified by an Admin or Accountant.</span>
+                        <span className="font-bold text-slate-700">GHS {manualArrears.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Student Exam Marks History */}
               <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -973,6 +1160,62 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
                       placeholder="Accra, Ghana"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Particulars & Manual Arrears Override */}
+              <div className="border-t border-slate-200 pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-bold text-emerald-900 flex items-center gap-1.5">
+                    <Banknote className="w-4 h-4 text-emerald-700" />
+                    Financial & Arrears Configuration
+                  </h4>
+                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                    Admin / Accountant
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-semibold text-slate-700">Manual Arrears Override (GHS)</label>
+                      <span className="text-[10px] text-amber-700 font-bold">Independent</span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">GHS</span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={formData.manualArrears}
+                        onChange={(e) => setFormData({ ...formData, manualArrears: Number(e.target.value) || 0 })}
+                        className="w-full pl-12 pr-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Prior terms debt carried forward.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-semibold text-slate-700">Total Fee Balance Due (GHS)</label>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">GHS</span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={formData.balanceDue}
+                        onChange={(e) => setFormData({ ...formData, balanceDue: Number(e.target.value) || 0 })}
+                        className="w-full pl-12 pr-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Total outstanding ledger balance.
+                    </p>
                   </div>
                 </div>
               </div>

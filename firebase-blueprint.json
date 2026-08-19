@@ -24,7 +24,8 @@
         "address": { "type": "string" },
         "status": { "type": "string" },
         "photoUrl": { "type": "string" },
-        "balanceDue": { "type": "number" }
+        "balanceDue": { "type": "number" },
+        "manualArrears": { "type": "number" }
       },
       "required": ["id", "admissionNo", "firstName", "lastName", "className", "status"]
     },

@@ -29,7 +29,8 @@ import {
   Bell,
   Mail,
   Phone,
-  MessageSquare
+  MessageSquare,
+  Save
 } from 'lucide-react';
 
 interface FeeManagementProps {
@@ -53,6 +54,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
     classes,
     currentUser,
     sendBroadcast,
+    updateStudentArrears,
     setActiveTab: setGlobalActiveTab
   } = useSchool();
 
@@ -70,6 +72,35 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
   const [isClearReportOpen, setIsClearReportOpen] = useState(false);
   const [isExportPdfOpen, setIsExportPdfOpen] = useState(false);
   const [isNewStructureOpen, setIsNewStructureOpen] = useState(false);
+  const [isManualArrearsModalOpen, setIsManualArrearsModalOpen] = useState(false);
+
+  // Manual Arrears Override State
+  const [selectedStudentForArrears, setSelectedStudentForArrears] = useState<Student | null>(null);
+  const [overrideArrearsAmount, setOverrideArrearsAmount] = useState<number | string>(0);
+  const [overrideArrearsReason, setOverrideArrearsReason] = useState<string>('');
+
+  const handleOpenArrearsOverride = (student: Student) => {
+    setSelectedStudentForArrears(student);
+    setOverrideArrearsAmount(student.manualArrears || 0);
+    setOverrideArrearsReason('');
+    setIsManualArrearsModalOpen(true);
+  };
+
+  const handleSaveArrearsOverride = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentForArrears) return;
+
+    const amount = Math.max(0, Number(overrideArrearsAmount) || 0);
+    updateStudentArrears(
+      selectedStudentForArrears.id,
+      amount,
+      overrideArrearsReason.trim() || 'Manual Arrears Override via Fee Portal'
+    );
+    showToast(
+      `Set manual arrears for ${selectedStudentForArrears.firstName} ${selectedStudentForArrears.lastName} to GHS ${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+    );
+    setIsManualArrearsModalOpen(false);
+  };
 
   // Send Reminder Modal State
   const [isSendReminderOpen, setIsSendReminderOpen] = useState(false);
@@ -845,6 +876,22 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
 
             <div className="flex items-center gap-2 flex-wrap">
               <button
+                onClick={() => {
+                  if (students.length > 0) {
+                    setSelectedStudentForArrears(students[0]);
+                    setOverrideArrearsAmount(students[0].manualArrears || 0);
+                    setOverrideArrearsReason('');
+                    setIsManualArrearsModalOpen(true);
+                  }
+                }}
+                className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                title="Set or adjust manual arrears balance for any student independently of billing calculations"
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-700" />
+                <span>Manual Arrears Override</span>
+              </button>
+
+              <button
                 onClick={handleOpenBulkReminders}
                 className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
                 title="Send notification broadcast to all parents with outstanding balances"
@@ -957,6 +1004,19 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                                 <span>Send Reminder</span>
                               </button>
                             )}
+                            <button
+                              onClick={() => {
+                                const std = students.find((s) => s.id === inv.studentId);
+                                if (std) {
+                                  handleOpenArrearsOverride(std);
+                                }
+                              }}
+                              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-lg text-[11px] shadow-xs cursor-pointer flex items-center gap-1 transition-colors"
+                              title="Set or adjust manual arrears for this student"
+                            >
+                              <Clock className="w-3 h-3 text-amber-700" />
+                              <span>Arrears</span>
+                            </button>
                             {inv.balance > 0 && (
                               <button
                                 onClick={() => {
@@ -2511,6 +2571,130 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                   className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl shadow-sm cursor-pointer"
                 >
                   Save Structure
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* 8. MANUAL ARREARS OVERRIDE MODAL */}
+      {/* ============================================================= */}
+      {isManualArrearsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-bold">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base font-['Outfit']">Manual Arrears Override</h3>
+                  <p className="text-xs text-emerald-200">Admin & Accountant Independent Debt Ledger Control</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsManualArrearsModalOpen(false)}
+                className="text-white hover:opacity-80 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveArrearsOverride} className="p-6 space-y-4 text-xs">
+              {/* Student Selector */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Select Student *</label>
+                <select
+                  value={selectedStudentForArrears?.id || ''}
+                  onChange={(e) => {
+                    const found = students.find((s) => s.id === e.target.value);
+                    if (found) {
+                      setSelectedStudentForArrears(found);
+                      setOverrideArrearsAmount(found.manualArrears || 0);
+                    }
+                  }}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold bg-white outline-none focus:ring-2 focus:ring-emerald-600"
+                >
+                  {students.map((std) => (
+                    <option key={std.id} value={std.id}>
+                      {std.firstName} {std.lastName} ({std.admissionNo}) — {std.className} [Current Arrears: GHS {(std.manualArrears || 0).toLocaleString()}]
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Student Context Card */}
+              {selectedStudentForArrears && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-500 font-medium">Student Name:</span>
+                    <span className="font-bold text-slate-900">{selectedStudentForArrears.firstName} {selectedStudentForArrears.lastName}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-500 font-medium">Class / Guardian:</span>
+                    <span className="font-semibold text-slate-700">{selectedStudentForArrears.className} ({selectedStudentForArrears.guardianName})</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs pt-1.5 border-t border-slate-200">
+                    <span className="text-slate-500 font-medium">Current Registered Arrears:</span>
+                    <span className="font-extrabold text-amber-700">GHS {(selectedStudentForArrears.manualArrears || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Arrears Amount Input */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-slate-700">New Manual Arrears Balance (GHS) *</label>
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                    Independent from Billing
+                  </span>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">GHS</span>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    required
+                    value={overrideArrearsAmount}
+                    onChange={(e) => setOverrideArrearsAmount(e.target.value)}
+                    className="w-full pl-12 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm font-extrabold text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                    placeholder="0.00"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  This value represents previous unpaid debt carried forward. It will persist directly to the database and will not be overwritten by current term fee billing items (Term Fees, Books, Accessories).
+                </p>
+              </div>
+
+              {/* Audit Reason */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Audit Reason / Ledger Note (Optional)</label>
+                <input
+                  type="text"
+                  value={overrideArrearsReason}
+                  onChange={(e) => setOverrideArrearsReason(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                  placeholder="e.g. Unpaid balance brought forward from Term 3"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsManualArrearsModalOpen(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4 text-amber-300" />
+                  Save Arrears Override
                 </button>
               </div>
             </form>
