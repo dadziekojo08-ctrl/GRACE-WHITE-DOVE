@@ -59,6 +59,7 @@ export interface Student {
   status: 'Active' | 'Inactive' | 'Suspended' | 'Alumni' | 'Graduated';
   photoUrl: string;
   balanceDue: number;
+  manualArrears?: number;
   joinedDate: string;
   enrollmentDate?: string;
 }
@@ -200,6 +201,7 @@ export interface FeeStructure {
 export interface InvoiceItem {
   description: string;
   amount: number;
+  category?: 'term_fees' | 'books' | 'accessories' | 'arrears' | 'other';
 }
 
 export interface Invoice {
@@ -212,11 +214,18 @@ export interface Invoice {
   academicYear: string;
   issueDate: string;
   dueDate: string;
+  termFees?: number;
+  books?: number;
+  accessories?: number;
+  arrears?: number;
+  currentTermAmount?: number;
   totalAmount: number;
+  grandTotal?: number;
   paidAmount: number;
   balance: number;
   status: 'Paid' | 'Partial' | 'Unpaid' | 'Overdue' | 'Partially Paid';
   items?: InvoiceItem[];
+  notes?: string;
 }
 
 export interface Payment {

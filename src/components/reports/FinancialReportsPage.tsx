@@ -60,6 +60,7 @@ export const FinancialReportsPage: React.FC<{
     recordPayment,
     generateMonthlyPayroll,
     markPayrollPaid,
+    updateStudentArrears,
     academicYear,
     currentTerm,
     logAuditAction,
@@ -84,6 +85,19 @@ export const FinancialReportsPage: React.FC<{
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<Payment | null>(null);
   const [isNewFeeDeskModalOpen, setIsNewFeeDeskModalOpen] = useState(false);
+
+  // Adjust Arrears Modal State (Admin / Finance manual entry)
+  const [isAdjustArrearsOpen, setIsAdjustArrearsOpen] = useState(false);
+  const [adjustArrearsTarget, setAdjustArrearsTarget] = useState<{
+    studentId: string;
+    studentName: string;
+    className: string;
+    currentArrears: number;
+    currentTermBill: number;
+    totalBalance: number;
+    newArrearsAmount: number;
+    reason: string;
+  } | null>(null);
 
   // Send Reminder Modal State for Arrears Tracking
   const [isReminderOpen, setIsReminderOpen] = useState(false);
@@ -168,39 +182,72 @@ export const FinancialReportsPage: React.FC<{
   };
 
   // -------------------------------------------------------------
-  // CALCULATIONS FOR METRICS
+  // CALCULATIONS FOR METRICS & BREAKDOWNS
   // -------------------------------------------------------------
 
+  // Helper to extract separated billing components for any invoice
+  const getInvoiceBreakdown = (inv: Invoice) => {
+    const tuitionItem = inv.items?.find((it) => it.description.toLowerCase().includes('term') || it.description.toLowerCase().includes('tuition'));
+    const bookItem = inv.items?.find((it) => it.description.toLowerCase().includes('book'));
+    const accItem = inv.items?.find((it) => it.description.toLowerCase().includes('accessor') || it.description.toLowerCase().includes('uniform'));
+    const arrearsItem = inv.items?.find((it) => it.description.toLowerCase().includes('arrear'));
+
+    const termFees = inv.termFees !== undefined ? inv.termFees : (tuitionItem ? tuitionItem.amount : 0);
+    const books = inv.books !== undefined ? inv.books : (bookItem ? bookItem.amount : 0);
+    const accessories = inv.accessories !== undefined ? inv.accessories : (accItem ? accItem.amount : 0);
+    const arrears = inv.arrears !== undefined ? inv.arrears : (arrearsItem ? arrearsItem.amount : 0);
+
+    // Current Term Amount = Term Fees + Books + Accessories
+    const currentTermAmount = inv.currentTermAmount !== undefined 
+      ? inv.currentTermAmount 
+      : ((termFees + books + accessories) > 0 ? (termFees + books + accessories) : Math.max(0, inv.totalAmount - arrears));
+
+    // Grand Total = Current Term Amount + Prior Manual Arrears
+    const grandTotal = inv.grandTotal !== undefined 
+      ? inv.grandTotal 
+      : (currentTermAmount + arrears);
+
+    const paidAmount = inv.paidAmount || 0;
+    const balanceDue = inv.balance !== undefined ? inv.balance : Math.max(0, grandTotal - paidAmount);
+
+    return {
+      termFees,
+      books,
+      accessories,
+      currentTermAmount,
+      arrears,
+      grandTotal,
+      paidAmount,
+      balanceDue
+    };
+  };
+
   // 1. Ledger & Summary Metrics
-  // Total Tuition/Academic Fees
-  const totalTuitionFees = invoices.reduce((sum, inv) => {
-    const tuitionItem = inv.items?.find((it) => it.description.toLowerCase().includes('tuition'));
-    return sum + (tuitionItem ? tuitionItem.amount : inv.totalAmount * 0.7);
-  }, 0);
+  // Total Tuition/Academic Term Fees
+  const totalTuitionFees = invoices.reduce((sum, inv) => sum + getInvoiceBreakdown(inv).termFees, 0);
 
   // Total Books
-  const totalBooksValue = invoices.reduce((sum, inv) => {
-    const bookItem = inv.items?.find((it) => it.description.toLowerCase().includes('book'));
-    return sum + (bookItem ? bookItem.amount : inv.totalAmount * 0.12);
-  }, 0);
+  const totalBooksValue = invoices.reduce((sum, inv) => sum + getInvoiceBreakdown(inv).books, 0);
 
   // Total Accessories (PE kit, uniforms, crests)
-  const totalAccessoriesValue = invoices.reduce((sum, inv) => {
-    const accItem = inv.items?.find(
-      (it) => it.description.toLowerCase().includes('accessor') || it.description.toLowerCase().includes('uniform')
-    );
-    return sum + (accItem ? accItem.amount : inv.totalAmount * 0.08);
-  }, 0);
+  const totalAccessoriesValue = invoices.reduce((sum, inv) => sum + getInvoiceBreakdown(inv).accessories, 0);
 
-  // Total Billed Grand Total Amount
-  const totalAmountBilled = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+  // Total Amount (Current Term Sum: Term Fees + Books + Accessories)
+  const totalAmountBilled = invoices.reduce((sum, inv) => sum + getInvoiceBreakdown(inv).currentTermAmount, 0);
 
-  // Total Arrears
-  const totalArrears = invoices.reduce((sum, inv) => sum + inv.balance, 0);
+  // Total Arrears (Entered manually by admin / finance)
+  const totalArrears = invoices.reduce((sum, inv) => sum + getInvoiceBreakdown(inv).arrears, 0) + 
+    students.reduce((sum, s) => {
+      const hasInv = invoices.some(i => i.studentId === s.id && (i.arrears || 0) > 0);
+      return sum + (hasInv ? 0 : (s.manualArrears || 0));
+    }, 0);
+
+  // Cumulative Billable = Current Term Total Amount + Standalone Prior Arrears
+  const cumulativeBillable = totalAmountBilled + totalArrears;
 
   // 2. Student Fees Desk Metrics
   const totalCompletedPaidFees = payments.reduce((sum, p) => sum + p.amount, 0);
-  const totalPendingArrears = totalArrears;
+  const totalPendingArrears = Math.max(0, cumulativeBillable - totalCompletedPaidFees);
 
   // 3. Staff Payroll Desk Metrics
   const monthlyPayrollCommitment =
@@ -220,6 +267,11 @@ export const FinancialReportsPage: React.FC<{
   // Class list for filters
   const classList = [
     'All Classes',
+    'Creche',
+    'Nursery 1',
+    'Nursery 2',
+    'KG 1',
+    'KG 2',
     'Primary 1 (Grade 1)',
     'Primary 2 (Grade 2)',
     'Primary 3 (Grade 3)',
@@ -252,6 +304,44 @@ export const FinancialReportsPage: React.FC<{
     return matchesSearch && matchesClass && matchesStatus;
   });
 
+  // Handle Opening Adjust Arrears Modal
+  const handleOpenAdjustArrears = (studentId: string, currentInv?: Invoice) => {
+    const std = students.find(s => s.id === studentId);
+    if (!std) return;
+
+    const breakdown = currentInv ? getInvoiceBreakdown(currentInv) : null;
+    const currentArrears = breakdown ? breakdown.arrears : (std.manualArrears || 0);
+    const currentTermBill = breakdown ? breakdown.currentTermAmount : 0;
+    const totalBalance = std.balanceDue || (currentTermBill + currentArrears);
+
+    setAdjustArrearsTarget({
+      studentId: std.id,
+      studentName: `${std.firstName} ${std.lastName}`,
+      className: std.className,
+      currentArrears,
+      currentTermBill,
+      totalBalance,
+      newArrearsAmount: currentArrears,
+      reason: ''
+    });
+
+    setIsAdjustArrearsOpen(true);
+  };
+
+  const handleSaveAdjustArrearsSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adjustArrearsTarget) return;
+
+    updateStudentArrears(
+      adjustArrearsTarget.studentId,
+      Number(adjustArrearsTarget.newArrearsAmount) || 0,
+      adjustArrearsTarget.reason || 'Manual Admin/Finance Arrears Adjustment'
+    );
+
+    triggerToast(`Arrears for ${adjustArrearsTarget.studentName} updated to GHS ${Number(adjustArrearsTarget.newArrearsAmount).toLocaleString()}`);
+    setIsAdjustArrearsOpen(false);
+  };
+
   // Export Financial CSV
   const handleExportCSV = () => {
     let csv = `Grace White Dove School Complex - Financial Report (${activeSubTab.toUpperCase()})\n`;
@@ -260,11 +350,14 @@ export const FinancialReportsPage: React.FC<{
 
     if (activeSubTab === 'ledger-summary') {
       csv += `--- LEDGER & SUMMARY TOTALS ---\n`;
-      csv += `Total Fees (Tuition),GHS ${totalTuitionFees.toLocaleString()}\n`;
-      csv += `Total Amount (Grand Total),GHS ${totalAmountBilled.toLocaleString()}\n`;
-      csv += `Total Arrears (Unpaid),GHS ${totalArrears.toLocaleString()}\n`;
+      csv += `Total Fees (Term/Tuition),GHS ${totalTuitionFees.toLocaleString()}\n`;
       csv += `Total Books & Materials,GHS ${totalBooksValue.toLocaleString()}\n`;
-      csv += `Total Accessories & Uniforms,GHS ${totalAccessoriesValue.toLocaleString()}\n\n`;
+      csv += `Total Accessories & Uniforms,GHS ${totalAccessoriesValue.toLocaleString()}\n`;
+      csv += `Total Amount (Current Term Billed),GHS ${totalAmountBilled.toLocaleString()}\n`;
+      csv += `Total Arrears (Manual Previous Debt),GHS ${totalArrears.toLocaleString()}\n`;
+      csv += `Cumulative Billable (Current + Arrears),GHS ${cumulativeBillable.toLocaleString()}\n`;
+      csv += `Total Completed / Paid,GHS ${totalCompletedPaidFees.toLocaleString()}\n`;
+      csv += `Net Outstanding Balance,GHS ${totalPendingArrears.toLocaleString()}\n\n`;
       csv += `--- GENERAL LEDGER TRANSACTIONS ---\n`;
       csv += `Reference,Account,Category,Debit/Credit,Amount (GHS),Date\n`;
       payments.forEach((p) => {
@@ -272,9 +365,10 @@ export const FinancialReportsPage: React.FC<{
       });
     } else if (activeSubTab === 'tracking-arrears') {
       csv += `--- STUDENT FEES TRACKING & ARREARS ---\n`;
-      csv += `Invoice #,Student Name,Class,Total Billed (GHS),Paid (GHS),Balance Arrears (GHS),Status,Due Date\n`;
+      csv += `Invoice #,Student Name,Class,Term Fees (GHS),Books (GHS),Accessories (GHS),Total Amount Current (GHS),Manual Arrears (GHS),Grand Total (GHS),Paid (GHS),Balance Due (GHS),Status,Due Date\n`;
       filteredInvoices.forEach((i) => {
-        csv += `"${i.invoiceNo}","${i.studentName}","${i.className}",${i.totalAmount},${i.paidAmount},${i.balance},"${i.status}","${i.dueDate}"\n`;
+        const bk = getInvoiceBreakdown(i);
+        csv += `"${i.invoiceNo}","${i.studentName}","${i.className}",${bk.termFees},${bk.books},${bk.accessories},${bk.currentTermAmount},${bk.arrears},${bk.grandTotal},${bk.paidAmount},${bk.balanceDue},"${i.status}","${i.dueDate}"\n`;
       });
     } else if (activeSubTab === 'payroll-desk') {
       csv += `--- STAFF PAYROLL DESK ---\n`;
@@ -284,14 +378,15 @@ export const FinancialReportsPage: React.FC<{
       csv += `Staff Name,Role,Basic Salary,Allowances,SSNIT / Tax,Net Salary,Status\n`;
       payrolls.forEach((pr) => {
         const allowVal = typeof pr.allowances === 'number' ? pr.allowances : (pr.allowances?.housing || 0) + (pr.allowances?.transport || 0) + (pr.allowances?.medical || 0);
-        csv += `"${pr.staffName}","Faculty/Staff",${pr.basicSalary},${allowVal},${pr.deductions.tax + pr.deductions.pension},${pr.netSalary},"${pr.paymentStatus || pr.status || 'Pending'}"\n`;
+        csv += `"${pr.staffName}","Faculty/Staff",${pr.basicSalary},${allowVal},${pr.deductions.pension + pr.deductions.tax},${pr.netSalary},"${pr.paymentStatus || pr.status}"\n`;
       });
     }
 
-    const encodedUri = encodeURI('data:text/csv;charset=utf-8,' + csv);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `GraceWhiteDove_FinancialReport_${activeSubTab}_${academicYear}.csv`);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `GraceWhiteDove_Financial_${activeSubTab}_${academicYear}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -384,7 +479,7 @@ export const FinancialReportsPage: React.FC<{
 
       {/* ========================================================================= */}
       {/* 1. SUB-TAB: LEDGER & SUMMARY */}
-      {/* Required Cards: Total Fees, Total Amount, Total Arrears, Total Books, Total Accessories */}
+      {/* Required Cards: Total Fees, Total Books, Total Accessories, Total Amount (Current Term), Total Arrears (Manual) */}
       {/* ========================================================================= */}
       {activeSubTab === 'ledger-summary' && (
         <div className="space-y-6">
@@ -393,7 +488,7 @@ export const FinancialReportsPage: React.FC<{
             {/* Total Fees */}
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-emerald-300 transition-all">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Fees</span>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Fees (Term)</span>
                 <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center font-black">
                   ₵
                 </div>
@@ -401,39 +496,11 @@ export const FinancialReportsPage: React.FC<{
               <div className="text-xl font-black text-slate-900 font-['Outfit'] mt-2">
                 GHS {Math.round(totalTuitionFees).toLocaleString()}
               </div>
-              <span className="text-[10px] text-emerald-700 font-medium">Core Tuition Revenue</span>
-            </div>
-
-            {/* Total Amount */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-emerald-300 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Amount</span>
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-800 flex items-center justify-center font-black">
-                  <DollarSign className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="text-xl font-black text-blue-950 font-['Outfit'] mt-2">
-                GHS {Math.round(totalAmountBilled).toLocaleString()}
-              </div>
-              <span className="text-[10px] text-blue-700 font-medium">Grand Billed Sum</span>
-            </div>
-
-            {/* Total Arrears */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-amber-300 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Arrears</span>
-                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-800 flex items-center justify-center font-black">
-                  <AlertCircle className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="text-xl font-black text-amber-950 font-['Outfit'] mt-2">
-                GHS {Math.round(totalArrears).toLocaleString()}
-              </div>
-              <span className="text-[10px] text-amber-700 font-medium">Outstanding Balances</span>
+              <span className="text-[10px] text-emerald-700 font-medium">Core Term Tuition</span>
             </div>
 
             {/* Total Books */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-emerald-300 transition-all">
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-purple-300 transition-all">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Books</span>
                 <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-800 flex items-center justify-center font-black">
@@ -447,7 +514,7 @@ export const FinancialReportsPage: React.FC<{
             </div>
 
             {/* Total Accessories */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-emerald-300 transition-all">
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-rose-300 transition-all">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Accessories</span>
                 <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-800 flex items-center justify-center font-black">
@@ -458,6 +525,58 @@ export const FinancialReportsPage: React.FC<{
                 GHS {Math.round(totalAccessoriesValue).toLocaleString()}
               </div>
               <span className="text-[10px] text-rose-700 font-medium">Uniforms & PE Kits</span>
+            </div>
+
+            {/* Total Amount (Current Term: Fees + Books + Accessories) */}
+            <div className="bg-white rounded-2xl p-4 border-2 border-emerald-600/30 shadow-xs hover:border-emerald-600 transition-all bg-emerald-50/20">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-emerald-950 uppercase tracking-wider">Total Amount (Current Term)</span>
+                <div className="w-8 h-8 rounded-lg bg-emerald-800 text-white flex items-center justify-center font-black">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-xl font-black text-emerald-950 font-['Outfit'] mt-2">
+                GHS {Math.round(totalAmountBilled).toLocaleString()}
+              </div>
+              <span className="text-[10px] text-emerald-800 font-semibold">Fees + Books + Accessories</span>
+            </div>
+
+            {/* Total Arrears (Entered manually by Admin/Finance) */}
+            <div className="bg-white rounded-2xl p-4 border-2 border-rose-400/30 shadow-xs hover:border-rose-500 transition-all bg-rose-50/20">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-rose-900 uppercase tracking-wider">Total Arrears (Manual)</span>
+                <div className="w-8 h-8 rounded-lg bg-rose-700 text-white flex items-center justify-center font-black">
+                  <AlertCircle className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-xl font-black text-rose-950 font-['Outfit'] mt-2">
+                GHS {Math.round(totalArrears).toLocaleString()}
+              </div>
+              <span className="text-[10px] text-rose-700 font-medium">Prior Debt (Manual Entry)</span>
+            </div>
+          </div>
+
+          {/* Audit Reconciliation Formula Strip */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-bold">
+                ₵
+              </div>
+              <div>
+                <h4 className="font-bold text-sm font-['Outfit'] text-amber-300">Financial Audit & Reconciliation Formula</h4>
+                <p className="text-[11px] text-slate-300">Total Arrears is strictly separated from Current Term Total Amount:</p>
+              </div>
+            </div>
+
+            <div className="flex items-center flex-wrap gap-2 text-xs font-mono">
+              <span className="bg-white/10 px-2.5 py-1 rounded-lg">Current Total: <strong>GHS {Math.round(totalAmountBilled).toLocaleString()}</strong></span>
+              <span className="text-amber-400 font-bold">+</span>
+              <span className="bg-white/10 px-2.5 py-1 rounded-lg">Manual Arrears: <strong>GHS {Math.round(totalArrears).toLocaleString()}</strong></span>
+              <span className="text-amber-400 font-bold">=</span>
+              <span className="bg-amber-400 text-emerald-950 px-2.5 py-1 rounded-lg font-bold">Cumulative: GHS {Math.round(cumulativeBillable).toLocaleString()}</span>
+              <span className="text-slate-400">|</span>
+              <span className="bg-emerald-800 text-emerald-100 px-2.5 py-1 rounded-lg">Paid: GHS {Math.round(totalCompletedPaidFees).toLocaleString()}</span>
+              <span className="bg-rose-900/80 text-rose-200 px-2.5 py-1 rounded-lg">Net Balance: GHS {Math.round(totalPendingArrears).toLocaleString()}</span>
             </div>
           </div>
 
@@ -517,24 +636,38 @@ export const FinancialReportsPage: React.FC<{
 
       {/* ========================================================================= */}
       {/* 2. SUB-TAB: STUDENT FEES DESK */}
-      {/* Required Cards: Total Billed Fees, Completed/Paid Fees, Pending/Arrears */}
+      {/* Required Cards: Total Amount (Current Term), Total Arrears (Manual), Completed/Paid Fees, Outstanding Balance */}
       {/* ========================================================================= */}
       {activeSubTab === 'fees-desk' && (
         <div className="space-y-6">
-          {/* Top 3 Requested KPI Metric Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Total Billed Fees */}
+          {/* Top 4 KPI Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total Amount (Current Term: Fees + Books + Accessories) */}
             <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Billed Fees</span>
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-800 flex items-center justify-center font-bold">
-                  <FileSpreadsheet className="w-5 h-5" />
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Amount (Current Term)</span>
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-bold">
+                  <DollarSign className="w-5 h-5" />
                 </div>
               </div>
               <div className="text-2xl font-black text-slate-900 font-['Outfit'] mt-2">
                 GHS {Math.round(totalAmountBilled).toLocaleString()}
               </div>
-              <span className="text-xs text-blue-700 font-medium">All Issued Student Bills</span>
+              <span className="text-xs text-emerald-700 font-medium">Term Fees + Books + Accessories</span>
+            </div>
+
+            {/* Total Arrears (Manual Entry) */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-rose-800 uppercase tracking-wider">Total Arrears (Manual)</span>
+                <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-800 flex items-center justify-center font-bold">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-rose-950 font-['Outfit'] mt-2">
+                GHS {Math.round(totalArrears).toLocaleString()}
+              </div>
+              <span className="text-xs text-rose-700 font-medium">Manually entered by Admin / Finance</span>
             </div>
 
             {/* Completed/Paid Fees */}
@@ -548,21 +681,21 @@ export const FinancialReportsPage: React.FC<{
               <div className="text-2xl font-black text-emerald-900 font-['Outfit'] mt-2">
                 GHS {Math.round(totalCompletedPaidFees).toLocaleString()}
               </div>
-              <span className="text-xs text-emerald-700 font-medium">Cleared and Settled</span>
+              <span className="text-xs text-emerald-700 font-medium">Cleared & Settled Payments</span>
             </div>
 
-            {/* Pending / Arrears */}
+            {/* Net Outstanding Balance */}
             <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending / Arrears</span>
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Net Outstanding Balance</span>
                 <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center font-bold">
-                  <AlertCircle className="w-5 h-5" />
+                  <Clock className="w-5 h-5" />
                 </div>
               </div>
               <div className="text-2xl font-black text-amber-950 font-['Outfit'] mt-2">
                 GHS {Math.round(totalPendingArrears).toLocaleString()}
               </div>
-              <span className="text-xs text-amber-700 font-medium">Outstanding Balances to Recover</span>
+              <span className="text-xs text-amber-700 font-medium">Cumulative Balance to Recover</span>
             </div>
           </div>
 
@@ -644,50 +777,71 @@ export const FinancialReportsPage: React.FC<{
             </div>
           </div>
 
-          {/* Arrears and Invoices Table */}
+          {/* Arrears and Invoices Table with Complete Columns Breakdown */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 whitespace-nowrap">
                   <tr>
-                    <th className="py-3 px-4">Invoice #</th>
-                    <th className="py-3 px-4">Student & ID</th>
-                    <th className="py-3 px-4">Class</th>
-                    <th className="py-3 px-4">Total Billed</th>
-                    <th className="py-3 px-4">Paid</th>
-                    <th className="py-3 px-4">Balance Arrears</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Receipt & Invoice</th>
+                    <th className="py-3 px-3.5">Invoice #</th>
+                    <th className="py-3 px-3.5">Student & ID</th>
+                    <th className="py-3 px-3">Class</th>
+                    <th className="py-3 px-3">Term Fees</th>
+                    <th className="py-3 px-3">Books</th>
+                    <th className="py-3 px-3">Accessories</th>
+                    <th className="py-3 px-3.5 text-emerald-950 font-bold bg-emerald-50/40">Total Amount (Current)</th>
+                    <th className="py-3 px-3.5 text-rose-900 font-bold bg-rose-50/40">Manual Arrears</th>
+                    <th className="py-3 px-3.5 font-black text-slate-900">Grand Total</th>
+                    <th className="py-3 px-3 text-emerald-800">Paid</th>
+                    <th className="py-3 px-3.5 text-amber-900">Balance Due</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 whitespace-nowrap">
                   {filteredInvoices.map((inv) => {
                     const std = students.find((s) => s.id === inv.studentId);
+                    const bk = getInvoiceBreakdown(inv);
                     return (
                       <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4 font-mono font-bold text-emerald-950">{inv.invoiceNo}</td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-3.5 font-mono font-bold text-emerald-950">{inv.invoiceNo}</td>
+                        <td className="py-3 px-3.5">
                           <div className="font-bold text-slate-900">{inv.studentName}</div>
                           <div className="text-[10px] text-slate-400 font-mono">{std?.admissionNo || 'ADM-GWD'}</div>
                         </td>
-                        <td className="py-3 px-4 text-slate-700">{inv.className}</td>
-                        <td className="py-3 px-4 font-bold text-slate-800 font-mono">
-                          GHS {inv.totalAmount.toLocaleString()}
+                        <td className="py-3 px-3 text-slate-700">{inv.className}</td>
+                        <td className="py-3 px-3 font-mono text-slate-700">
+                          GHS {bk.termFees.toLocaleString()}
                         </td>
-                        <td className="py-3 px-4 font-bold text-emerald-700 font-mono">
-                          GHS {inv.paidAmount.toLocaleString()}
+                        <td className="py-3 px-3 font-mono text-purple-900">
+                          GHS {bk.books.toLocaleString()}
                         </td>
-                        <td className="py-3 px-4 font-black font-mono">
-                          <span className={inv.balance > 0 ? 'text-amber-800' : 'text-slate-400'}>
-                            GHS {inv.balance.toLocaleString()}
+                        <td className="py-3 px-3 font-mono text-rose-900">
+                          GHS {bk.accessories.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3.5 font-bold font-mono text-emerald-950 bg-emerald-50/30">
+                          GHS {bk.currentTermAmount.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3.5 font-bold font-mono text-rose-700 bg-rose-50/30">
+                          GHS {bk.arrears.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3.5 font-black font-mono text-slate-900">
+                          GHS {bk.grandTotal.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3 font-bold text-emerald-700 font-mono">
+                          GHS {bk.paidAmount.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3.5 font-black font-mono">
+                          <span className={bk.balanceDue > 0 ? 'text-amber-900' : 'text-slate-400'}>
+                            GHS {bk.balanceDue.toLocaleString()}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-3">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               inv.status === 'Paid'
                                 ? 'bg-emerald-100 text-emerald-800'
-                                : inv.status === 'Partially Paid'
+                                : inv.status === 'Partially Paid' || inv.status === 'Partial'
                                 ? 'bg-blue-100 text-blue-800'
                                 : 'bg-amber-100 text-amber-900'
                             }`}
@@ -695,8 +849,18 @@ export const FinancialReportsPage: React.FC<{
                             {inv.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                          {inv.balance > 0 && (
+                        <td className="py-3 px-3.5 text-right space-x-1.5 whitespace-nowrap">
+                          {/* Manual Arrears Adjustment Button for Admin / Finance */}
+                          <button
+                            onClick={() => handleOpenAdjustArrears(inv.studentId, inv)}
+                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-lg text-[11px] inline-flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                            title="Manually adjust or enter arrears for this student"
+                          >
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-800" />
+                            Edit Arrears
+                          </button>
+
+                          {bk.balanceDue > 0 && (
                             <button
                               onClick={() => handleOpenReminder(inv)}
                               className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold rounded-lg text-[11px] inline-flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
@@ -874,81 +1038,256 @@ export const FinancialReportsPage: React.FC<{
       {/* ========================================================================= */}
       {/* OFFICIAL INVOICE MODAL VIEW (Grace White Dove School Complex) */}
       {/* ========================================================================= */}
-      {viewingInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
-            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base font-['Outfit']">Grace White Dove School Complex</h3>
-                <p className="text-xs text-emerald-200">Official Student Fee Invoice</p>
+      {viewingInvoice && (() => {
+        const bk = getInvoiceBreakdown(viewingInvoice);
+        const std = students.find((s) => s.id === viewingInvoice.studentId);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+              <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-base font-['Outfit']">Grace White Dove School Complex</h3>
+                  <p className="text-xs text-emerald-200">Official Student Fee Invoice</p>
+                </div>
+                <button
+                  onClick={() => setViewingInvoice(null)}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 text-xs">
+                <div className="flex justify-between items-start border-b border-slate-200 pb-3">
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-900">{viewingInvoice.studentName}</h4>
+                    <p className="text-[11px] text-slate-500">{viewingInvoice.className} • {viewingInvoice.term}</p>
+                    <p className="text-[10px] text-slate-400 font-mono">Admission No: {std?.admissionNo || 'GWD-STD'}</p>
+                  </div>
+                  <div className="text-right font-mono">
+                    <div className="font-bold text-emerald-950">{viewingInvoice.invoiceNo}</div>
+                    <div className="text-[10px] text-slate-400">Due: {viewingInvoice.dueDate}</div>
+                  </div>
+                </div>
+
+                {/* Itemized breakdown */}
+                <div className="space-y-1.5 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <div className="font-bold text-slate-800 text-[11px] mb-1">Fee Item Breakdown:</div>
+                  {viewingInvoice.items && viewingInvoice.items.length > 0 ? (
+                    viewingInvoice.items.map((it, idx) => (
+                      <div key={idx} className="flex justify-between text-slate-700">
+                        <span>{it.description}</span>
+                        <span className="font-mono font-semibold">GHS {it.amount.toLocaleString()}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-slate-700">
+                        <span>Term Fees (Tuition & Levies)</span>
+                        <span className="font-mono font-semibold">GHS {bk.termFees.toLocaleString()}</span>
+                      </div>
+                      {bk.books > 0 && (
+                        <div className="flex justify-between text-slate-700">
+                          <span>Textbooks & Stationeries</span>
+                          <span className="font-mono font-semibold">GHS {bk.books.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {bk.accessories > 0 && (
+                        <div className="flex justify-between text-slate-700">
+                          <span>Uniforms & Accessories</span>
+                          <span className="font-mono font-semibold">GHS {bk.accessories.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Totals Breakdown */}
+                <div className="border-t border-slate-200 pt-3 space-y-1.5 text-right">
+                  <div className="flex justify-between text-slate-700">
+                    <span>Term Fees:</span>
+                    <span className="font-mono font-semibold">GHS {bk.termFees.toLocaleString()}</span>
+                  </div>
+                  {bk.books > 0 && (
+                    <div className="flex justify-between text-purple-900">
+                      <span>Books:</span>
+                      <span className="font-mono font-semibold">GHS {bk.books.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {bk.accessories > 0 && (
+                    <div className="flex justify-between text-rose-900">
+                      <span>Accessories:</span>
+                      <span className="font-mono font-semibold">GHS {bk.accessories.toLocaleString()}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between text-emerald-950 font-bold bg-emerald-50/60 p-2 rounded-lg">
+                    <span>Total Amount (Current Term Bill):</span>
+                    <span className="font-mono">GHS {bk.currentTermAmount.toLocaleString()}</span>
+                  </div>
+
+                  <div className="flex justify-between text-rose-900 font-bold bg-rose-50/60 p-2 rounded-lg">
+                    <span>Manual Arrears (Prior Debt):</span>
+                    <span className="font-mono">GHS {bk.arrears.toLocaleString()}</span>
+                  </div>
+
+                  <div className="flex justify-between text-slate-900 font-black text-sm border-t border-slate-200 pt-1.5">
+                    <span>Grand Total Billed:</span>
+                    <span className="font-mono">GHS {bk.grandTotal.toLocaleString()}</span>
+                  </div>
+
+                  <div className="flex justify-between text-emerald-700 font-bold">
+                    <span>Amount Paid:</span>
+                    <span className="font-mono">GHS {bk.paidAmount.toLocaleString()}</span>
+                  </div>
+
+                  <div className="flex justify-between text-amber-900 font-black text-sm border-t border-slate-200 pt-1.5">
+                    <span>Net Balance Due:</span>
+                    <span className="font-mono">GHS {bk.balanceDue.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-slate-400 text-center pt-2">
+                  Managed by Accounts Desk • Software by BenDaz IT Consult
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                  <button
+                    onClick={() => setViewingInvoice(null)}
+                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => window.print()}
+                    className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4 text-amber-300" />
+                    Print Official Invoice
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ========================================================================= */}
+      {/* ADJUST STUDENT ARREARS MODAL (Manual Entry by Admin / Finance) */}
+      {/* ========================================================================= */}
+      {isAdjustArrearsOpen && adjustArrearsTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-gradient-to-r from-amber-900 to-amber-950 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-bold">
+                  <AlertCircle className="w-5 h-5 text-amber-950" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold font-['Outfit']">Adjust Student Arrears</h3>
+                  <p className="text-xs text-amber-200">Manual Entry by Admin / Finance</p>
+                </div>
               </div>
               <button
-                onClick={() => setViewingInvoice(null)}
+                onClick={() => setIsAdjustArrearsOpen(false)}
                 className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4 text-xs">
-              <div className="flex justify-between items-start border-b border-slate-200 pb-3">
-                <div>
-                  <h4 className="font-bold text-sm text-slate-900">{viewingInvoice.studentName}</h4>
-                  <p className="text-[11px] text-slate-500">{viewingInvoice.className} • {viewingInvoice.term}</p>
+            <form onSubmit={handleSaveAdjustArrearsSubmit} className="p-6 space-y-4 text-xs">
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1">
+                <div className="font-bold text-sm text-slate-900">{adjustArrearsTarget.studentName}</div>
+                <div className="text-slate-500">{adjustArrearsTarget.className}</div>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200 text-[11px]">
+                  <span className="text-slate-600">Current Term Bill:</span>
+                  <span className="font-bold font-mono text-emerald-900">GHS {adjustArrearsTarget.currentTermBill.toLocaleString()}</span>
                 </div>
-                <div className="text-right font-mono">
-                  <div className="font-bold text-emerald-950">{viewingInvoice.invoiceNo}</div>
-                  <div className="text-[10px] text-slate-400">Due: {viewingInvoice.dueDate}</div>
-                </div>
-              </div>
-
-              {/* Itemized breakdown */}
-              <div className="space-y-1.5 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                <div className="font-bold text-slate-800 text-[11px] mb-1">Fee Item Breakdown:</div>
-                {viewingInvoice.items.map((it, idx) => (
-                  <div key={idx} className="flex justify-between text-slate-700">
-                    <span>{it.description}</span>
-                    <span className="font-mono font-semibold">GHS {it.amount.toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Totals */}
-              <div className="border-t border-slate-200 pt-3 space-y-1 text-right">
-                <div className="flex justify-between text-slate-600">
-                  <span>Total Amount Billed:</span>
-                  <span className="font-bold font-mono text-slate-900">GHS {viewingInvoice.totalAmount.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-emerald-700">
-                  <span>Paid Amount:</span>
-                  <span className="font-bold font-mono">GHS {viewingInvoice.paidAmount.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-amber-900 font-extrabold text-sm border-t border-slate-200 pt-1.5">
-                  <span>Balance Due:</span>
-                  <span className="font-mono">GHS {viewingInvoice.balance.toLocaleString()}</span>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-600">Existing Arrears:</span>
+                  <span className="font-bold font-mono text-rose-700">GHS {adjustArrearsTarget.currentArrears.toLocaleString()}</span>
                 </div>
               </div>
 
-              <div className="text-[10px] text-slate-400 text-center pt-2">
-                Managed by Accounts Desk • Software by BenDaz IT Consult
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Manual Arrears Amount (GHS) <span className="text-rose-500">*</span>
+                </label>
+                <p className="text-[11px] text-slate-500 mb-2">
+                  Enter the exact outstanding arrears for prior academic terms. This is separate from the current term bill.
+                </p>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-500">₵</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    required
+                    value={adjustArrearsTarget.newArrearsAmount}
+                    onChange={(e) =>
+                      setAdjustArrearsTarget({
+                        ...adjustArrearsTarget,
+                        newArrearsAmount: Number(e.target.value) || 0
+                      })
+                    }
+                    className="w-full pl-8 pr-4 py-2.5 text-sm font-mono font-bold border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none"
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Adjustment Reason / Notes</label>
+                <input
+                  type="text"
+                  value={adjustArrearsTarget.reason}
+                  onChange={(e) =>
+                    setAdjustArrearsTarget({
+                      ...adjustArrearsTarget,
+                      reason: e.target.value
+                    })
+                  }
+                  placeholder="e.g., Unpaid Term 2 balance from previous year"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+
+              {/* Summary Calculation Preview */}
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-950 space-y-1">
+                <div className="flex justify-between text-[11px]">
+                  <span>Current Term Bill:</span>
+                  <span className="font-mono">GHS {adjustArrearsTarget.currentTermBill.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-[11px] font-bold text-rose-800">
+                  <span>+ New Manual Arrears:</span>
+                  <span className="font-mono">GHS {(Number(adjustArrearsTarget.newArrearsAmount) || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs font-black border-t border-amber-200 pt-1 text-slate-900">
+                  <span>= Total Cumulative Billable:</span>
+                  <span className="font-mono text-emerald-950">
+                    GHS {(adjustArrearsTarget.currentTermBill + (Number(adjustArrearsTarget.newArrearsAmount) || 0)).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-200">
                 <button
-                  onClick={() => setViewingInvoice(null)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl"
+                  type="button"
+                  onClick={() => setIsAdjustArrearsOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
                 >
-                  Close
+                  Cancel
                 </button>
                 <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+                  type="submit"
+                  className="px-5 py-2 bg-amber-800 hover:bg-amber-900 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
-                  <Printer className="w-4 h-4 text-amber-300" />
-                  Print Official Invoice
+                  <CheckCircle2 className="w-4 h-4 text-amber-300" />
+                  <span>Save Arrears</span>
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}

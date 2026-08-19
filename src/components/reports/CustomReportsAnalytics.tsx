@@ -46,13 +46,51 @@ export const CustomReportsAnalytics: React.FC = () => {
     return { subject, averageScore: avg, passRate };
   });
 
-  // Financial data computed dynamically from actual records
-  const totalBilledVal = invoices.reduce((acc, i) => acc + i.totalAmount, 0);
+  // Financial data computed dynamically from actual records with clean separation
+  const totalTermFeesVal = invoices.reduce((acc, i) => {
+    const it = i.items?.find(x => x.description.toLowerCase().includes('term') || x.description.toLowerCase().includes('tuition'));
+    return acc + (i.termFees !== undefined ? i.termFees : it ? it.amount : 0);
+  }, 0);
+  const totalBooksVal = invoices.reduce((acc, i) => {
+    const it = i.items?.find(x => x.description.toLowerCase().includes('book'));
+    return acc + (i.books !== undefined ? i.books : it ? it.amount : 0);
+  }, 0);
+  const totalAccessoriesVal = invoices.reduce((acc, i) => {
+    const it = i.items?.find(x => x.description.toLowerCase().includes('accessor') || x.description.toLowerCase().includes('uniform'));
+    return acc + (i.accessories !== undefined ? i.accessories : it ? it.amount : 0);
+  }, 0);
+
+  // Total Amount = Current Term Amount (Term Fees + Books + Accessories)
+  const totalCurrentBilledVal = invoices.reduce((acc, i) => {
+    if (i.currentTermAmount !== undefined) return acc + i.currentTermAmount;
+    const tf = (i.termFees ?? 0) + (i.books ?? 0) + (i.accessories ?? 0);
+    if (tf > 0) return acc + tf;
+    const arr = i.arrears ?? (i.items?.find(x => x.description.toLowerCase().includes('arrear'))?.amount || 0);
+    return acc + Math.max(0, i.totalAmount - arr);
+  }, 0);
+
+  // Total Arrears = Standalone Prior Arrears (Entered manually by admin/finance)
+  const totalArrearsVal = invoices.reduce((acc, i) => {
+    if (i.arrears !== undefined) return acc + i.arrears;
+    const it = i.items?.find(x => x.description.toLowerCase().includes('arrear'));
+    return acc + (it ? it.amount : 0);
+  }, 0) + students.reduce((acc, s) => {
+    const hasInvArrears = invoices.some(i => i.studentId === s.id && (i.arrears || 0) > 0);
+    return acc + (hasInvArrears ? 0 : (s.manualArrears || 0));
+  }, 0);
+
   const totalCollectedVal = payments.reduce((acc, p) => acc + p.amount, 0);
-  const totalOutstandingVal = invoices.reduce((acc, i) => acc + i.balance, 0);
+  const totalCumulativeBillable = totalCurrentBilledVal + totalArrearsVal;
+  const totalOutstandingVal = Math.max(0, totalCumulativeBillable - totalCollectedVal);
 
   const financialData = [
-    { term: `${currentTerm} ${academicYear}`, billed: totalBilledVal, collected: totalCollectedVal, outstanding: totalOutstandingVal }
+    { 
+      term: `${currentTerm} ${academicYear}`, 
+      totalAmount: totalCurrentBilledVal, 
+      arrears: totalArrearsVal, 
+      collected: totalCollectedVal, 
+      outstanding: totalOutstandingVal 
+    }
   ];
 
   const femaleCount = students.filter((s) => s.gender === 'Female').length;
@@ -77,9 +115,9 @@ export const CustomReportsAnalytics: React.FC = () => {
   const handleExportReportCSV = () => {
     let content = 'Report Title: Grace White Dove School Complex Executive Report\n\n';
     if (reportType === 'financial') {
-      content += 'Term,Billed (GHS),Collected (GHS),Outstanding (GHS)\n';
+      content += 'Term,Current Term Amount (GHS),Arrears (GHS),Cumulative Billable (GHS),Collected (GHS),Net Outstanding (GHS)\n';
       financialData.forEach((f) => {
-        content += `"${f.term}",${f.billed},${f.collected},${f.outstanding}\n`;
+        content += `"${f.term}",${f.totalAmount},${f.arrears},${f.totalAmount + f.arrears},${f.collected},${f.outstanding}\n`;
       });
     } else {
       content += 'Subject,Average Score (%),Pass Rate (%)\n';
@@ -215,8 +253,9 @@ export const CustomReportsAnalytics: React.FC = () => {
                   contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '12px' }}
                 />
                 <Legend />
-                <Bar dataKey="billed" fill="#047857" name="Total Billed" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="collected" fill="#f59e0b" name="Actually Collected" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="totalAmount" fill="#047857" name="Current Term Total (Term Fees + Books + Accessories)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="arrears" fill="#e11d48" name="Manual Arrears (Prior Debt)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="collected" fill="#f59e0b" name="Collected Fees" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

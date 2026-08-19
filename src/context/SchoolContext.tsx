@@ -151,6 +151,7 @@ interface SchoolContextType {
   createInvoice: (invoice: Omit<Invoice, 'id' | 'invoiceNo' | 'issueDate'>) => void;
   createBulkInvoices: (invoices: Omit<Invoice, 'id' | 'invoiceNo' | 'issueDate'>[]) => void;
   deleteInvoice: (id: string) => void;
+  updateStudentArrears: (studentId: string, manualArrears: number, reason?: string) => void;
   payments: Payment[];
   recordPayment: (payment: Omit<Payment, 'id' | 'paymentRef' | 'date'>) => Payment;
   clearFinancialRecords: () => void;
@@ -1332,7 +1333,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Student Actions
   const addStudent = (newStd: Omit<Student, 'id' | 'admissionNo' | 'joinedDate'> & { admissionNo?: string }) => {
-    const id = `std-${Date.now().toString().slice(-4)}`;
+    const id = `std-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const autoAdmissionNo = generateNextStudentNumber();
     const admissionNo = newStd.admissionNo && newStd.admissionNo.trim() !== '' ? newStd.admissionNo.trim() : autoAdmissionNo;
     
@@ -1352,7 +1353,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     
     // Save student locally and to Firestore immediately
     setStudents(prev => {
-      const updated = [student, ...prev];
+      const updated = [student, ...prev.filter(s => s.id !== student.id && s.admissionNo !== student.admissionNo)];
       saveStorage('students', updated);
       return updated;
     });
@@ -1436,7 +1437,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Admissions
   const addAdmission = (adm: Omit<AdmissionApplication, 'id' | 'applicationNo' | 'submissionDate'> & { applicationNo?: string; studentNumber?: string }) => {
-    const id = `adm-app-${Date.now().toString().slice(-4)}`;
+    const id = `adm-app-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const autoStudentNumber = generateNextStudentNumber();
     const studentNumber = adm.studentNumber && adm.studentNumber.trim() !== '' ? adm.studentNumber.trim() : autoStudentNumber;
     const applicationNo = adm.applicationNo || studentNumber;
@@ -1483,17 +1484,19 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateAdmissionStatus = (id: string, status: AdmissionApplication['status'], notes?: string) => {
+    let studentToEnrollData: Omit<Student, 'id' | 'admissionNo' | 'joinedDate'> & { admissionNo?: string } | null = null;
+
     setAdmissions(prev => {
       const next = prev.map(a => {
         if (a.id === id) {
           const updated = { ...a, status, notes: notes || a.notes };
           saveDocumentToFirestore('admissions', updated);
-          // If approved and converted to enrolled, automatically add to students
+          
           if (status === 'Enrolled') {
             const names = a.applicantName.trim().split(/\s+/);
             const firstName = names[0] || 'New';
             const lastName = names.slice(1).join(' ') || 'Student';
-            addStudent({
+            studentToEnrollData = {
               admissionNo: a.studentNumber || a.applicationNo,
               firstName,
               lastName,
@@ -1511,7 +1514,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               status: 'Active',
               photoUrl: `https://api.dicebear.com/7.x/micah/svg?seed=${encodeURIComponent(a.applicantName)}`,
               balanceDue: 0
-            });
+            };
           }
           return updated;
         }
@@ -1520,6 +1523,11 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       saveStorage('admissions', next);
       return next;
     });
+
+    if (studentToEnrollData) {
+      addStudent(studentToEnrollData);
+    }
+
     logAuditAction('ADMISSION_STATUS_CHANGE', 'Admissions', `Application ID ${id} status set to ${status}`);
   };
 
@@ -1629,56 +1637,200 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const createInvoice = (inv: Omit<Invoice, 'id' | 'invoiceNo' | 'issueDate'>) => {
     const invoiceNo = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    
+    // Calculate separated components
+    const termFees = inv.termFees !== undefined 
+      ? inv.termFees 
+      : (inv.items?.find(it => it.description.toLowerCase().includes('term') || it.description.toLowerCase().includes('tuition'))?.amount || 0);
+    
+    const books = inv.books !== undefined
+      ? inv.books
+      : (inv.items?.find(it => it.description.toLowerCase().includes('book'))?.amount || 0);
+      
+    const accessories = inv.accessories !== undefined
+      ? inv.accessories
+      : (inv.items?.find(it => it.description.toLowerCase().includes('accessor') || it.description.toLowerCase().includes('uniform') || it.description.toLowerCase().includes('crest'))?.amount || 0);
+      
+    const arrears = inv.arrears !== undefined
+      ? inv.arrears
+      : (inv.items?.find(it => it.description.toLowerCase().includes('arrear'))?.amount || 0);
+
+    const currentTermAmount = inv.currentTermAmount !== undefined
+      ? inv.currentTermAmount
+      : (termFees + books + accessories > 0 ? (termFees + books + accessories) : Math.max(0, inv.totalAmount - arrears));
+
+    const totalAmount = currentTermAmount;
+    const grandTotal = currentTermAmount + arrears;
+    const paidAmount = inv.paidAmount || 0;
+    const balance = Math.max(0, grandTotal - paidAmount);
+    const status = balance === 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Unpaid';
+
     const newInvoice: Invoice = {
       ...inv,
       id: `inv-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       invoiceNo,
-      issueDate: new Date().toISOString().split('T')[0]
+      issueDate: new Date().toISOString().split('T')[0],
+      termFees,
+      books,
+      accessories,
+      arrears,
+      currentTermAmount,
+      totalAmount,
+      grandTotal,
+      paidAmount,
+      balance,
+      status
     };
+
     setInvoices(prev => [newInvoice, ...prev]);
+    saveDocumentToFirestore('invoices', newInvoice);
+
     setStudents(prev => prev.map(s => {
       if (s.id === inv.studentId) {
-        return { ...s, balanceDue: (s.balanceDue || 0) + inv.balance };
+        const updatedStd: Student = { 
+          ...s, 
+          balanceDue: (s.balanceDue || 0) + balance,
+          ...(arrears > 0 ? { manualArrears: arrears } : {})
+        };
+        saveDocumentToFirestore('students', updatedStd);
+        return updatedStd;
       }
       return s;
     }));
-    logAuditAction('INVOICE_GENERATED', 'Fee Management', `Generated invoice ${invoiceNo} for ${inv.studentName} (GHS ${inv.totalAmount})`);
+
+    logAuditAction('INVOICE_GENERATED', 'Fee Management', `Generated invoice ${invoiceNo} for ${inv.studentName} (Current Bill: GHS ${totalAmount}, Arrears: GHS ${arrears}, Grand Total: GHS ${grandTotal})`);
   };
 
   const createBulkInvoices = (bulkList: Omit<Invoice, 'id' | 'invoiceNo' | 'issueDate'>[]) => {
-    const newInvoices: Invoice[] = bulkList.map((inv, idx) => ({
-      ...inv,
-      id: `inv-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
-      invoiceNo: `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      issueDate: new Date().toISOString().split('T')[0]
-    }));
+    const newInvoices: Invoice[] = bulkList.map((inv, idx) => {
+      const invoiceNo = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const termFees = inv.termFees !== undefined 
+        ? inv.termFees 
+        : (inv.items?.find(it => it.description.toLowerCase().includes('term') || it.description.toLowerCase().includes('tuition'))?.amount || 0);
+      
+      const books = inv.books !== undefined
+        ? inv.books
+        : (inv.items?.find(it => it.description.toLowerCase().includes('book'))?.amount || 0);
+        
+      const accessories = inv.accessories !== undefined
+        ? inv.accessories
+        : (inv.items?.find(it => it.description.toLowerCase().includes('accessor') || it.description.toLowerCase().includes('uniform') || it.description.toLowerCase().includes('crest'))?.amount || 0);
+        
+      const arrears = inv.arrears !== undefined
+        ? inv.arrears
+        : (inv.items?.find(it => it.description.toLowerCase().includes('arrear'))?.amount || 0);
+
+      const currentTermAmount = inv.currentTermAmount !== undefined
+        ? inv.currentTermAmount
+        : (termFees + books + accessories > 0 ? (termFees + books + accessories) : Math.max(0, inv.totalAmount - arrears));
+
+      const totalAmount = currentTermAmount;
+      const grandTotal = currentTermAmount + arrears;
+      const paidAmount = inv.paidAmount || 0;
+      const balance = Math.max(0, grandTotal - paidAmount);
+      const status = balance === 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Unpaid';
+
+      return {
+        ...inv,
+        id: `inv-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
+        invoiceNo,
+        issueDate: new Date().toISOString().split('T')[0],
+        termFees,
+        books,
+        accessories,
+        arrears,
+        currentTermAmount,
+        totalAmount,
+        grandTotal,
+        paidAmount,
+        balance,
+        status
+      };
+    });
 
     setInvoices(prev => [...newInvoices, ...prev]);
+    newInvoices.forEach(inv => saveDocumentToFirestore('invoices', inv));
 
     // Update students balance
-    const balanceMap = new Map<string, number>();
-    bulkList.forEach(inv => {
-      balanceMap.set(inv.studentId, (balanceMap.get(inv.studentId) || 0) + inv.balance);
+    const balanceMap = new Map<string, { balance: number; arrears: number }>();
+    newInvoices.forEach(inv => {
+      balanceMap.set(inv.studentId, {
+        balance: (balanceMap.get(inv.studentId)?.balance || 0) + inv.balance,
+        arrears: inv.arrears || 0
+      });
     });
 
     setStudents(prev => prev.map(s => {
-      const addedBal = balanceMap.get(s.id);
-      if (addedBal !== undefined) {
-        return { ...s, balanceDue: (s.balanceDue || 0) + addedBal };
+      const addedData = balanceMap.get(s.id);
+      if (addedData !== undefined) {
+        const updatedStd: Student = { 
+          ...s, 
+          balanceDue: (s.balanceDue || 0) + addedData.balance,
+          ...(addedData.arrears > 0 ? { manualArrears: addedData.arrears } : {})
+        };
+        saveDocumentToFirestore('students', updatedStd);
+        return updatedStd;
       }
       return s;
     }));
 
-    logAuditAction('BULK_INVOICES_GENERATED', 'Fee Management', `Generated ${bulkList.length} fee invoices in batch`);
+    logAuditAction('BULK_INVOICES_GENERATED', 'Fee Management', `Generated ${bulkList.length} fee invoices in batch with separated arrears tracking`);
+  };
+
+  const updateStudentArrears = (studentId: string, manualArrears: number, reason?: string) => {
+    const safeArrears = Math.max(0, Number(manualArrears) || 0);
+    setStudents(prev => prev.map(s => {
+      if (s.id === studentId) {
+        const oldArrears = s.manualArrears || 0;
+        const diff = safeArrears - oldArrears;
+        const updatedStudent: Student = {
+          ...s,
+          manualArrears: safeArrears,
+          balanceDue: Math.max(0, (s.balanceDue || 0) + diff)
+        };
+        saveDocumentToFirestore('students', updatedStudent);
+        return updatedStudent;
+      }
+      return s;
+    }));
+
+    // Update corresponding invoice if student has an active invoice
+    setInvoices(prev => prev.map(inv => {
+      if (inv.studentId === studentId) {
+        const grandTotal = (inv.currentTermAmount || inv.totalAmount) + safeArrears;
+        const balance = Math.max(0, grandTotal - inv.paidAmount);
+        const updatedInv: Invoice = {
+          ...inv,
+          arrears: safeArrears,
+          grandTotal,
+          balance,
+          status: balance === 0 ? 'Paid' : inv.paidAmount > 0 ? 'Partial' : 'Unpaid'
+        };
+        saveDocumentToFirestore('invoices', updatedInv);
+        return updatedInv;
+      }
+      return inv;
+    }));
+
+    const targetStudent = students.find(s => s.id === studentId);
+    const targetName = targetStudent ? `${targetStudent.firstName} ${targetStudent.lastName}` : studentId;
+    logAuditAction(
+      'ARREARS_MANUALLY_UPDATED',
+      'Fee Management',
+      `Admin/Finance manually set Arrears for ${targetName} to GHS ${safeArrears.toLocaleString()}${reason ? ` (Reason: ${reason})` : ''}`
+    );
   };
 
   const deleteInvoice = (id: string) => {
     const target = invoices.find(i => i.id === id);
     if (target) {
       setInvoices(prev => prev.filter(i => i.id !== id));
+      deleteDocumentFromFirestore('invoices', id);
       setStudents(prev => prev.map(s => {
         if (s.id === target.studentId) {
-          return { ...s, balanceDue: Math.max(0, (s.balanceDue || 0) - target.balance) };
+          const updatedStd: Student = { ...s, balanceDue: Math.max(0, (s.balanceDue || 0) - target.balance) };
+          saveDocumentToFirestore('students', updatedStd);
+          return updatedStd;
         }
         return s;
       }));
@@ -2255,6 +2407,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         createInvoice,
         createBulkInvoices,
         deleteInvoice,
+        updateStudentArrears,
         payments,
         recordPayment,
         clearFinancialRecords,
