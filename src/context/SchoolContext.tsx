@@ -60,8 +60,15 @@ import {
 import {
   fetchCollectionFromFirestore,
   batchSaveCollectionToFirestore,
+  saveDocumentToFirestore,
+  deleteDocumentFromFirestore,
   checkIsQuotaExceeded
 } from '../lib/firestoreService';
+
+import {
+  findTeacherForClass,
+  MatchedTeacherResult
+} from '../utils/teacherAssignment';
 
 interface SchoolContextType {
   // Cloud Sync Status
@@ -123,6 +130,7 @@ interface SchoolContextType {
   // Students & Admissions
   students: Student[];
   generateNextStudentNumber: () => string;
+  suggestTeacherForClass: (className: string) => MatchedTeacherResult | null;
   addStudent: (student: Omit<Student, 'id' | 'admissionNo' | 'joinedDate'> & { admissionNo?: string }) => void;
   updateStudent: (id: string, student: Partial<Student>) => void;
   deleteStudent: (id: string) => void;
@@ -241,6 +249,26 @@ function saveStorage<T>(key: string, data: T) {
   } catch (e) {
     console.error(`Failed to save ${key} to storage:`, e);
   }
+}
+
+function mergeCollection<T extends { id: string }>(localList: T[], cloudList: T[]): T[] {
+  if (!cloudList || cloudList.length === 0) return localList || [];
+  if (!localList || localList.length === 0) return cloudList || [];
+
+  const map = new Map<string, T>();
+  // 1. Put cloud items first
+  cloudList.forEach(item => {
+    if (item && item.id) {
+      map.set(item.id, item);
+    }
+  });
+  // 2. Put local items (preserves newly admitted students, locally updated records that haven't synced yet)
+  localList.forEach(item => {
+    if (item && item.id) {
+      map.set(item.id, item);
+    }
+  });
+  return Array.from(map.values());
 }
 
 export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -466,30 +494,157 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         if (!isMounted) return;
 
-        if (cloudStudents.length > 0) setStudents(cloudStudents);
-        if (cloudAdmissions.length > 0) setAdmissions(cloudAdmissions);
-        if (cloudClasses.length > 0) setClasses(cloudClasses);
-        if (cloudSubjects.length > 0) setSubjects(cloudSubjects);
-        if (cloudInvoices.length > 0) setInvoices(cloudInvoices);
-        if (cloudPayments.length > 0) setPayments(cloudPayments);
-        if (cloudAttendance.length > 0) setAttendance(cloudAttendance);
-        if (cloudFeeStructures.length > 0) setFeeStructures(cloudFeeStructures);
-        if (cloudExams.length > 0) setExams(cloudExams);
-        if (cloudExamSchedules.length > 0) setExamSchedules(cloudExamSchedules);
-        if (cloudMarks.length > 0) setMarks(cloudMarks);
-        if (cloudTimetable.length > 0) setTimetable(cloudTimetable);
-        if (cloudStaff.length > 0) setStaff(cloudStaff);
-        if (cloudPayrolls.length > 0) setPayrolls(cloudPayrolls);
-        if (cloudReimbursements.length > 0) setReimbursements(cloudReimbursements);
-        if (cloudBooks.length > 0) setBooks(cloudBooks);
-        if (cloudBookIssues.length > 0) setBookIssues(cloudBookIssues);
-        if (cloudVehicles.length > 0) setVehicles(cloudVehicles);
-        if (cloudRoutes.length > 0) setRoutes(cloudRoutes);
-        if (cloudAnnouncements.length > 0) setAnnouncements(cloudAnnouncements);
-        if (cloudCommunicationLogs.length > 0) setCommunicationLogs(cloudCommunicationLogs);
-        if (cloudDocuments.length > 0) setDocuments(cloudDocuments);
-        if (cloudAuditLogs.length > 0) setAuditLogs(cloudAuditLogs);
-        if (cloudCalendarEvents.length > 0) setCalendarEvents(cloudCalendarEvents);
+        // Perform bidirectional merge so local additions (such as newly admitted/enrolled students) are never overwritten or lost on refresh
+        setStudents(prev => {
+          const merged = mergeCollection(prev, cloudStudents);
+          saveStorage('students', merged);
+          // If there are newly enrolled students in local that cloud didn't have, push them to Firestore asynchronously
+          if (merged.length > cloudStudents.length) {
+            batchSaveCollectionToFirestore('students', merged);
+          }
+          return merged;
+        });
+
+        setAdmissions(prev => {
+          const merged = mergeCollection(prev, cloudAdmissions);
+          saveStorage('admissions', merged);
+          if (merged.length > cloudAdmissions.length) {
+            batchSaveCollectionToFirestore('admissions', merged);
+          }
+          return merged;
+        });
+
+        setClasses(prev => {
+          const merged = mergeCollection(prev, cloudClasses);
+          saveStorage('classes', merged);
+          return merged;
+        });
+
+        setSubjects(prev => {
+          const merged = mergeCollection(prev, cloudSubjects);
+          saveStorage('subjects', merged);
+          return merged;
+        });
+
+        setInvoices(prev => {
+          const merged = mergeCollection(prev, cloudInvoices);
+          saveStorage('invoices', merged);
+          return merged;
+        });
+
+        setPayments(prev => {
+          const merged = mergeCollection(prev, cloudPayments);
+          saveStorage('payments', merged);
+          return merged;
+        });
+
+        setAttendance(prev => {
+          const merged = mergeCollection(prev, cloudAttendance);
+          saveStorage('attendance', merged);
+          return merged;
+        });
+
+        setFeeStructures(prev => {
+          const merged = mergeCollection(prev, cloudFeeStructures);
+          saveStorage('feeStructures', merged);
+          return merged;
+        });
+
+        setExams(prev => {
+          const merged = mergeCollection(prev, cloudExams);
+          saveStorage('exams', merged);
+          return merged;
+        });
+
+        setExamSchedules(prev => {
+          const merged = mergeCollection(prev, cloudExamSchedules);
+          saveStorage('examSchedules', merged);
+          return merged;
+        });
+
+        setMarks(prev => {
+          const merged = mergeCollection(prev, cloudMarks);
+          saveStorage('marks', merged);
+          return merged;
+        });
+
+        setTimetable(prev => {
+          const merged = mergeCollection(prev, cloudTimetable);
+          saveStorage('timetable', merged);
+          return merged;
+        });
+
+        setStaff(prev => {
+          const merged = mergeCollection(prev, cloudStaff);
+          saveStorage('staff', merged);
+          return merged;
+        });
+
+        setPayrolls(prev => {
+          const merged = mergeCollection(prev, cloudPayrolls);
+          saveStorage('payrolls', merged);
+          return merged;
+        });
+
+        setReimbursements(prev => {
+          const merged = mergeCollection(prev, cloudReimbursements);
+          saveStorage('reimbursements', merged);
+          return merged;
+        });
+
+        setBooks(prev => {
+          const merged = mergeCollection(prev, cloudBooks);
+          saveStorage('books', merged);
+          return merged;
+        });
+
+        setBookIssues(prev => {
+          const merged = mergeCollection(prev, cloudBookIssues);
+          saveStorage('bookIssues', merged);
+          return merged;
+        });
+
+        setVehicles(prev => {
+          const merged = mergeCollection(prev, cloudVehicles);
+          saveStorage('vehicles', merged);
+          return merged;
+        });
+
+        setRoutes(prev => {
+          const merged = mergeCollection(prev, cloudRoutes);
+          saveStorage('routes', merged);
+          return merged;
+        });
+
+        setAnnouncements(prev => {
+          const merged = mergeCollection(prev, cloudAnnouncements);
+          saveStorage('announcements', merged);
+          return merged;
+        });
+
+        setCommunicationLogs(prev => {
+          const merged = mergeCollection(prev, cloudCommunicationLogs);
+          saveStorage('communicationLogs', merged);
+          return merged;
+        });
+
+        setDocuments(prev => {
+          const merged = mergeCollection(prev, cloudDocuments);
+          saveStorage('documents', merged);
+          return merged;
+        });
+
+        setAuditLogs(prev => {
+          const merged = mergeCollection(prev, cloudAuditLogs);
+          saveStorage('auditLogs', merged);
+          return merged;
+        });
+
+        setCalendarEvents(prev => {
+          const merged = mergeCollection(prev, cloudCalendarEvents);
+          saveStorage('calendarEvents', merged);
+          return merged;
+        });
 
         if (cloudAuthUsers.length > 0) {
           setAuthUsers(prev => {
@@ -502,7 +657,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               if (u.email) map.set(u.email.toLowerCase(), u);
               if (u.username) map.set(u.username.toLowerCase(), u);
             });
-            return Array.from(new Set(map.values()));
+            const unified = Array.from(new Set(map.values()));
+            saveStorage('authUsers', unified);
+            return unified;
           });
         }
 
@@ -1009,12 +1166,20 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       saveStorage('classes', next);
       return next;
     });
+    saveDocumentToFirestore('classes', cls);
     logAuditAction('CLASS_CREATED', 'Classes', `Created class: ${cls.name} (${cls.level}) with capacity of ${cls.capacity} desks and assigned teacher ${cls.classTeacher || 'Unassigned'}`);
   };
 
   const updateClass = (id: string, updated: Partial<ClassRoom>) => {
     setClasses(prev => {
-      const next = prev.map(c => c.id === id ? { ...c, ...updated } : c);
+      const next = prev.map(c => {
+        if (c.id === id) {
+          const merged = { ...c, ...updated };
+          saveDocumentToFirestore('classes', merged);
+          return merged;
+        }
+        return c;
+      });
       saveStorage('classes', next);
       return next;
     });
@@ -1028,22 +1193,54 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       saveStorage('classes', next);
       return next;
     });
+    deleteDocumentFromFirestore('classes', id);
     logAuditAction('CLASS_DELETED', 'Classes', `Removed class: ${target?.name || id}`);
   };
 
   const assignClassTeacher = (classId: string, teacherName: string) => {
+    let targetClassName = '';
     setClasses(prev => {
-      const next = prev.map(c => c.id === classId ? { ...c, classTeacher: teacherName } : c);
+      const next = prev.map(c => {
+        if (c.id === classId) {
+          targetClassName = c.name;
+          const updated = { ...c, classTeacher: teacherName };
+          saveDocumentToFirestore('classes', updated);
+          return updated;
+        }
+        return c;
+      });
       saveStorage('classes', next);
       return next;
     });
+
+    // Synchronize all enrolled students in this class
+    setStudents(prev => {
+      const next = prev.map(s => {
+        if (s.classId === classId || (targetClassName && s.className.toLowerCase() === targetClassName.toLowerCase())) {
+          const updated = { ...s, classTeacher: teacherName };
+          saveDocumentToFirestore('students', updated);
+          return updated;
+        }
+        return s;
+      });
+      saveStorage('students', next);
+      return next;
+    });
+
     const targetCls = classes.find(c => c.id === classId);
     logAuditAction('CLASS_TEACHER_ASSIGNED', 'Classes', `Assigned teacher ${teacherName} to ${targetCls?.name || classId}`);
   };
 
   const updateClassCapacity = (classId: string, capacity: number) => {
     setClasses(prev => {
-      const next = prev.map(c => c.id === classId ? { ...c, capacity: Math.max(0, capacity) } : c);
+      const next = prev.map(c => {
+        if (c.id === classId) {
+          const updated = { ...c, capacity: Math.max(0, capacity) };
+          saveDocumentToFirestore('classes', updated);
+          return updated;
+        }
+        return c;
+      });
       saveStorage('classes', next);
       return next;
     });
@@ -1060,12 +1257,20 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       saveStorage('subjects', next);
       return next;
     });
+    saveDocumentToFirestore('subjects', subj);
     logAuditAction('SUBJECT_CREATED', 'Subjects', `Created subject: ${subj.name} (${subj.code})`);
   };
 
   const updateSubject = (id: string, updated: Partial<Subject>) => {
     setSubjects(prev => {
-      const next = prev.map(s => s.id === id ? { ...s, ...updated } : s);
+      const next = prev.map(s => {
+        if (s.id === id) {
+          const merged = { ...s, ...updated };
+          saveDocumentToFirestore('subjects', merged);
+          return merged;
+        }
+        return s;
+      });
       saveStorage('subjects', next);
       return next;
     });
@@ -1081,6 +1286,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       saveStorage('calendarEvents', next);
       return next;
     });
+    saveDocumentToFirestore('calendarEvents', event);
     logAuditAction('CALENDAR_EVENT_ADDED', 'Calendar', `Added calendar event: ${event.title}`);
   };
 
@@ -1091,6 +1297,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       saveStorage('calendarEvents', next);
       return next;
     });
+    deleteDocumentFromFirestore('calendarEvents', id);
     logAuditAction('CALENDAR_EVENT_DELETED', 'Calendar', `Removed event: ${ev?.title}`);
   };
 
@@ -1118,25 +1325,38 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return `GWD-0000-${String(nextSeq).padStart(5, '0')}`;
   };
 
+  // Auto Teacher Suggestion / Assignment
+  const suggestTeacherForClass = (className: string): MatchedTeacherResult | null => {
+    return findTeacherForClass(className, { classes, staff, authUsers });
+  };
+
   // Student Actions
   const addStudent = (newStd: Omit<Student, 'id' | 'admissionNo' | 'joinedDate'> & { admissionNo?: string }) => {
     const id = `std-${Date.now().toString().slice(-4)}`;
     const autoAdmissionNo = generateNextStudentNumber();
     const admissionNo = newStd.admissionNo && newStd.admissionNo.trim() !== '' ? newStd.admissionNo.trim() : autoAdmissionNo;
+    
+    // Auto-resolve teacher for class if not provided
+    const autoTeacher = (newStd.classTeacher && newStd.classTeacher.trim() !== '')
+      ? newStd.classTeacher.trim()
+      : (findTeacherForClass(newStd.className, { classes, staff, authUsers })?.teacherName || '');
+
     const student: Student = {
       ...newStd,
       id,
       admissionNo,
+      classTeacher: autoTeacher,
       joinedDate: newStd.enrollmentDate || new Date().toISOString().split('T')[0],
       enrollmentDate: newStd.enrollmentDate || new Date().toISOString().split('T')[0]
     };
     
-    // Save student synchronously
+    // Save student locally and to Firestore immediately
     setStudents(prev => {
       const updated = [student, ...prev];
       saveStorage('students', updated);
       return updated;
     });
+    saveDocumentToFirestore('students', student);
 
     // Auto-create / update Parent account in authUsers for instant parent portal login
     if (student.guardianPhone) {
@@ -1158,6 +1378,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         saveStorage('authUsers', updated);
         return updated;
       });
+      saveDocumentToFirestore('authUsers', parentUser);
     }
 
     // Update class enrolledCount
@@ -1165,7 +1386,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setClasses(prev => {
         const updated = prev.map(c => {
           if (c.name.toLowerCase() === student.className.toLowerCase() || c.id === student.classId) {
-            return { ...c, enrolledCount: (c.enrolledCount || 0) + 1 };
+            const upd = { ...c, enrolledCount: (c.enrolledCount || 0) + 1 };
+            saveDocumentToFirestore('classes', upd);
+            return upd;
           }
           return c;
         });
@@ -1174,12 +1397,26 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     }
 
-    logAuditAction('STUDENT_ENROLLED', 'Students', `Enrolled student: ${student.firstName} ${student.lastName} (${admissionNo})`);
+    logAuditAction('STUDENT_ENROLLED', 'Students', `Enrolled student: ${student.firstName} ${student.lastName} (${admissionNo}) in ${student.className}${autoTeacher ? ` under ${autoTeacher}` : ''}`);
   };
 
   const updateStudent = (id: string, updated: Partial<Student>) => {
     setStudents(prev => {
-      const next = prev.map(s => s.id === id ? { ...s, ...updated } : s);
+      const next = prev.map(s => {
+        if (s.id === id) {
+          const merged = { ...s, ...updated };
+          // If class was changed and teacher wasn't explicitly supplied, auto-assign teacher for new class
+          if (updated.className && updated.className !== s.className && updated.classTeacher === undefined) {
+            const matchedTeacher = findTeacherForClass(updated.className, { classes, staff, authUsers });
+            if (matchedTeacher) {
+              merged.classTeacher = matchedTeacher.teacherName;
+            }
+          }
+          saveDocumentToFirestore('students', merged);
+          return merged;
+        }
+        return s;
+      });
       saveStorage('students', next);
       return next;
     });
@@ -1193,6 +1430,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       saveStorage('students', next);
       return next;
     });
+    deleteDocumentFromFirestore('students', id);
     logAuditAction('STUDENT_DELETED', 'Students', `Removed student: ${std?.firstName} ${std?.lastName}`);
   };
 
@@ -1216,6 +1454,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       saveStorage('admissions', updated);
       return updated;
     });
+    saveDocumentToFirestore('admissions', application);
 
     // Auto-create parent user account for applicant
     if (application.parentPhone) {
@@ -1237,6 +1476,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         saveStorage('authUsers', updated);
         return updated;
       });
+      saveDocumentToFirestore('authUsers', parentUser);
     }
 
     logAuditAction('ADMISSION_SUBMITTED', 'Admissions', `Received application #${studentNumber} for ${application.applicantName}`);
@@ -1247,6 +1487,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const next = prev.map(a => {
         if (a.id === id) {
           const updated = { ...a, status, notes: notes || a.notes };
+          saveDocumentToFirestore('admissions', updated);
           // If approved and converted to enrolled, automatically add to students
           if (status === 'Enrolled') {
             const names = a.applicantName.trim().split(/\s+/);
@@ -1997,6 +2238,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         deleteCalendarEvent,
         students,
         generateNextStudentNumber,
+        suggestTeacherForClass,
         addStudent,
         updateStudent,
         deleteStudent,

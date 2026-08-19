@@ -45,7 +45,7 @@ const ALL_CLASSES = [
 ];
 
 export const AdmissionManagement: React.FC = () => {
-  const { admissions, addAdmission, updateAdmissionStatus, generateNextStudentNumber } = useSchool();
+  const { admissions, addAdmission, updateAdmissionStatus, generateNextStudentNumber, suggestTeacherForClass } = useSchool();
 
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
@@ -642,6 +642,27 @@ export const AdmissionManagement: React.FC = () => {
                   </select>
                 </div>
               </div>
+
+              {/* Matched Teacher Hint */}
+              {(() => {
+                const matched = suggestTeacherForClass(form.appliedClass);
+                if (matched) {
+                  return (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs text-emerald-950">
+                      <div className="flex items-center gap-2">
+                        <GraduationCap className="w-4 h-4 text-emerald-700 shrink-0" />
+                        <span>
+                          Designated Teacher: <strong>{matched.teacherName}</strong>
+                        </span>
+                      </div>
+                      <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded font-bold">
+                        Auto-Assigned on Admission
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Parents Information Section */}
               <div className="border-t border-slate-200 pt-3 space-y-3">

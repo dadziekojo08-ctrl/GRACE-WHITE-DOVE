@@ -1,0 +1,105 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Student record at Grace White Dove School Complex",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "admissionNo": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "gender": { "type": "string" },
+        "dateOfBirth": { "type": "string" },
+        "enrollmentDate": { "type": "string" },
+        "joinedDate": { "type": "string" },
+        "classId": { "type": "string" },
+        "className": { "type": "string" },
+        "section": { "type": "string" },
+        "rollNo": { "type": "string" },
+        "classTeacher": { "type": "string" },
+        "guardianName": { "type": "string" },
+        "guardianEmail": { "type": "string" },
+        "guardianPhone": { "type": "string" },
+        "address": { "type": "string" },
+        "status": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "balanceDue": { "type": "number" }
+      },
+      "required": ["id", "admissionNo", "firstName", "lastName", "className", "status"]
+    },
+    "AdmissionApplication": {
+      "title": "AdmissionApplication",
+      "description": "Admission application record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "applicationNo": { "type": "string" },
+        "studentNumber": { "type": "string" },
+        "applicantName": { "type": "string" },
+        "gender": { "type": "string" },
+        "dateOfBirth": { "type": "string" },
+        "enrollmentDate": { "type": "string" },
+        "appliedClass": { "type": "string" },
+        "parentName": { "type": "string" },
+        "parentEmail": { "type": "string" },
+        "parentPhone": { "type": "string" },
+        "parentAddress": { "type": "string" },
+        "status": { "type": "string" },
+        "submissionDate": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "applicationNo", "applicantName", "appliedClass", "status", "submissionDate"]
+    },
+    "ClassRoom": {
+      "title": "ClassRoom",
+      "description": "Classroom definition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "level": { "type": "string" },
+        "section": { "type": "string" },
+        "classTeacher": { "type": "string" },
+        "capacity": { "type": "number" },
+        "enrolledCount": { "type": "number" }
+      },
+      "required": ["id", "name", "level"]
+    },
+    "AuthUser": {
+      "title": "AuthUser",
+      "description": "Authenticated user and role assignment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "phone": { "type": "string" },
+        "staffCode": { "type": "string" },
+        "studentId": { "type": "string" },
+        "assignedClass": { "type": "string" }
+      },
+      "required": ["id", "name", "role"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Enrolled student records"
+    },
+    "/admissions/{admissionId}": {
+      "schema": "AdmissionApplication",
+      "description": "Admission applications"
+    },
+    "/classes/{classId}": {
+      "schema": "ClassRoom",
+      "description": "Academic classes"
+    },
+    "/authUsers/{userId}": {
+      "schema": "AuthUser",
+      "description": "User profiles and credentials"
+    }
+  }
+}

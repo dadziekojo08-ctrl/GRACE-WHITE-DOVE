@@ -21,20 +21,37 @@ import {
   Shield,
   Printer,
   Sparkles,
-  QrCode
+  QrCode,
+  UserCheck,
+  AlertCircle,
+  RefreshCw,
+  GraduationCap
 } from 'lucide-react';
 import { DigitalIdCardGenerator } from './DigitalIdCardGenerator';
 
 export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: Student) => void }> = ({
   onOpenPaystackForStudent
 }) => {
-  const { students, addStudent, updateStudent, deleteStudent, searchQuery, marks, attendance, invoices, classes, generateNextStudentNumber } = useSchool();
+  const {
+    students,
+    addStudent,
+    updateStudent,
+    deleteStudent,
+    searchQuery,
+    marks,
+    attendance,
+    invoices,
+    classes,
+    generateNextStudentNumber,
+    suggestTeacherForClass
+  } = useSchool();
 
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [activeStudentProfile, setActiveStudentProfile] = useState<Student | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
   // Digital ID Card Generator State
   const [isIdGeneratorOpen, setIsIdGeneratorOpen] = useState<boolean>(false);
@@ -100,6 +117,58 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
           'JHS 3 (Basic 9)'
         ])
   ];
+
+  // Auto-suggested teacher for the currently selected class in the form
+  const currentSuggestedTeacher = suggestTeacherForClass(formData.className);
+
+  // When class changes in the form, automatically suggest and fill the class teacher
+  const handleClassChange = (newClassName: string) => {
+    const suggested = suggestTeacherForClass(newClassName);
+    setFormData((prev) => ({
+      ...prev,
+      className: newClassName,
+      classTeacher: suggested ? suggested.teacherName : ''
+    }));
+  };
+
+  const handleOpenAdd = () => {
+    setEditingStudent(null);
+    const initialClass = classes[0]?.name || 'Primary 1 (Grade 1)';
+    const suggested = suggestTeacherForClass(initialClass);
+    setFormData({
+      admissionNo: '',
+      firstName: '',
+      lastName: '',
+      gender: 'Male',
+      dateOfBirth: '',
+      className: initialClass,
+      classTeacher: suggested ? suggested.teacherName : '',
+      enrollmentDate: new Date().toISOString().split('T')[0],
+      section: 'A',
+      rollNo: '',
+      guardianName: '',
+      guardianPhone: '',
+      guardianEmail: '',
+      address: '',
+      balanceDue: 0,
+      photoUrl: ''
+    });
+    setIsAddModalOpen(true);
+  };
+
+  // Bulk auto-sync teachers for all enrolled students
+  const handleAutoSyncAllTeachers = () => {
+    let syncedCount = 0;
+    students.forEach((std) => {
+      const matched = suggestTeacherForClass(std.className);
+      if (matched && (!std.classTeacher || std.classTeacher.trim() === '' || std.classTeacher !== matched.teacherName)) {
+        updateStudent(std.id, { classTeacher: matched.teacherName });
+        syncedCount++;
+      }
+    });
+    setSyncFeedback(`Successfully synchronized class teachers for ${syncedCount} student(s) matching their class levels.`);
+    setTimeout(() => setSyncFeedback(null), 5000);
+  };
 
   // Filtering
   const effectiveSearch = localSearch || searchQuery || '';
@@ -247,6 +316,14 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
 
         <div className="flex items-center gap-2">
           <button
+            onClick={handleAutoSyncAllTeachers}
+            className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+            title="Auto-match and assign class teachers for all students based on their class levels"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-emerald-700" />
+            Auto-Sync Teachers
+          </button>
+          <button
             onClick={() => {
               setSelectedIdCardStudent(null);
               setIsIdGeneratorOpen(true);
@@ -265,10 +342,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
             Export CSV
           </button>
           <button
-            onClick={() => {
-              setEditingStudent(null);
-              setIsAddModalOpen(true);
-            }}
+            onClick={handleOpenAdd}
             className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
           >
             <UserPlus className="w-4 h-4 text-amber-300" />
@@ -276,6 +350,21 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
           </button>
         </div>
       </div>
+
+      {syncFeedback && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs px-4 py-2.5 rounded-xl flex items-center justify-between animate-fadeIn shadow-2xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-semibold">{syncFeedback}</span>
+          </div>
+          <button
+            onClick={() => setSyncFeedback(null)}
+            className="text-emerald-700 hover:text-emerald-900 text-xs font-bold px-2 py-0.5 rounded cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Filters & Search Row */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 text-xs">
@@ -376,10 +465,32 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
 
                   {/* 3. Class Teacher */}
                   <td className="py-3 px-4">
-                    <span className="font-medium text-slate-800 block">
-                      {std.classTeacher || 'Mr. Arthur Mensah'}
-                    </span>
-                    <span className="text-[10px] text-emerald-700">Lead Mentor</span>
+                    {std.classTeacher && std.classTeacher.trim() !== '' ? (
+                      <div>
+                        <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                          <GraduationCap className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          {std.classTeacher}
+                        </span>
+                        <span className="text-[10px] text-emerald-700 font-medium block mt-0.5">Assigned Class Teacher</span>
+                      </div>
+                    ) : (() => {
+                      const matched = suggestTeacherForClass(std.className);
+                      if (matched) {
+                        return (
+                          <button
+                            onClick={() => updateStudent(std.id, { classTeacher: matched.teacherName })}
+                            className="inline-flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md text-[10px] font-bold cursor-pointer transition-colors"
+                            title={`Auto-assign ${matched.teacherName} based on ${std.className}`}
+                          >
+                            <Sparkles className="w-3 h-3 text-amber-600" />
+                            Assign {matched.teacherName.split(' ').pop()}
+                          </button>
+                        );
+                      }
+                      return (
+                        <span className="text-slate-400 italic text-[11px]">Unassigned</span>
+                      );
+                    })()}
                   </td>
 
                   {/* 4. Enrollment Date */}
@@ -520,6 +631,13 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                   </h4>
                   <div className="flex justify-between"><span className="text-slate-500">Gender:</span><span className="font-semibold">{activeStudentProfile.gender}</span></div>
                   <div className="flex justify-between"><span className="text-slate-500">Date of Birth:</span><span className="font-semibold">{activeStudentProfile.dateOfBirth}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">Class Level:</span><span className="font-bold text-emerald-900">{activeStudentProfile.className}</span></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Class Teacher:</span>
+                    <span className="font-semibold text-emerald-950 bg-emerald-100/70 px-2 py-0.5 rounded text-[11px]">
+                      {activeStudentProfile.classTeacher || 'Unassigned'}
+                    </span>
+                  </div>
                   <div className="flex justify-between"><span className="text-slate-500">Roll Number:</span><span className="font-semibold font-mono">{activeStudentProfile.rollNo}</span></div>
                   <div className="flex justify-between"><span className="text-slate-500">Joined Date:</span><span className="font-semibold">{activeStudentProfile.joinedDate}</span></div>
                   <div className="flex justify-between"><span className="text-slate-500">Address:</span><span className="font-semibold text-right max-w-[150px] truncate">{activeStudentProfile.address}</span></div>
@@ -709,7 +827,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                   <label className="block font-semibold text-slate-700 mb-1">Assign Class</label>
                   <select
                     value={formData.className}
-                    onChange={(e) => setFormData({ ...formData, className: e.target.value })}
+                    onChange={(e) => handleClassChange(e.target.value)}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
                   >
                     {classList.filter((c) => c !== 'All Classes').map((c) => (
@@ -733,9 +851,21 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                 </div>
               </div>
 
+              {/* Class Teacher Auto-Suggestion & Match Feedback */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Class Teacher</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-semibold text-slate-700">Class Teacher</label>
+                    {currentSuggestedTeacher && formData.classTeacher !== currentSuggestedTeacher.teacherName && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, classTeacher: currentSuggestedTeacher.teacherName }))}
+                        className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                      >
+                        Auto-fill suggested
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={formData.classTeacher}
@@ -754,6 +884,48 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                   />
                 </div>
               </div>
+
+              {/* Smart Teacher Match Assistant Badge */}
+              {currentSuggestedTeacher ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                      <GraduationCap className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5 flex-wrap">
+                        <span>Class Teacher:</span>
+                        <span className="text-emerald-900 font-extrabold">{currentSuggestedTeacher.teacherName}</span>
+                        <span className="bg-emerald-200/80 text-emerald-900 text-[10px] px-1.5 py-0.5 rounded font-semibold">
+                          {currentSuggestedTeacher.source === 'class_roster' ? 'Classroom Lead' : currentSuggestedTeacher.source === 'staff_registry' ? 'Staff Registry' : 'Teacher Account'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-emerald-800 mt-0.5">
+                        Matched automatically for <span className="font-semibold">{formData.className}</span> level.
+                      </p>
+                    </div>
+                  </div>
+                  {formData.classTeacher === currentSuggestedTeacher.teacherName ? (
+                    <span className="inline-flex items-center gap-1 bg-emerald-200/70 text-emerald-950 px-2.5 py-1 rounded-lg text-xs font-bold shrink-0">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-700" />
+                      Assigned
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, classTeacher: currentSuggestedTeacher.teacherName }))}
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 shadow-2xs"
+                    >
+                      Assign {currentSuggestedTeacher.teacherName.split(' ').pop()}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-center gap-2 text-xs text-amber-900">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>No dedicated class teacher is assigned to <strong>{formData.className}</strong> yet. You can manually enter one or configure class teachers in Class Management.</span>
+                </div>
+              )}
 
               <div className="border-t border-slate-200 pt-3">
                 <h4 className="font-bold text-emerald-900 mb-2">Guardian / Parent Contact Details</h4>
