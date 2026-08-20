@@ -60,10 +60,8 @@ export const AccountantDashboard: React.FC<{
 
   // Modals state
   const [isBillClassModalOpen, setIsBillClassModalOpen] = useState(false);
-  const [isProcessFeeModalOpen, setIsProcessFeeModalOpen] = useState(false);
   const [isClearReportModalOpen, setIsClearReportModalOpen] = useState(false);
   const [clearReportMode, setClearReportMode] = useState<'arrears-only' | 'payments-only' | 'all'>('arrears-only');
-  const [selectedReceiptPayment, setSelectedReceiptPayment] = useState<Payment | null>(null);
 
   // Bill Class Form State
   const [billClassForm, setBillClassForm] = useState({
@@ -74,15 +72,6 @@ export const AccountantDashboard: React.FC<{
     devLevy: 0,
     ictFee: 0,
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  });
-
-  // Process Student Fee Form State
-  const [processFeeForm, setProcessFeeForm] = useState({
-    studentId: '',
-    amount: 0,
-    method: 'Cash' as 'Cash',
-    reference: `RCP-${Date.now().toString().slice(-6)}`,
-    remarks: 'School Fees Term Installment'
   });
 
   const [studentSearch, setStudentSearch] = useState('');
@@ -224,33 +213,6 @@ export const AccountantDashboard: React.FC<{
     setIsBillClassModalOpen(false);
   };
 
-  // Process Student Fees Manual / MoMo / Paystack
-  const handleProcessStudentFee = (e: React.FormEvent) => {
-    e.preventDefault();
-    const student = students.find((s) => s.id === processFeeForm.studentId);
-    if (!student) {
-      alert('Please select a student.');
-      return;
-    }
-
-    const studentInvoice = invoices.find((i) => i.studentId === student.id && i.balance > 0) || invoices.find((i) => i.studentId === student.id);
-
-    recordPayment({
-      studentId: student.id,
-      studentName: `${student.firstName} ${student.lastName}`,
-      invoiceId: studentInvoice?.id || `inv-direct-${Date.now().toString().slice(-4)}`,
-      amount: Number(processFeeForm.amount),
-      paymentMethod: 'Cash',
-      channel: 'Cash Desk',
-      reference: processFeeForm.reference || `RCP-${Date.now().toString().slice(-6)}`,
-      remarks: processFeeForm.remarks,
-      status: 'Success'
-    });
-
-    alert(`Payment of GHS ${processFeeForm.amount} recorded at Cash Desk successfully for ${student.firstName} ${student.lastName}!`);
-    setIsProcessFeeModalOpen(false);
-  };
-
   // Export Financial Statement CSV
   const handleExportStatement = () => {
     let csv = `Grace White Dove School Complex - Official Financial Statement\n`;
@@ -312,11 +274,11 @@ export const AccountantDashboard: React.FC<{
               Grace White Dove Finance Portal
             </h1>
             <p className="text-xs sm:text-sm text-emerald-100/90 mt-1 max-w-xl">
-              Class-level billing automation, real-time fee receipting via Paystack & Mobile Money, ledger tracking, and statement exports.
+              Class-level billing automation, real-time fee settlement tracking via Paystack, ledger records, and statement exports.
             </p>
           </div>
 
-          {/* Requested Top 4 Functional Buttons on Accountant Dashboard */}
+          {/* Requested Top Functional Buttons on Accountant Dashboard */}
           <div className="flex flex-wrap items-center gap-2.5">
             {/* 1. Bill Class */}
             <button
@@ -328,14 +290,14 @@ export const AccountantDashboard: React.FC<{
               Bill Class
             </button>
 
-            {/* 2. Process Student Fees */}
+            {/* 2. Fee Management */}
             <button
-              onClick={() => setIsProcessFeeModalOpen(true)}
+              onClick={() => setActiveTab('fees')}
               className="bg-white text-emerald-950 hover:bg-emerald-50 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer hover:scale-[1.02]"
-              title="Record payment via Paystack, Mobile Money or Cash"
+              title="View student invoices and billing management"
             >
               <CreditCard className="w-4 h-4 text-emerald-700" />
-              Process Student Fees
+              Fee Management
             </button>
 
             {/* 3. Clear Financial Reports */}
@@ -491,42 +453,42 @@ export const AccountantDashboard: React.FC<{
           </div>
         </div>
 
-        {/* Quick Fee Shortcuts & Cash Desk Processing Card */}
+        {/* Accounts & Online Gateway Settlement Status Card */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-3">
               <div className="w-8 h-8 rounded-lg bg-emerald-800 text-amber-300 flex items-center justify-center font-black text-sm shadow-xs">
-                <Banknote className="w-4 h-4" />
+                <CreditCard className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">Cash Desk Counter</h3>
-                <p className="text-[11px] text-slate-500">Physical receipting & parent online payment tracking</p>
+                <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">Accounts & Settlement</h3>
+                <p className="text-[11px] text-slate-500">Automated parent billing & gateway reconciliation</p>
               </div>
             </div>
 
             <div className="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-100 mb-4 text-xs space-y-2">
               <div className="flex justify-between items-center text-emerald-900">
-                <span className="font-medium">Cash Desk Status:</span>
-                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full text-[10px]">Cashier Ready</span>
+                <span className="font-medium">Gateway Service:</span>
+                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full text-[10px]">Paystack Live Active</span>
               </div>
               <div className="flex justify-between items-center text-emerald-900">
                 <span className="font-medium">Parent Portal MoMo:</span>
-                <span className="font-bold text-slate-800 text-[10px]">Live Paystack Gateway</span>
+                <span className="font-bold text-slate-800 text-[10px]">MTN • Telecel • AT</span>
               </div>
               <div className="flex justify-between items-center text-emerald-900">
-                <span className="font-medium">Instant Receipts:</span>
-                <span className="font-bold text-emerald-800 text-[10px]">Auto-Stamped & SMS</span>
+                <span className="font-medium">Receipt Delivery:</span>
+                <span className="font-bold text-emerald-800 text-[10px]">Parent Portal Receipts</span>
               </div>
             </div>
           </div>
 
           <div className="space-y-2">
             <button
-              onClick={() => setIsProcessFeeModalOpen(true)}
+              onClick={() => setActiveTab('fees')}
               className="w-full py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
             >
-              <Banknote className="w-4 h-4 text-amber-300" />
-              Open Cash Desk Counter
+              <CreditCard className="w-4 h-4 text-amber-300" />
+              Open Fee Management
             </button>
             <button
               onClick={() => setActiveTab('reports')}
@@ -539,12 +501,12 @@ export const AccountantDashboard: React.FC<{
         </div>
       </div>
 
-      {/* Recent Fee Payments & Direct Receipts Table */}
+      {/* Financial Transactions & Ledger Activity */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">Recent Fee Payments & Receipts</h3>
-            <p className="text-xs text-slate-500">Live feed of cleared transactions across all methods</p>
+            <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">Financial Transactions & Verified Settlements</h3>
+            <p className="text-xs text-slate-500">Real-time ledger audit log of student fee transactions</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -560,49 +522,53 @@ export const AccountantDashboard: React.FC<{
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
               <tr>
-                <th className="py-3 px-4">Receipt #</th>
+                <th className="py-3 px-4">Transaction Ref</th>
                 <th className="py-3 px-4">Student</th>
                 <th className="py-3 px-4">Class</th>
                 <th className="py-3 px-4">Amount</th>
-                <th className="py-3 px-4">Payment Method</th>
+                <th className="py-3 px-4">Payment Channel</th>
                 <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4 text-right">Official Receipt</th>
+                <th className="py-3 px-4 text-right">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {payments.slice(0, 7).map((p) => {
-                const std = students.find((s) => s.id === p.studentId);
-                return (
-                  <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold text-emerald-950">
-                      {p.receiptNo || p.reference}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="font-bold text-slate-900">{p.studentName}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{std?.admissionNo || 'ADM-REC'}</div>
-                    </td>
-                    <td className="py-3 px-4 text-slate-700">{std?.className || 'Grade Class'}</td>
-                    <td className="py-3 px-4 font-black text-emerald-800 font-mono">
-                      GHS {p.amount.toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="bg-slate-100 text-slate-800 font-medium px-2 py-0.5 rounded text-[10px]">
-                        {p.paymentMethod}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-500">{p.date}</td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => setSelectedReceiptPayment(p)}
-                        className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-lg text-[11px] inline-flex items-center gap-1 cursor-pointer transition-colors"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                        Print Receipt
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {payments.length > 0 ? (
+                payments.slice(0, 7).map((p) => {
+                  const std = students.find((s) => s.id === p.studentId);
+                  return (
+                    <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-950">
+                        {p.receiptNo || p.reference}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-bold text-slate-900">{p.studentName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{std?.admissionNo || 'ADM-REC'}</div>
+                      </td>
+                      <td className="py-3 px-4 text-slate-700">{std?.className || 'Grade Class'}</td>
+                      <td className="py-3 px-4 font-black text-emerald-800 font-mono">
+                        GHS {p.amount.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="bg-slate-100 text-slate-800 font-medium px-2 py-0.5 rounded text-[10px]">
+                          {p.channel || p.paymentMethod}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">{p.date}</td>
+                      <td className="py-3 px-4 text-right">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          Verified
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-400">
+                    No transactions recorded yet in current ledger.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -726,7 +692,7 @@ export const AccountantDashboard: React.FC<{
                 <button
                   type="button"
                   onClick={() => setIsBillClassModalOpen(false)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl"
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -743,105 +709,7 @@ export const AccountantDashboard: React.FC<{
       )}
 
       {/* ========================================================================= */}
-      {/* 2. PROCESS STUDENT FEES MODAL */}
-      {/* ========================================================================= */}
-      {isProcessFeeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base font-['Outfit']">Process Student Fees</h3>
-                <p className="text-xs text-emerald-200">Collect fee payment and issue official receipt</p>
-              </div>
-              <button
-                onClick={() => setIsProcessFeeModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleProcessStudentFee} className="p-6 space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Select Student *</label>
-                <select
-                  required
-                  value={processFeeForm.studentId}
-                  onChange={(e) => setProcessFeeForm({ ...processFeeForm, studentId: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold focus:ring-2 focus:ring-emerald-600 outline-none"
-                >
-                  <option value="">-- Choose Student --</option>
-                  {students.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.firstName} {s.lastName} ({s.admissionNo}) • {s.className} • Balance: GHS {s.balanceDue}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Amount (GHS) *</label>
-                  <input
-                    type="number"
-                    required
-                    value={processFeeForm.amount}
-                    onChange={(e) => setProcessFeeForm({ ...processFeeForm, amount: Number(e.target.value) })}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Method / Channel</label>
-                  <div className="flex items-center gap-2 p-2 border border-emerald-300 bg-emerald-50 rounded-lg text-emerald-950 font-bold text-xs">
-                    <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                    <span>Cash Desk (Physical Counter)</span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Reference / Transaction ID</label>
-                <input
-                  type="text"
-                  value={processFeeForm.reference}
-                  onChange={(e) => setProcessFeeForm({ ...processFeeForm, reference: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono focus:ring-2 focus:ring-emerald-600 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Remarks / Note</label>
-                <input
-                  type="text"
-                  value={processFeeForm.remarks}
-                  onChange={(e) => setProcessFeeForm({ ...processFeeForm, remarks: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setIsProcessFeeModalOpen(false)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl shadow-sm cursor-pointer flex items-center gap-1.5"
-                >
-                  <Receipt className="w-4 h-4 text-amber-300" />
-                  Confirm & Issue Receipt
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 3. CLEAR FINANCIAL REPORTS MODAL */}
+      {/* 2. CLEAR FINANCIAL REPORTS MODAL */}
       {/* ========================================================================= */}
       {isClearReportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
@@ -944,69 +812,6 @@ export const AccountantDashboard: React.FC<{
                     : clearReportMode === 'payments-only'
                     ? 'Clear Total Collected'
                     : 'Clear All Records'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* OFFICIAL RECEIPT POPUP */}
-      {/* ========================================================================= */}
-      {selectedReceiptPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
-            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base font-['Outfit']">Grace White Dove School Complex</h3>
-                <p className="text-xs text-emerald-200">Official Student Fee Receipt</p>
-                <p className="text-[10px] text-emerald-300 mt-0.5 font-medium">
-                  gracewhitedoveschool@gmail.com • 0244403541
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedReceiptPayment(null)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 text-xs">
-              <div className="text-center pb-3 border-b border-dashed border-slate-200">
-                <span className="text-[10px] uppercase font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                  Payment Cleared & Verified
-                </span>
-                <h4 className="text-xl font-black text-slate-900 font-mono mt-2">
-                  GHS {selectedReceiptPayment.amount.toLocaleString()}
-                </h4>
-                <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                  Receipt: {selectedReceiptPayment.receiptNo || selectedReceiptPayment.reference}
-                </p>
-              </div>
-
-              <div className="space-y-2 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                <div className="flex justify-between"><span className="text-slate-500">Student Name:</span><span className="font-bold text-slate-900">{selectedReceiptPayment.studentName}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">Payment Channel:</span><span className="font-semibold">{selectedReceiptPayment.paymentMethod}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">Transaction Date:</span><span className="font-semibold">{selectedReceiptPayment.date}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">Purpose / Remarks:</span><span className="font-semibold">{selectedReceiptPayment.remarks || 'School Fees'}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">Managing Entity:</span><span className="font-bold text-emerald-800">BenDaz IT Consult</span></div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-                <button
-                  onClick={() => setSelectedReceiptPayment(null)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer className="w-4 h-4 text-amber-300" />
-                  Print Official Receipt
                 </button>
               </div>
             </div>

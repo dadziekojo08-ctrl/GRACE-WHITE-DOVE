@@ -44,7 +44,7 @@ export const PaystackModal: React.FC<PaystackModalProps> = ({
   studentId,
   onPaymentSuccess
 }) => {
-  const { students, recordPayment } = useSchool();
+  const { students, recordPayment, activeRole } = useSchool();
 
   const [channel, setChannel] = useState<'card' | 'momo' | 'bank'>('momo');
   const [cardNumber, setCardNumber] = useState('');
@@ -374,53 +374,86 @@ export const PaystackModal: React.FC<PaystackModalProps> = ({
               </div>
               <h3 className="text-lg font-bold text-slate-900">Payment Successful!</h3>
               <p className="text-xs text-slate-500 mb-4">
-                Thank you. The fees have been recorded and your student balance updated instantly.
+                Thank you. The fees have been recorded and the student balance updated instantly.
               </p>
 
-              {/* Printable Receipt Card */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-left mb-5 text-xs space-y-2 font-mono">
-                <div className="flex justify-between border-b border-slate-200 pb-2 font-sans font-bold text-emerald-950">
-                  <span>Grace White Dove Official Receipt</span>
-                  <span className="text-emerald-600 font-mono">PAID</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-sans">Payment Ref:</span>
-                  <span className="font-bold text-slate-800">{completedPayment.paymentRef}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-sans">Student Name:</span>
-                  <span className="font-bold text-slate-800">{completedPayment.studentName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-sans">Amount Cleared:</span>
-                  <span className="font-bold text-emerald-700 text-sm">GHS {completedPayment.amount.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-sans">Channel:</span>
-                  <span className="text-slate-800">{completedPayment.channel}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-sans">Date & Time:</span>
-                  <span className="text-slate-800">{completedPayment.date}</span>
-                </div>
-              </div>
+              {/* Show Printable Official Receipt ONLY on Parent Portal */}
+              {activeRole === 'Parent' ? (
+                <>
+                  {/* Printable Receipt Card */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-left mb-5 text-xs space-y-2 font-mono">
+                    <div className="flex justify-between border-b border-slate-200 pb-2 font-sans font-bold text-emerald-950">
+                      <span>Grace White Dove Official Receipt</span>
+                      <span className="text-emerald-600 font-mono">PAID</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-sans">Payment Ref:</span>
+                      <span className="font-bold text-slate-800">{completedPayment.paymentRef}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-sans">Student Name:</span>
+                      <span className="font-bold text-slate-800">{completedPayment.studentName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-sans">Amount Cleared:</span>
+                      <span className="font-bold text-emerald-700 text-sm">GHS {completedPayment.amount.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-sans">Channel:</span>
+                      <span className="text-slate-800">{completedPayment.channel}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-sans">Date & Time:</span>
+                      <span className="text-slate-800">{completedPayment.date}</span>
+                    </div>
+                  </div>
 
-              {/* Bottom buttons */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handlePrintReceipt}
-                  className="flex-1 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Printer className="w-4 h-4" />
-                  Print Official Receipt
-                </button>
-                <button
-                  onClick={onClose}
-                  className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold py-2.5 px-4 rounded-xl text-xs transition-colors cursor-pointer"
-                >
-                  Done
-                </button>
-              </div>
+                  {/* Bottom buttons for Parent Portal */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handlePrintReceipt}
+                      className="flex-1 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Printer className="w-4 h-4" />
+                      Print Official Receipt
+                    </button>
+                    <button
+                      onClick={onClose}
+                      className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold py-2.5 px-4 rounded-xl text-xs transition-colors cursor-pointer"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Administrative / Staff Confirmation (Receipts delivered to Parent Portal) */}
+                  <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-4 text-left mb-5 text-xs space-y-2">
+                    <div className="flex justify-between items-center text-emerald-900 font-bold">
+                      <span>Ledger Status</span>
+                      <span className="bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded text-[10px]">Settled & Recorded</span>
+                    </div>
+                    <div className="flex justify-between text-slate-700">
+                      <span>Transaction Ref:</span>
+                      <span className="font-mono font-bold text-slate-900">{completedPayment.paymentRef}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-700">
+                      <span>Amount Recorded:</span>
+                      <span className="font-mono font-bold text-emerald-800">GHS {completedPayment.amount.toLocaleString()}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 pt-2 border-t border-emerald-100">
+                      Official fee receipt has been automatically routed to the <strong>Parent Portal</strong> where parents can view and print their official digital receipt.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={onClose}
+                    className="w-full bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Done & Close
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>

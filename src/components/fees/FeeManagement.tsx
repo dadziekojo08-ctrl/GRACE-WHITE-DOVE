@@ -67,7 +67,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
   } = useSchool();
 
   // Active Main Tab
-  const [activeTab, setActiveTab] = useState<'invoices' | 'structures' | 'payments' | 'summary'>('invoices');
+  const [activeTab, setActiveTab] = useState<'invoices' | 'structures' | 'summary'>('invoices');
 
   // Search and Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -76,7 +76,6 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
 
   // Modal Visibility States
   const [isBillStudentOpen, setIsBillStudentOpen] = useState(false);
-  const [isProcessFeeOpen, setIsProcessFeeOpen] = useState(false);
   const [isClearReportOpen, setIsClearReportOpen] = useState(false);
   const [clearMode, setClearMode] = useState<'all' | 'arrears-only' | 'payments-only'>('arrears-only');
   const [isExportPdfOpen, setIsExportPdfOpen] = useState(false);
@@ -94,17 +93,6 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
     dueDate: '',
     status: 'Unpaid' as 'Paid' | 'Partial' | 'Unpaid' | 'Overdue',
     paidAmount: 0
-  });
-
-  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
-  const [isEditPaymentOpen, setIsEditPaymentOpen] = useState(false);
-  const [editPaymentForm, setEditPaymentForm] = useState({
-    amount: 0,
-    paymentMethod: 'Cash' as Payment['paymentMethod'],
-    payerPhone: '',
-    remarks: '',
-    receivedBy: '',
-    date: ''
   });
 
   const [editingStructure, setEditingStructure] = useState<FeeStructure | null>(null);
@@ -181,37 +169,6 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
 
     showToast(`Invoice ${editingInvoice.invoiceNo} successfully updated!`, 'success');
     setIsEditInvoiceOpen(false);
-  };
-
-  // Edit Payment Handlers
-  const handleOpenEditPayment = (p: Payment) => {
-    setEditingPayment(p);
-    setEditPaymentForm({
-      amount: p.amount,
-      paymentMethod: p.paymentMethod,
-      payerPhone: p.payerPhone || '',
-      remarks: p.remarks || '',
-      receivedBy: p.receivedBy || currentUser?.name || 'School Bursar',
-      date: p.date || new Date().toISOString().split('T')[0]
-    });
-    setIsEditPaymentOpen(true);
-  };
-
-  const handleSaveEditPayment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingPayment) return;
-
-    updatePayment(editingPayment.id, {
-      amount: Number(editPaymentForm.amount) || 0,
-      paymentMethod: editPaymentForm.paymentMethod,
-      payerPhone: editPaymentForm.payerPhone,
-      remarks: editPaymentForm.remarks,
-      receivedBy: editPaymentForm.receivedBy,
-      date: editPaymentForm.date
-    });
-
-    showToast(`Payment receipt ${editingPayment.reference} updated successfully!`, 'success');
-    setIsEditPaymentOpen(false);
   };
 
   // Edit Structure Handlers
@@ -301,7 +258,6 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
 
   // Selected Detail Models
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  const [selectedPaymentReceipt, setSelectedPaymentReceipt] = useState<Payment | null>(null);
 
   // Extract class names safely
   const classNames = useMemo(() => {
@@ -514,131 +470,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
   };
 
   // -------------------------------------------------------------
-  // 2. PROCESS STUDENT FEES FORM STATE
-  // -------------------------------------------------------------
-  const [processFeeForm, setProcessFeeForm] = useState({
-    studentId: '',
-    invoiceId: '',
-    amount: 500,
-    paymentPurpose: 'Full Payment (All Fees Combined)',
-    paymentMethod: 'Cash' as 'Cash' | 'Mobile Money' | 'Bank Transfer' | 'Cheque' | 'Paystack',
-    channel: 'Cashier Desk',
-    payerName: '',
-    payerPhone: '',
-    reference: `RCP-${Math.floor(100000 + Math.random() * 900000)}`,
-    remarks: 'Full Payment (All Fees Combined)'
-  });
-
-  const selectedProcessStudent = useMemo(() => {
-    return students.find(s => s.id === processFeeForm.studentId);
-  }, [students, processFeeForm.studentId]);
-
-  const studentOutstandingInvoices = useMemo(() => {
-    if (!processFeeForm.studentId) return [];
-    return invoices.filter(inv => inv.studentId === processFeeForm.studentId && inv.balance > 0);
-  }, [invoices, processFeeForm.studentId]);
-
-  const handleStudentSelectInProcess = (studentId: string) => {
-    const std = students.find(s => s.id === studentId);
-    const pendingInv = invoices.find(inv => inv.studentId === studentId && inv.balance > 0);
-    const defaultAmount = pendingInv?.balance || std?.balanceDue || 500;
-    
-    setProcessFeeForm(prev => ({
-      ...prev,
-      studentId,
-      invoiceId: pendingInv?.id || '',
-      amount: defaultAmount,
-      paymentPurpose: 'Full Payment (All Fees Combined)',
-      remarks: `Full Payment (All Fees Combined) - ${currentTerm}`,
-      payerName: std ? `${std.guardianName || `${std.firstName}'s Guardian`}` : '',
-      payerPhone: std?.guardianPhone || ''
-    }));
-  };
-
-  // Quick Fee Allocation handler for Process Student Fees
-  const handleQuickAllocatePayment = (
-    purposeLabel: string,
-    allocatedAmount: number,
-    remarksText: string
-  ) => {
-    setProcessFeeForm(prev => ({
-      ...prev,
-      paymentPurpose: purposeLabel,
-      amount: Math.max(1, allocatedAmount),
-      remarks: remarksText
-    }));
-  };
-
-  const handleProcessFeeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedProcessStudent) {
-      showToast('Please select a student to process fees for.', 'error');
-      return;
-    }
-
-    const payAmount = Number(processFeeForm.amount);
-    if (payAmount <= 0) {
-      showToast('Please enter a valid positive payment amount.', 'error');
-      return;
-    }
-
-    let feeCategory: 'Fees' | 'Books' | 'Accessories' | 'Combined' = 'Combined';
-    let feesPart = 0;
-    let booksPart = 0;
-    let accPart = 0;
-
-    const purposeLower = (processFeeForm.paymentPurpose || '').toLowerCase();
-    if (purposeLower.includes('term fees') || purposeLower.includes('tuition')) {
-      feeCategory = 'Fees';
-      feesPart = payAmount;
-    } else if (purposeLower.includes('book')) {
-      feeCategory = 'Books';
-      booksPart = payAmount;
-    } else if (purposeLower.includes('accessor') || purposeLower.includes('uniform') || purposeLower.includes('crest')) {
-      feeCategory = 'Accessories';
-      accPart = payAmount;
-    } else {
-      feeCategory = 'Combined';
-      const targetInv = studentOutstandingInvoices[0] || invoices.find(i => i.studentId === selectedProcessStudent.id);
-      if (targetInv && ((targetInv.termFees || 0) + (targetInv.books || 0) + (targetInv.accessories || 0)) > 0) {
-        const tf = targetInv.termFees || (targetInv.currentTermAmount ? Math.max(0, targetInv.currentTermAmount - (targetInv.books || 0) - (targetInv.accessories || 0)) : (targetInv.totalAmount - (targetInv.arrears || 0)));
-        const bk = targetInv.books || 0;
-        const acc = targetInv.accessories || 0;
-        const tot = (tf + bk + acc) || 1;
-        feesPart = Math.round(payAmount * (tf / tot));
-        booksPart = Math.round(payAmount * (bk / tot));
-        accPart = Math.max(0, payAmount - feesPart - booksPart);
-      } else {
-        feesPart = payAmount;
-      }
-    }
-
-    const newPayment = recordPayment({
-      invoiceId: processFeeForm.invoiceId || (studentOutstandingInvoices[0]?.id || `direct-${Date.now()}`),
-      studentId: selectedProcessStudent.id,
-      studentName: `${selectedProcessStudent.firstName} ${selectedProcessStudent.lastName}`,
-      amount: payAmount,
-      paymentMethod: 'Cash',
-      channel: 'Cash Desk',
-      payerPhone: processFeeForm.payerPhone,
-      receivedBy: currentUser?.name || 'School Bursar',
-      remarks: `${processFeeForm.paymentPurpose ? `[${processFeeForm.paymentPurpose}] ` : ''}${processFeeForm.remarks}`,
-      feeCategory,
-      breakdown: {
-        fees: feesPart,
-        books: booksPart,
-        accessories: accPart
-      },
-      status: 'Success'
-    });
-
-    showToast(`Payment of GHS ${payAmount.toLocaleString()} (${processFeeForm.paymentPurpose}) recorded for ${selectedProcessStudent.firstName}!`);
-    setIsProcessFeeOpen(false);
-    setSelectedPaymentReceipt(newPayment);
-  };
-
-  // -------------------------------------------------------------
-  // 3. CLEAR FINANCIAL REPORT STATE
+  // 2. CLEAR FINANCIAL REPORT STATE
   // -------------------------------------------------------------
   const [clearConfirmText, setClearConfirmText] = useState('');
 
@@ -1038,7 +870,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
           </div>
         </div>
 
-        {/* The 4 Core Primary Action Buttons */}
+        {/* Primary Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Action 1: Bill Student */}
           <button
@@ -1050,14 +882,14 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
             <span>Bill Student</span>
           </button>
 
-          {/* Action 2: Process student fees */}
+          {/* Action 2: Manual Arrears */}
           <button
-            onClick={() => setIsProcessFeeOpen(true)}
-            id="btn-process-student-fees"
-            className="px-3.5 py-2.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            onClick={() => setIsManualArrearsModalOpen(true)}
+            id="btn-manual-arrears-override"
+            className="px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl flex items-center gap-1.5 border border-amber-200 transition-all cursor-pointer"
           >
-            <Banknote className="w-4 h-4 text-emerald-950 stroke-[2.5]" />
-            <span>Process Student Fees</span>
+            <Clock className="w-4 h-4 text-amber-700 stroke-[2]" />
+            <span>Arrears Override</span>
           </button>
 
           {/* Action 3: Export to PDF */}
@@ -1172,17 +1004,6 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
         >
           <Receipt className="w-4 h-4" />
           Invoices & Student Balances ({invoices.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('payments')}
-          className={`py-3.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'payments'
-              ? 'border-emerald-700 text-emerald-900'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Banknote className="w-4 h-4" />
-          Cashier Receipts & Payments ({payments.length})
         </button>
         <button
           onClick={() => setActiveTab('summary')}
@@ -1369,23 +1190,6 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                               <Clock className="w-3 h-3 text-amber-700" />
                               <span>Arrears</span>
                             </button>
-                            {inv.balance > 0 && (
-                              <button
-                                onClick={() => {
-                                  setProcessFeeForm(prev => ({
-                                    ...prev,
-                                    studentId: inv.studentId,
-                                    invoiceId: inv.id,
-                                    amount: inv.balance
-                                  }));
-                                  setIsProcessFeeOpen(true);
-                                }}
-                                className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold rounded-lg text-[11px] shadow-xs cursor-pointer"
-                                title="Process payment for this invoice"
-                              >
-                                Pay / Receive
-                              </button>
-                            )}
                             <button
                               onClick={() => setSelectedInvoice(inv)}
                               className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
@@ -1425,106 +1229,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* TAB 2: CASHIER RECEIPTS & PAYMENTS */}
-      {/* ------------------------------------------------------------- */}
-      {activeTab === 'payments' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="font-bold text-sm text-slate-900">Reconciled Cashier Transactions</h3>
-              <p className="text-xs text-slate-500">Real-time record of all student fee payments across cash, mobile money, bank, and online channels.</p>
-            </div>
-            <button
-              onClick={() => setIsProcessFeeOpen(true)}
-              className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs cursor-pointer self-start sm:self-auto"
-            >
-              <Plus className="w-4 h-4 text-emerald-950" />
-              New Payment Receipt
-            </button>
-          </div>
-
-          {payments.length === 0 ? (
-            <div className="p-12 text-center text-slate-400">
-              <Receipt className="w-10 h-10 mx-auto mb-2 opacity-50" />
-              <p className="text-xs font-semibold text-slate-600">No payment transactions recorded yet.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-emerald-900 text-white uppercase text-[10px] tracking-wider font-bold">
-                    <th className="py-3 px-4">Receipt / Ref #</th>
-                    <th className="py-3 px-4">Student</th>
-                    <th className="py-3 px-4">Payment Method</th>
-                    <th className="py-3 px-4">Amount Paid</th>
-                    <th className="py-3 px-4">Date</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4">Cashier / Staff</th>
-                    <th className="py-3 px-4 text-right">Receipt</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {payments.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-emerald-950">{p.paymentRef}</td>
-                      <td className="py-3 px-4 font-bold text-slate-900">{p.studentName}</td>
-                      <td className="py-3 px-4">
-                        <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-semibold text-[11px]">
-                          {p.paymentMethod || p.channel}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-black text-emerald-800 font-mono">
-                        GHS {p.amount.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{p.date}</td>
-                      <td className="py-3 px-4">
-                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-600 text-[11px]">{p.receivedBy || 'Bursar'}</td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => setSelectedPaymentReceipt(p)}
-                            className="px-2 py-1 bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 font-bold rounded-lg text-[11px] inline-flex items-center gap-1 cursor-pointer"
-                            title="View and Print Payment Receipt"
-                          >
-                            <Printer className="w-3 h-3" />
-                            <span>Receipt</span>
-                          </button>
-                          <button
-                            onClick={() => handleOpenEditPayment(p)}
-                            className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 cursor-pointer transition-colors"
-                            title="Edit / Correct Payment Entry"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (window.confirm(`Are you sure you want to delete payment receipt ${p.paymentRef} (GHS ${p.amount.toLocaleString()}) for ${p.studentName}?`)) {
-                                deletePayment(p.id);
-                                showToast(`Deleted payment ${p.paymentRef}`);
-                              }
-                            }}
-                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 cursor-pointer transition-colors"
-                            title="Delete Payment Entry"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* TAB 3: CLASS-BY-CLASS SUMMARY */}
+      {/* TAB 2: CLASS-BY-CLASS SUMMARY */}
       {/* ------------------------------------------------------------- */}
       {activeTab === 'summary' && (
         <div className="space-y-4">
@@ -2001,279 +1706,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
       )}
 
       {/* ============================================================= */}
-      {/* 2. PROCESS STUDENT FEES MODAL */}
-      {/* ============================================================= */}
-      {isProcessFeeOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-8">
-            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-400 text-emerald-950 flex items-center justify-center font-bold">
-                  <Banknote className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base font-['Outfit']">Process Student Fee Payment</h3>
-                  <p className="text-xs text-emerald-200">Record cash, mobile money, cheque, or bank receipts with instant voucher</p>
-                </div>
-              </div>
-              <button onClick={() => setIsProcessFeeOpen(false)} className="text-white hover:opacity-80 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleProcessFeeSubmit} className="p-6 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
-              {/* Student Selector */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Select Student *</label>
-                <select
-                  required
-                  value={processFeeForm.studentId}
-                  onChange={(e) => handleStudentSelectInProcess(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
-                >
-                  <option value="">-- Choose Student to Receive Payment --</option>
-                  {students.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.firstName} {s.lastName} ({s.className}) - Bal: GHS {(s.balanceDue || 0).toLocaleString()}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Student Outstanding Context Card */}
-              {selectedProcessStudent && (
-                <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200/80 flex items-center justify-between">
-                  <div>
-                    <span className="text-[11px] text-amber-800 font-semibold block">Total Outstanding Balance:</span>
-                    <span className="text-lg font-black text-amber-950 font-mono">
-                      GHS {(selectedProcessStudent.balanceDue || 0).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="text-right text-[11px] text-slate-600">
-                    <span>{studentOutstandingInvoices.length} Unsettled Invoices</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Invoice Allocation */}
-              {studentOutstandingInvoices.length > 0 && (
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Apply to Specific Invoice (Optional)</label>
-                  <select
-                    value={processFeeForm.invoiceId}
-                    onChange={(e) => {
-                      const inv = studentOutstandingInvoices.find(i => i.id === e.target.value);
-                      setProcessFeeForm({
-                        ...processFeeForm,
-                        invoiceId: e.target.value,
-                        amount: inv ? inv.balance : processFeeForm.amount
-                      });
-                    }}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
-                  >
-                    <option value="">-- General Account Balance --</option>
-                    {studentOutstandingInvoices.map((inv) => (
-                      <option key={inv.id} value={inv.id}>
-                        {inv.invoiceNo} ({inv.term}) - Balance: GHS {inv.balance.toLocaleString()}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Fee Purpose & Category Allocation Selector */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1.5">Payment Purpose / Fee Category Allocation *</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                  {[
-                    {
-                      label: 'Full Payment (All Fees Combined)',
-                      icon: '🌟',
-                      amount: selectedProcessStudent?.balanceDue || 2200,
-                      remarks: `Full Payment (All Fees Combined) - ${currentTerm}`
-                    },
-                    {
-                      label: 'Term Fees',
-                      icon: '🎓',
-                      amount: 1500,
-                      remarks: `Term Tuition & Academic Instruction Fees - ${currentTerm}`
-                    },
-                    {
-                      label: 'Books (Text & Exercise Books)',
-                      icon: '📚',
-                      amount: 450,
-                      remarks: `Text Books & Exercise Books Package - ${currentTerm}`
-                    },
-                    {
-                      label: 'Accessories',
-                      icon: '🎒',
-                      amount: 250,
-                      remarks: `Uniforms, Crest, PE Kit & Accessories - ${currentTerm}`
-                    },
-                    {
-                      label: 'Arrears (Previous Term)',
-                      icon: '🕒',
-                      amount: selectedProcessStudent?.balanceDue || 350,
-                      remarks: `Previous Term Outstanding Arrears Settlement`
-                    },
-                    {
-                      label: 'Custom Breakdown',
-                      icon: '📝',
-                      amount: processFeeForm.amount,
-                      remarks: `Custom Itemized Payment`
-                    }
-                  ].map((cat, idx) => {
-                    const isSelected = processFeeForm.paymentPurpose === cat.label;
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => handleQuickAllocatePayment(cat.label, cat.amount, cat.remarks)}
-                        className={`p-2 rounded-xl border text-left flex items-center gap-1.5 cursor-pointer transition-all ${
-                          isSelected
-                            ? 'border-emerald-800 bg-emerald-50 text-emerald-950 font-bold ring-1 ring-emerald-700'
-                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className="text-xs">{cat.icon}</span>
-                        <span className="text-[11px] truncate">{cat.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Amount and Quick Buttons */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block font-semibold text-slate-700">Payment Amount (GHS) *</label>
-                  <span className="text-[11px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    Allocated to: {processFeeForm.paymentPurpose}
-                  </span>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono font-bold text-slate-400">GHS</span>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    value={processFeeForm.amount}
-                    onChange={(e) => setProcessFeeForm({ ...processFeeForm, amount: Number(e.target.value) })}
-                    className="w-full border border-slate-300 rounded-lg pl-12 pr-3 py-2 text-slate-900 text-base font-bold font-mono outline-none focus:ring-2 focus:ring-emerald-600"
-                  />
-                </div>
-
-                {selectedProcessStudent && selectedProcessStudent.balanceDue > 0 && (
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => setProcessFeeForm({ ...processFeeForm, amount: selectedProcessStudent.balanceDue, paymentPurpose: 'Full Payment (All Fees Combined)' })}
-                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-semibold cursor-pointer"
-                    >
-                      Pay Full Arrears/Balance (GHS {selectedProcessStudent.balanceDue.toLocaleString()})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setProcessFeeForm({ ...processFeeForm, amount: Math.round(selectedProcessStudent.balanceDue / 2) })}
-                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-semibold cursor-pointer"
-                    >
-                      Pay 50% (GHS {Math.round(selectedProcessStudent.balanceDue / 2).toLocaleString()})
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Remarks / Narrative */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Receipt Narrative / Purpose Description</label>
-                <input
-                  type="text"
-                  value={processFeeForm.remarks}
-                  onChange={(e) => setProcessFeeForm({ ...processFeeForm, remarks: e.target.value })}
-                  placeholder="e.g. Term Fees, Books & Accessories settlement"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
-                />
-              </div>
-
-              {/* Payment Method - Exclusive to Cash Desk */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Payment Method / Collection Channel *</label>
-                <div className="p-3 rounded-xl border border-emerald-700 bg-emerald-50/90 text-emerald-950 flex items-center justify-between shadow-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-800 text-amber-300 flex items-center justify-center shadow-xs">
-                      <Banknote className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-900">Cash Desk</span>
-                        <span className="text-[10px] font-extrabold bg-emerald-700 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
-                          Cashier Active
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-500">Official cash collection at school accounts counter</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-bold text-emerald-800 font-mono">GHS {Number(processFeeForm.amount || 0).toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* Payer & Contact Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payer / Guardian Name</label>
-                  <input
-                    type="text"
-                    value={processFeeForm.payerName}
-                    onChange={(e) => setProcessFeeForm({ ...processFeeForm, payerName: e.target.value })}
-                    placeholder="e.g. Mr. Kwame Mensah"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payer Phone (SMS Receipt)</label>
-                  <input
-                    type="tel"
-                    value={processFeeForm.payerPhone}
-                    onChange={(e) => setProcessFeeForm({ ...processFeeForm, payerPhone: e.target.value })}
-                    placeholder="e.g. 0244123456"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Receipt Reference / Cheque #</label>
-                <input
-                  type="text"
-                  value={processFeeForm.reference}
-                  onChange={(e) => setProcessFeeForm({ ...processFeeForm, reference: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setIsProcessFeeOpen(false)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-extrabold rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
-                >
-                  <CheckCircle className="w-4 h-4 text-emerald-950 stroke-[2.5]" />
-                  Confirm & Issue Receipt
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================= */}
-      {/* 3. CLEAR FINANCIAL REPORT SAFETY MODAL */}
+      {/* 2. CLEAR FINANCIAL REPORT SAFETY MODAL */}
       {/* ============================================================= */}
       {isClearReportOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4">
@@ -2544,123 +1977,6 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                 <button
                   type="button"
                   onClick={() => setIsEditInvoiceOpen(false)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl shadow-sm cursor-pointer"
-                >
-                  Save Corrections
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================= */}
-      {/* EDIT PAYMENT RECEIPT MODAL */}
-      {/* ============================================================= */}
-      {isEditPaymentOpen && editingPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-8 animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-400 text-emerald-950 flex items-center justify-center font-bold">
-                  <Edit2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base font-['Outfit']">Edit Payment Receipt</h3>
-                  <p className="text-xs text-emerald-200">Correct transaction receipt #{editingPayment.paymentRef || editingPayment.reference}</p>
-                </div>
-              </div>
-              <button onClick={() => setIsEditPaymentOpen(false)} className="text-white hover:opacity-80 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEditPayment} className="p-6 space-y-4 text-xs">
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <span className="font-bold text-slate-900 block">{editingPayment.studentName}</span>
-                <span className="text-slate-500 text-[11px]">Original Ref: {editingPayment.paymentRef || editingPayment.reference}</span>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Payment Amount (GHS) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="any"
-                  required
-                  value={editPaymentForm.amount}
-                  onChange={(e) => setEditPaymentForm({ ...editPaymentForm, amount: Number(e.target.value) || 0 })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold text-base focus:ring-2 focus:ring-emerald-600 outline-none font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Method</label>
-                  <select
-                    value={editPaymentForm.paymentMethod}
-                    onChange={(e) => setEditPaymentForm({ ...editPaymentForm, paymentMethod: e.target.value as any })}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 bg-white focus:ring-2 focus:ring-emerald-600 outline-none font-semibold"
-                  >
-                    <option value="Cash">Cash</option>
-                    <option value="Mobile Money">Mobile Money</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="Cheque">Cheque</option>
-                    <option value="Paystack">Paystack Online</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Date</label>
-                  <input
-                    type="date"
-                    value={editPaymentForm.date}
-                    onChange={(e) => setEditPaymentForm({ ...editPaymentForm, date: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Payer Phone / Reference</label>
-                <input
-                  type="text"
-                  value={editPaymentForm.payerPhone}
-                  onChange={(e) => setEditPaymentForm({ ...editPaymentForm, payerPhone: e.target.value })}
-                  placeholder="e.g. 0244123456"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Received By (Cashier / Staff)</label>
-                <input
-                  type="text"
-                  value={editPaymentForm.receivedBy}
-                  onChange={(e) => setEditPaymentForm({ ...editPaymentForm, receivedBy: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Payment Purpose & Remarks</label>
-                <input
-                  type="text"
-                  value={editPaymentForm.remarks}
-                  onChange={(e) => setEditPaymentForm({ ...editPaymentForm, remarks: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setIsEditPaymentOpen(false)}
                   className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl cursor-pointer"
                 >
                   Cancel
@@ -3039,24 +2355,6 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                     <Bell className="w-4 h-4 text-emerald-700" /> Send Reminder Notice
                   </button>
                 )}
-                {selectedInvoice.balance > 0 && (
-                  <button
-                    onClick={() => {
-                      const inv = selectedInvoice;
-                      setSelectedInvoice(null);
-                      setProcessFeeForm(prev => ({
-                        ...prev,
-                        studentId: inv.studentId,
-                        invoiceId: inv.id,
-                        amount: inv.balance
-                      }));
-                      setIsProcessFeeOpen(true);
-                    }}
-                    className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Banknote className="w-4 h-4" /> Process Fee Payment
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -3237,7 +2535,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                   onClick={() => {
                     setReminderForm(prev => ({
                       ...prev,
-                      message: `Dear ${reminderForm.recipientName || 'Parent'}, gentle reminder from Grace White Dove School Complex: Outstanding fee balance of GHS ${reminderTarget.balanceDue.toLocaleString()} for ${reminderTarget.studentName} is due. Please settle via Mobile Money or at the bursar's desk. For inquiries: gracewhitedoveschool@gmail.com / 0244403541. Thank you.`
+                      message: `Dear ${reminderForm.recipientName || 'Parent'}, gentle reminder from Grace White Dove School Complex: Outstanding fee balance of GHS ${reminderTarget.balanceDue.toLocaleString()} for ${reminderTarget.studentName} is due. Please settle via Mobile Money or online via the Parent Portal. For inquiries: gracewhitedoveschool@gmail.com / 0244403541. Thank you.`
                     }));
                   }}
                   className="text-[10px] px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium cursor-pointer"
@@ -3249,7 +2547,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                   onClick={() => {
                     setReminderForm(prev => ({
                       ...prev,
-                      message: `URGENT NOTICE: Dear ${reminderForm.recipientName || 'Parent'}, school fees for ${reminderTarget.studentName} at Grace White Dove School Complex with outstanding amount GHS ${reminderTarget.balanceDue.toLocaleString()} is overdue. Please settle immediately to avoid disruption in student academic activities.`
+                      message: `URGENT NOTICE: Dear ${reminderForm.recipientName || 'Parent'}, school fees for ${reminderTarget.studentName} at Grace White Dove School Complex with outstanding amount GHS ${reminderTarget.balanceDue.toLocaleString()} is overdue. Please settle immediately via the Parent Portal to avoid disruption in student academic activities.`
                     }));
                   }}
                   className="text-[10px] px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-md font-medium cursor-pointer"
@@ -3277,77 +2575,6 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================= */}
-      {/* 6. PAYMENT RECEIPT SLIP MODAL */}
-      {/* ============================================================= */}
-      {selectedPaymentReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
-            <div className="bg-emerald-950 text-white p-6 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold font-['Outfit'] flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-amber-300" />
-                  Official Payment Receipt
-                </h3>
-                <p className="text-xs text-emerald-200">Receipt Ref #{selectedPaymentReceipt.paymentRef}</p>
-              </div>
-              <button
-                onClick={() => setSelectedPaymentReceipt(null)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 text-xs">
-              <div className="text-center pb-2 border-b border-slate-200">
-                <h4 className="font-bold text-base text-slate-900 font-['Outfit']">Grace White Dove School Complex</h4>
-                <p className="text-[11px] text-slate-500 font-medium">Student Tuition & Fee Payment Voucher</p>
-                <p className="text-[11px] text-emerald-900 font-medium mt-0.5">
-                  Email: <span className="font-semibold">gracewhitedoveschool@gmail.com</span> • Phone: <span className="font-semibold font-mono">0244403541</span>
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Student Name:</span>
-                  <span className="font-bold text-slate-900">{selectedPaymentReceipt.studentName}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Payment Date:</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedPaymentReceipt.date}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Payment Method:</span>
-                  <span className="font-bold text-emerald-800">{selectedPaymentReceipt.paymentMethod || selectedPaymentReceipt.channel}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Cashier / Received By:</span>
-                  <span className="font-bold text-slate-700">{selectedPaymentReceipt.receivedBy || 'Bursar'}</span>
-                </div>
-              </div>
-
-              <div className="bg-emerald-950 text-white p-4 rounded-xl text-center space-y-1">
-                <span className="text-[11px] text-amber-300 uppercase tracking-wider font-semibold">Amount Paid</span>
-                <div className="text-2xl font-black font-mono text-white">
-                  GHS {selectedPaymentReceipt.amount.toLocaleString()}
-                </div>
-                <span className="text-[10px] text-emerald-300 block">Status: Verified & Processed</span>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3">
-                <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer className="w-4 h-4" /> Print Official Slip
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
