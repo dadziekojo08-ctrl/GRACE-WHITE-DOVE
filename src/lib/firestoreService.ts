@@ -128,6 +128,34 @@ export async function deleteDocumentFromFirestore(
   }
 }
 
+export async function clearCollectionFromFirestore(
+  collectionName: string
+): Promise<void> {
+  if (checkIsQuotaExceeded()) return;
+  try {
+    const colRef = collection(db, collectionName);
+    const snap = await getDocs(colRef);
+    if (snap.empty) return;
+
+    const docIds: string[] = [];
+    snap.forEach((docSnap) => {
+      docIds.push(docSnap.id);
+    });
+
+    for (let i = 0; i < docIds.length; i += 400) {
+      if (checkIsQuotaExceeded()) break;
+      const chunk = docIds.slice(i, i + 400);
+      const batch = writeBatch(db);
+      for (const id of chunk) {
+        batch.delete(doc(db, collectionName, id));
+      }
+      await batch.commit();
+    }
+  } catch (error: any) {
+    handleFirestoreError(`Clear collection ${collectionName}`, error);
+  }
+}
+
 export async function batchSaveCollectionToFirestore<T extends { id: string }>(
   collectionName: string,
   items: T[]

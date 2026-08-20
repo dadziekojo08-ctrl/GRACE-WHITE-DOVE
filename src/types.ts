@@ -246,6 +246,12 @@ export interface Payment {
   channel?: string;
   receivedBy?: string;
   remarks?: string;
+  feeCategory?: 'Fees' | 'Books' | 'Accessories' | 'Combined' | 'Other';
+  breakdown?: {
+    fees?: number;
+    books?: number;
+    accessories?: number;
+  };
 }
 
 export interface Exam {

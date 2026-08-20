@@ -582,6 +582,37 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
       return;
     }
 
+    let feeCategory: 'Fees' | 'Books' | 'Accessories' | 'Combined' = 'Combined';
+    let feesPart = 0;
+    let booksPart = 0;
+    let accPart = 0;
+
+    const purposeLower = (processFeeForm.paymentPurpose || '').toLowerCase();
+    if (purposeLower.includes('term fees') || purposeLower.includes('tuition')) {
+      feeCategory = 'Fees';
+      feesPart = payAmount;
+    } else if (purposeLower.includes('book')) {
+      feeCategory = 'Books';
+      booksPart = payAmount;
+    } else if (purposeLower.includes('accessor') || purposeLower.includes('uniform') || purposeLower.includes('crest')) {
+      feeCategory = 'Accessories';
+      accPart = payAmount;
+    } else {
+      feeCategory = 'Combined';
+      const targetInv = studentOutstandingInvoices[0] || invoices.find(i => i.studentId === selectedProcessStudent.id);
+      if (targetInv && ((targetInv.termFees || 0) + (targetInv.books || 0) + (targetInv.accessories || 0)) > 0) {
+        const tf = targetInv.termFees || (targetInv.currentTermAmount ? Math.max(0, targetInv.currentTermAmount - (targetInv.books || 0) - (targetInv.accessories || 0)) : (targetInv.totalAmount - (targetInv.arrears || 0)));
+        const bk = targetInv.books || 0;
+        const acc = targetInv.accessories || 0;
+        const tot = (tf + bk + acc) || 1;
+        feesPart = Math.round(payAmount * (tf / tot));
+        booksPart = Math.round(payAmount * (bk / tot));
+        accPart = Math.max(0, payAmount - feesPart - booksPart);
+      } else {
+        feesPart = payAmount;
+      }
+    }
+
     const newPayment = recordPayment({
       invoiceId: processFeeForm.invoiceId || (studentOutstandingInvoices[0]?.id || `direct-${Date.now()}`),
       studentId: selectedProcessStudent.id,
@@ -592,6 +623,12 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
       payerPhone: processFeeForm.payerPhone,
       receivedBy: currentUser?.name || 'School Bursar',
       remarks: `${processFeeForm.paymentPurpose ? `[${processFeeForm.paymentPurpose}] ` : ''}${processFeeForm.remarks}`,
+      feeCategory,
+      breakdown: {
+        fees: feesPart,
+        books: booksPart,
+        accessories: accPart
+      },
       status: 'Success'
     });
 
@@ -605,20 +642,20 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
   // -------------------------------------------------------------
   const [clearConfirmText, setClearConfirmText] = useState('');
 
-  const handleClearFinancialReportSubmit = () => {
+  const handleClearFinancialReportSubmit = async () => {
     if (clearConfirmText.trim().toUpperCase() !== 'CONFIRM') {
       showToast('Please type CONFIRM to authorize clearing financial reports.', 'error');
       return;
     }
 
     if (clearMode === 'arrears-only') {
-      clearAllArrears();
+      await clearAllArrears();
       showToast('All previous arrears have been successfully cleared to GHS 0.00 across all students!', 'success');
     } else if (clearMode === 'payments-only') {
-      clearTotalCollected();
+      await clearTotalCollected();
       showToast('Total collected figures and payment receipts cleared successfully!', 'success');
     } else {
-      clearFinancialRecords('all');
+      await clearFinancialRecords('all');
       showToast('All financial records, invoices, and payment receipts have been reset cleanly.', 'info');
     }
 
@@ -783,7 +820,61 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
   // -------------------------------------------------------------
   // FINANCIAL CALCULATIONS & KPIs
   // -------------------------------------------------------------
-  const totalCollected = useMemo(() => payments.reduce((sum, p) => sum + p.amount, 0), [payments]);
+  // Calculate Total Collected Breakdown (Fees, Books, Accessories - strictly excluding arrears)
+  const { totalCollected, collectedFees, collectedBooks, collectedAccessories } = useMemo(() => {
+    let fSum = 0;
+    let bSum = 0;
+    let aSum = 0;
+
+    payments.forEach(p => {
+      const pAmt = Number(p.amount) || 0;
+      if (pAmt <= 0) return;
+
+      if (p.breakdown) {
+        fSum += Number(p.breakdown.fees) || 0;
+        bSum += Number(p.breakdown.books) || 0;
+        aSum += Number(p.breakdown.accessories) || 0;
+      } else if (p.feeCategory === 'Fees') {
+        fSum += pAmt;
+      } else if (p.feeCategory === 'Books') {
+        bSum += pAmt;
+      } else if (p.feeCategory === 'Accessories') {
+        aSum += pAmt;
+      } else {
+        const remarksLower = (p.remarks || '').toLowerCase();
+        if (remarksLower.includes('book') && !remarksLower.includes('term') && !remarksLower.includes('tuition')) {
+          bSum += pAmt;
+        } else if (remarksLower.includes('accessor') || remarksLower.includes('uniform') || remarksLower.includes('crest')) {
+          aSum += pAmt;
+        } else {
+          const inv = invoices.find(i => i.id === p.invoiceId || i.studentId === p.studentId);
+          if (inv && ((inv.termFees || 0) + (inv.books || 0) + (inv.accessories || 0)) > 0) {
+            const tf = inv.termFees || (inv.currentTermAmount ? Math.max(0, inv.currentTermAmount - (inv.books || 0) - (inv.accessories || 0)) : (inv.totalAmount - (inv.arrears || 0)));
+            const bk = inv.books || 0;
+            const acc = inv.accessories || 0;
+            const tot = (tf + bk + acc) || 1;
+            const fP = Math.round(pAmt * (tf / tot));
+            const bP = Math.round(pAmt * (bk / tot));
+            const aP = Math.max(0, pAmt - fP - bP);
+            fSum += fP;
+            bSum += bP;
+            aSum += aP;
+          } else {
+            fSum += pAmt;
+          }
+        }
+      }
+    });
+
+    const total = fSum + bSum + aSum;
+    return {
+      totalCollected: total,
+      collectedFees: fSum,
+      collectedBooks: bSum,
+      collectedAccessories: aSum
+    };
+  }, [payments, invoices]);
+
   const totalOutstanding = useMemo(() => invoices.reduce((sum, i) => sum + i.balance, 0), [invoices]);
   const totalBilled = useMemo(() => invoices.reduce((sum, i) => sum + i.totalAmount, 0), [invoices]);
   const collectionRate = totalBilled > 0 ? Math.round((totalCollected / totalBilled) * 100) : 0;
@@ -812,19 +903,86 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
     });
   }, [invoices, searchQuery, statusFilter, classFilter]);
 
-  // Class-by-Class Financial Summary
+  // Class-by-Class Financial Summary with Fees / Books / Accessories Breakdown
   const classBreakdowns = useMemo(() => {
-    const map: Record<string, { totalBilled: number; totalCollected: number; totalOutstanding: number; count: number }> = {};
+    const map: Record<string, {
+      totalBilled: number;
+      totalCollected: number;
+      collectedFees: number;
+      collectedBooks: number;
+      collectedAccessories: number;
+      totalOutstanding: number;
+      count: number;
+    }> = {};
 
     invoices.forEach(inv => {
       const cName = inv.className || 'Unassigned';
       if (!map[cName]) {
-        map[cName] = { totalBilled: 0, totalCollected: 0, totalOutstanding: 0, count: 0 };
+        map[cName] = {
+          totalBilled: 0,
+          totalCollected: 0,
+          collectedFees: 0,
+          collectedBooks: 0,
+          collectedAccessories: 0,
+          totalOutstanding: 0,
+          count: 0
+        };
       }
-      map[cName].totalBilled += inv.totalAmount;
-      map[cName].totalCollected += inv.paidAmount;
-      map[cName].totalOutstanding += inv.balance;
+      map[cName].totalBilled += (inv.currentTermAmount || inv.totalAmount || 0);
+      map[cName].totalOutstanding += (inv.balance || 0);
       map[cName].count += 1;
+    });
+
+    // Allocate actual verified payments per class
+    payments.forEach(p => {
+      const pAmt = Number(p.amount) || 0;
+      if (pAmt <= 0) return;
+      const inv = invoices.find(i => i.id === p.invoiceId || i.studentId === p.studentId);
+      const student = students.find(s => s.id === p.studentId);
+      const cName = inv?.className || student?.className || 'Unassigned';
+      
+      if (!map[cName]) {
+        map[cName] = {
+          totalBilled: 0,
+          totalCollected: 0,
+          collectedFees: 0,
+          collectedBooks: 0,
+          collectedAccessories: 0,
+          totalOutstanding: 0,
+          count: 0
+        };
+      }
+
+      let fP = 0;
+      let bP = 0;
+      let aP = 0;
+
+      if (p.breakdown) {
+        fP = Number(p.breakdown.fees) || 0;
+        bP = Number(p.breakdown.books) || 0;
+        aP = Number(p.breakdown.accessories) || 0;
+      } else if (p.feeCategory === 'Fees') {
+        fP = pAmt;
+      } else if (p.feeCategory === 'Books') {
+        bP = pAmt;
+      } else if (p.feeCategory === 'Accessories') {
+        aP = pAmt;
+      } else if (inv && ((inv.termFees || 0) + (inv.books || 0) + (inv.accessories || 0)) > 0) {
+        const tf = inv.termFees || (inv.currentTermAmount ? Math.max(0, inv.currentTermAmount - (inv.books || 0) - (inv.accessories || 0)) : (inv.totalAmount - (inv.arrears || 0)));
+        const bk = inv.books || 0;
+        const acc = inv.accessories || 0;
+        const tot = (tf + bk + acc) || 1;
+        fP = Math.round(pAmt * (tf / tot));
+        bP = Math.round(pAmt * (bk / tot));
+        aP = Math.max(0, pAmt - fP - bP);
+      } else {
+        fP = pAmt;
+      }
+
+      map[cName].collectedFees += fP;
+      map[cName].collectedBooks += bP;
+      map[cName].collectedAccessories += aP;
+      map[cName].totalCollected += (fP + bP + aP);
     });
 
     return Object.entries(map).map(([className, data]) => ({
@@ -832,7 +990,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
       ...data,
       rate: data.totalBilled > 0 ? Math.round((data.totalCollected / data.totalBilled) * 100) : 0
     }));
-  }, [invoices]);
+  }, [invoices, payments, students]);
 
   return (
     <div className="space-y-6">
@@ -948,9 +1106,25 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
             </div>
           </div>
           <span className="text-2xl font-black text-emerald-800 mt-2 block font-['Outfit']">
-            GHS {totalCollected.toLocaleString()}
+            GHS {totalCollected.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </span>
-          <p className="text-[11px] text-emerald-600 mt-1 font-semibold">{payments.length} Payments Reconciled</p>
+          <div className="mt-2.5 pt-2.5 border-t border-slate-100 grid grid-cols-3 gap-1.5 text-[10px]">
+            <div className="bg-emerald-50/90 p-1.5 rounded-lg text-center border border-emerald-200/60">
+              <span className="text-emerald-800 font-semibold block">Fees</span>
+              <span className="font-bold text-emerald-950 font-mono">GHS {collectedFees.toLocaleString()}</span>
+            </div>
+            <div className="bg-sky-50/90 p-1.5 rounded-lg text-center border border-sky-200/60">
+              <span className="text-sky-800 font-semibold block">Books</span>
+              <span className="font-bold text-sky-950 font-mono">GHS {collectedBooks.toLocaleString()}</span>
+            </div>
+            <div className="bg-purple-50/90 p-1.5 rounded-lg text-center border border-purple-200/60">
+              <span className="text-purple-800 font-semibold block">Accessories</span>
+              <span className="font-bold text-purple-950 font-mono">GHS {collectedAccessories.toLocaleString()}</span>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2 font-medium">
+            {payments.length === 0 ? 'No collections recorded yet (Arrears excluded)' : `${payments.length} Payments Reconciled (Arrears Excluded)`}
+          </p>
         </div>
 
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
@@ -1377,6 +1551,11 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                   <div className="flex justify-between text-emerald-700 font-semibold">
                     <span>Total Collected:</span>
                     <span>GHS {item.totalCollected.toLocaleString()}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 text-[10px] py-1 bg-slate-50 rounded-lg px-2 border border-slate-100">
+                    <span className="text-emerald-800">Fees: <strong>GHS {item.collectedFees.toLocaleString()}</strong></span>
+                    <span className="text-sky-800">Books: <strong>GHS {item.collectedBooks.toLocaleString()}</strong></span>
+                    <span className="text-purple-800">Acc: <strong>GHS {item.collectedAccessories.toLocaleString()}</strong></span>
                   </div>
                   <div className="flex justify-between text-amber-900 font-semibold">
                     <span>Outstanding:</span>
@@ -1813,7 +1992,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                   className="px-5 py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
                 >
                   <Receipt className="w-4 h-4 text-amber-300" />
-                  {billingMode === 'individual' ? 'Generate Student Invoice' : `Batch Bill Class (${billForm.classLevel})`}
+                  {billingMode === 'individual' ? 'Bill Now' : `Bill Class Now (${billForm.classLevel})`}
                 </button>
               </div>
             </form>

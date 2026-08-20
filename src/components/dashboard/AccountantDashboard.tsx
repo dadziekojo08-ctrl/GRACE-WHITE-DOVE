@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { Student, Invoice, Payment } from '../../types';
 import {
@@ -49,6 +49,9 @@ export const AccountantDashboard: React.FC<{
     feeStructures,
     createInvoice,
     recordPayment,
+    clearFinancialRecords,
+    clearAllArrears,
+    clearTotalCollected,
     currentTerm,
     academicYear,
     setActiveTab,
@@ -59,6 +62,7 @@ export const AccountantDashboard: React.FC<{
   const [isBillClassModalOpen, setIsBillClassModalOpen] = useState(false);
   const [isProcessFeeModalOpen, setIsProcessFeeModalOpen] = useState(false);
   const [isClearReportModalOpen, setIsClearReportModalOpen] = useState(false);
+  const [clearReportMode, setClearReportMode] = useState<'arrears-only' | 'payments-only' | 'all'>('arrears-only');
   const [selectedReceiptPayment, setSelectedReceiptPayment] = useState<Payment | null>(null);
 
   // Bill Class Form State
@@ -85,7 +89,61 @@ export const AccountantDashboard: React.FC<{
 
   // Financial Calculations
   const totalBilled = invoices.reduce((acc, curr) => acc + curr.totalAmount, 0);
-  const totalCollected = payments.reduce((acc, curr) => acc + curr.amount, 0);
+
+  // Calculate Total Collected Breakdown (Fees, Books, Accessories - strictly excluding arrears)
+  const { totalCollected, collectedFees, collectedBooks, collectedAccessories } = useMemo(() => {
+    let fSum = 0;
+    let bSum = 0;
+    let aSum = 0;
+
+    payments.forEach(p => {
+      const pAmt = Number(p.amount) || 0;
+      if (pAmt <= 0) return;
+
+      if (p.breakdown) {
+        fSum += Number(p.breakdown.fees) || 0;
+        bSum += Number(p.breakdown.books) || 0;
+        aSum += Number(p.breakdown.accessories) || 0;
+      } else if (p.feeCategory === 'Fees') {
+        fSum += pAmt;
+      } else if (p.feeCategory === 'Books') {
+        bSum += pAmt;
+      } else if (p.feeCategory === 'Accessories') {
+        aSum += pAmt;
+      } else {
+        const remarksLower = (p.remarks || '').toLowerCase();
+        if (remarksLower.includes('book') && !remarksLower.includes('term') && !remarksLower.includes('tuition')) {
+          bSum += pAmt;
+        } else if (remarksLower.includes('accessor') || remarksLower.includes('uniform') || remarksLower.includes('crest')) {
+          aSum += pAmt;
+        } else {
+          const inv = invoices.find(i => i.id === p.invoiceId || i.studentId === p.studentId);
+          if (inv && ((inv.termFees || 0) + (inv.books || 0) + (inv.accessories || 0)) > 0) {
+            const tf = inv.termFees || (inv.currentTermAmount ? Math.max(0, inv.currentTermAmount - (inv.books || 0) - (inv.accessories || 0)) : (inv.totalAmount - (inv.arrears || 0)));
+            const bk = inv.books || 0;
+            const acc = inv.accessories || 0;
+            const tot = (tf + bk + acc) || 1;
+            const fP = Math.round(pAmt * (tf / tot));
+            const bP = Math.round(pAmt * (bk / tot));
+            const aP = Math.max(0, pAmt - fP - bP);
+            fSum += fP;
+            bSum += bP;
+            aSum += aP;
+          } else {
+            fSum += pAmt;
+          }
+        }
+      }
+    });
+
+    return {
+      totalCollected: fSum + bSum + aSum,
+      collectedFees: fSum,
+      collectedBooks: bSum,
+      collectedAccessories: aSum
+    };
+  }, [payments, invoices]);
+
   const totalArrears = invoices.reduce((acc, curr) => acc + curr.balance, 0);
   const collectionRate = totalBilled > 0 ? Math.round((totalCollected / totalBilled) * 100) : 0;
 
@@ -221,11 +279,20 @@ export const AccountantDashboard: React.FC<{
     document.body.removeChild(link);
   };
 
-  // Clear Financial Reports confirmation
-  const handleClearFinancialReports = () => {
-    logAuditAction('FINANCIAL_REPORTS_CLEARED', 'Finance', 'Financial reconciliation filters and report cache cleared.');
+  // Clear Financial Reports execution
+  const handleClearFinancialReports = async () => {
+    if (clearReportMode === 'arrears-only') {
+      await clearAllArrears();
+      alert('All student arrears have been successfully cleared to GHS 0.00.');
+    } else if (clearReportMode === 'payments-only') {
+      await clearTotalCollected();
+      alert('Total collected figures and payment receipts cleared to GHS 0.00.');
+    } else {
+      await clearFinancialRecords('all');
+      alert('All financial records, invoices, and payments have been completely reset.');
+    }
+    logAuditAction('FINANCIAL_REPORTS_CLEARED', 'Finance', `Financial ledger reset performed (Mode: ${clearReportMode}).`);
     setIsClearReportModalOpen(false);
-    alert('Financial reports cache, ledger filters, and reconciliation logs have been successfully refreshed.');
   };
 
   return (
@@ -305,13 +372,27 @@ export const AccountantDashboard: React.FC<{
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-black text-slate-900 font-['Outfit']">
-              GHS {totalCollected.toLocaleString()}
+            <div className="text-2xl font-black text-emerald-800 font-['Outfit']">
+              GHS {totalCollected.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-semibold mt-1">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>{collectionRate}% of total billing collected</span>
+            {/* 3-Way Granular Breakdown for Accounts */}
+            <div className="grid grid-cols-3 gap-1.5 mt-2.5 pt-2.5 border-t border-slate-100 text-[10px]">
+              <div className="bg-emerald-50/80 p-1.5 rounded-lg text-center border border-emerald-100">
+                <span className="text-emerald-700 font-semibold block">Fees</span>
+                <span className="font-bold text-emerald-950 font-mono">GHS {collectedFees.toLocaleString()}</span>
+              </div>
+              <div className="bg-sky-50/80 p-1.5 rounded-lg text-center border border-sky-100">
+                <span className="text-sky-700 font-semibold block">Books</span>
+                <span className="font-bold text-sky-950 font-mono">GHS {collectedBooks.toLocaleString()}</span>
+              </div>
+              <div className="bg-purple-50/80 p-1.5 rounded-lg text-center border border-purple-100">
+                <span className="text-purple-700 font-semibold block">Accessories</span>
+                <span className="font-bold text-purple-950 font-mono">GHS {collectedAccessories.toLocaleString()}</span>
+              </div>
             </div>
+            <p className="text-[10px] text-slate-400 mt-2 font-medium">
+              {payments.length === 0 ? 'No payments recorded yet' : `${payments.length} Payments Reconciled (Arrears Excluded)`}
+            </p>
           </div>
         </div>
 
@@ -653,7 +734,7 @@ export const AccountantDashboard: React.FC<{
                   type="submit"
                   className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl shadow-sm cursor-pointer"
                 >
-                  Generate Invoices for Class
+                  Bill Class Now
                 </button>
               </div>
             </form>
@@ -765,18 +846,89 @@ export const AccountantDashboard: React.FC<{
       {isClearReportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-6 text-center space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 mx-auto flex items-center justify-center">
-                <RotateCcw className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-bold text-lg text-slate-900 font-['Outfit']">Clear & Reconcile Financial Reports</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  This will reset all financial date filters, recalculate balances across current student invoices, and refresh the live ledger cache.
-                </p>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 font-['Outfit']">Clear Financial Reports</h3>
+                  <p className="text-xs text-slate-500">Select what to clear in the school accounting records.</p>
+                </div>
               </div>
 
-              <div className="flex justify-center gap-3 pt-2">
+              <div className="space-y-2.5 text-xs">
+                <label
+                  onClick={() => setClearReportMode('arrears-only')}
+                  className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                    clearReportMode === 'arrears-only'
+                      ? 'border-rose-600 bg-rose-50/70 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="clearReportMode"
+                    checked={clearReportMode === 'arrears-only'}
+                    onChange={() => setClearReportMode('arrears-only')}
+                    className="mt-0.5 accent-rose-700"
+                  />
+                  <div>
+                    <strong className="text-slate-900 block font-bold">1. Clear Arrears Only</strong>
+                    <span className="text-[11px] text-slate-500 block mt-0.5">
+                      Resets all previous arrears balances to GHS 0.00 across all students.
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => setClearReportMode('payments-only')}
+                  className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                    clearReportMode === 'payments-only'
+                      ? 'border-rose-600 bg-rose-50/70 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="clearReportMode"
+                    checked={clearReportMode === 'payments-only'}
+                    onChange={() => setClearReportMode('payments-only')}
+                    className="mt-0.5 accent-rose-700"
+                  />
+                  <div>
+                    <strong className="text-slate-900 block font-bold">2. Clear Total Collected Only</strong>
+                    <span className="text-[11px] text-slate-500 block mt-0.5">
+                      Clears recorded payment receipts and resets total collected figures back to GHS 0.00.
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => setClearReportMode('all')}
+                  className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                    clearReportMode === 'all'
+                      ? 'border-rose-600 bg-rose-50/70 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="clearReportMode"
+                    checked={clearReportMode === 'all'}
+                    onChange={() => setClearReportMode('all')}
+                    className="mt-0.5 accent-rose-700"
+                  />
+                  <div>
+                    <strong className="text-slate-900 block font-bold">3. Full Financial Reset</strong>
+                    <span className="text-[11px] text-slate-500 block mt-0.5">
+                      Wipes all invoices, payments, and resets all student balances to 0.00.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   onClick={() => setIsClearReportModalOpen(false)}
                   className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs rounded-xl cursor-pointer"
@@ -785,9 +937,13 @@ export const AccountantDashboard: React.FC<{
                 </button>
                 <button
                   onClick={handleClearFinancialReports}
-                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
+                  className="px-5 py-2 bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
                 >
-                  Confirm Reconcile & Refresh
+                  {clearReportMode === 'arrears-only'
+                    ? 'Clear Arrears'
+                    : clearReportMode === 'payments-only'
+                    ? 'Clear Total Collected'
+                    : 'Clear All Records'}
                 </button>
               </div>
             </div>

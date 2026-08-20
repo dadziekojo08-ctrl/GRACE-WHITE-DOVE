@@ -62,6 +62,7 @@ import {
   batchSaveCollectionToFirestore,
   saveDocumentToFirestore,
   deleteDocumentFromFirestore,
+  clearCollectionFromFirestore,
   checkIsQuotaExceeded
 } from '../lib/firestoreService';
 
@@ -536,13 +537,30 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           return merged;
         });
 
+        const paymentsCleared = localStorage.getItem('gwd_payments_cleared_at');
+        const invoicesCleared = localStorage.getItem('gwd_invoices_cleared_at');
+
         setInvoices(prev => {
+          if (invoicesCleared && prev.length === 0) {
+            if (cloudInvoices.length > 0) {
+              clearCollectionFromFirestore('invoices');
+            }
+            saveStorage('invoices', []);
+            return [];
+          }
           const merged = mergeCollection(prev, cloudInvoices);
           saveStorage('invoices', merged);
           return merged;
         });
 
         setPayments(prev => {
+          if (paymentsCleared && prev.length === 0) {
+            if (cloudPayments.length > 0) {
+              clearCollectionFromFirestore('payments');
+            }
+            saveStorage('payments', []);
+            return [];
+          }
           const merged = mergeCollection(prev, cloudPayments);
           saveStorage('payments', merged);
           return merged;
@@ -1750,6 +1768,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       status
     };
 
+    localStorage.removeItem('gwd_invoices_cleared_at');
     setInvoices(prev => [newInvoice, ...prev]);
     saveDocumentToFirestore('invoices', newInvoice);
 
@@ -1816,6 +1835,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
     });
 
+    localStorage.removeItem('gwd_invoices_cleared_at');
     setInvoices(prev => [...newInvoices, ...prev]);
     newInvoices.forEach(inv => saveDocumentToFirestore('invoices', inv));
 
@@ -2052,14 +2072,20 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAuditAction('PAYMENT_DELETED', 'Fee Management', `Voided/Deleted payment ${target.paymentRef} of GHS ${target.amount}`);
   };
 
-  const clearFinancialRecords = (mode: 'all' | 'arrears-only' | 'payments-only' = 'all') => {
+  const clearFinancialRecords = async (mode: 'all' | 'arrears-only' | 'payments-only' = 'all') => {
     if (mode === 'all') {
-      invoices.forEach(i => deleteDocumentFromFirestore('invoices', i.id));
-      payments.forEach(p => deleteDocumentFromFirestore('payments', p.id));
+      localStorage.setItem('gwd_invoices_cleared_at', Date.now().toString());
+      localStorage.setItem('gwd_payments_cleared_at', Date.now().toString());
+      localStorage.setItem('gwd_arrears_cleared_at', Date.now().toString());
+
       setInvoices([]);
       setPayments([]);
       saveStorage('invoices', []);
       saveStorage('payments', []);
+
+      clearCollectionFromFirestore('invoices');
+      clearCollectionFromFirestore('payments');
+
       setStudents(prev => prev.map(s => {
         const updated = { ...s, balanceDue: 0, manualArrears: 0 };
         saveDocumentToFirestore('students', updated);
@@ -2067,6 +2093,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }));
       logAuditAction('FINANCIAL_REPORTS_CLEARED', 'Fee Management', 'Purged all invoices, payments, total collected, and reset all student balances & arrears to 0.');
     } else if (mode === 'arrears-only') {
+      localStorage.setItem('gwd_arrears_cleared_at', Date.now().toString());
       setInvoices(prev => prev.map(inv => {
         const currentTermAmount = inv.currentTermAmount || Math.max(0, inv.totalAmount - (inv.arrears || 0));
         const grandTotal = currentTermAmount;
@@ -2095,9 +2122,11 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }));
       logAuditAction('ARREARS_CLEARED', 'Fee Management', 'Reset all student and invoice arrears to GHS 0.00 across the school.');
     } else if (mode === 'payments-only') {
-      payments.forEach(p => deleteDocumentFromFirestore('payments', p.id));
+      localStorage.setItem('gwd_payments_cleared_at', Date.now().toString());
       setPayments([]);
       saveStorage('payments', []);
+      clearCollectionFromFirestore('payments');
+
       setInvoices(prev => prev.map(inv => {
         const grandTotal = inv.grandTotal || (inv.currentTermAmount || inv.totalAmount) + (inv.arrears || 0);
         const updated: Invoice = {
@@ -2220,6 +2249,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       date: new Date().toLocaleString()
     };
 
+    localStorage.removeItem('gwd_payments_cleared_at');
     setPayments(prev => [newPayment, ...prev]);
     saveDocumentToFirestore('payments', newPayment);
 
