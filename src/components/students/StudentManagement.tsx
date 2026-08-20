@@ -29,7 +29,13 @@ import {
   Banknote,
   DollarSign,
   Save,
-  Clock
+  Clock,
+  ArrowRightLeft,
+  ArrowRightCircle,
+  Layers,
+  ShieldCheck,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { DigitalIdCardGenerator } from './DigitalIdCardGenerator';
 
@@ -49,7 +55,9 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
     generateNextStudentNumber,
     suggestTeacherForClass,
     currentUser,
-    updateStudentArrears
+    updateStudentArrears,
+    reassignStudentClass,
+    bulkReassignStudentsClass
   } = useSchool();
 
   const [selectedClass, setSelectedClass] = useState<string>('all');
@@ -58,6 +66,14 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+
+  // Student Selection & Class Reassignment State
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [isReassignModalOpen, setIsReassignModalOpen] = useState<boolean>(false);
+  const [reassignStudentsList, setReassignStudentsList] = useState<Student[]>([]);
+  const [targetReassignClass, setTargetReassignClass] = useState<string>('');
+  const [targetReassignSection, setTargetReassignSection] = useState<string>('A');
+  const [autoAssignTeacher, setAutoAssignTeacher] = useState<boolean>(true);
 
   // Manual Arrears Override in Profile Modal State
   const [profileManualArrears, setProfileManualArrears] = useState<number | string>(0);
@@ -345,6 +361,62 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
     document.body.removeChild(link);
   };
 
+  // Reassign / Push Students to Class Handlers
+  const handleOpenReassignSingle = (std: Student) => {
+    setReassignStudentsList([std]);
+    setTargetReassignClass(std.className);
+    setTargetReassignSection(std.section || 'A');
+    setAutoAssignTeacher(true);
+    setIsReassignModalOpen(true);
+  };
+
+  const handleOpenReassignBulk = () => {
+    const selected = students.filter(s => selectedStudentIds.includes(s.id));
+    if (selected.length === 0) return;
+    setReassignStudentsList(selected);
+    setTargetReassignClass(selected[0]?.className || (classes[0]?.name || 'Primary 1 (Grade 1)'));
+    setTargetReassignSection('A');
+    setAutoAssignTeacher(true);
+    setIsReassignModalOpen(true);
+  };
+
+  const handleExecuteReassign = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetReassignClass || reassignStudentsList.length === 0) return;
+
+    if (reassignStudentsList.length === 1) {
+      const student = reassignStudentsList[0];
+      reassignStudentClass(student.id, targetReassignClass, targetReassignSection, autoAssignTeacher);
+      setSyncFeedback(`Successfully pushed ${student.firstName} ${student.lastName} to ${targetReassignClass} (Section ${targetReassignSection})!`);
+    } else {
+      bulkReassignStudentsClass(
+        reassignStudentsList.map(s => s.id),
+        targetReassignClass,
+        targetReassignSection,
+        autoAssignTeacher
+      );
+      setSyncFeedback(`Successfully pushed ${reassignStudentsList.length} students to ${targetReassignClass}!`);
+      setSelectedStudentIds([]);
+    }
+
+    setIsReassignModalOpen(false);
+    setTimeout(() => setSyncFeedback(null), 5000);
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedStudentIds.length === filteredStudents.length && filteredStudents.length > 0) {
+      setSelectedStudentIds([]);
+    } else {
+      setSelectedStudentIds(filteredStudents.map(s => s.id));
+    }
+  };
+
+  const handleToggleSelectOne = (id: string) => {
+    setSelectedStudentIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Bar */}
@@ -464,12 +536,55 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
         </span>
       </div>
 
+      {/* Multi-Select Floating Bulk Action Banner */}
+      {selectedStudentIds.length > 0 && (
+        <div className="bg-emerald-900 text-white p-3.5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 animate-in slide-in-from-top-2 border border-emerald-700">
+          <div className="flex items-center gap-2.5">
+            <span className="bg-amber-400 text-emerald-950 font-black text-xs px-2.5 py-1 rounded-lg">
+              {selectedStudentIds.length}
+            </span>
+            <span className="text-xs font-bold">
+              {selectedStudentIds.length === 1 ? 'Student' : 'Students'} selected for batch actions
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenReassignBulk}
+              className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-transform active:scale-95"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-950" />
+              Push / Move to Class...
+            </button>
+            <button
+              onClick={() => setSelectedStudentIds([])}
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl cursor-pointer"
+            >
+              Clear Selection
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Students Data Table (with exact requested columns) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-emerald-900/95 text-white uppercase text-[10px] tracking-wider font-bold">
+                <th className="py-3.5 px-3 w-10 text-center">
+                  <button
+                    type="button"
+                    onClick={handleToggleSelectAll}
+                    className="cursor-pointer text-white/80 hover:text-white"
+                    title={selectedStudentIds.length === filteredStudents.length ? 'Deselect all' : 'Select all'}
+                  >
+                    {selectedStudentIds.length > 0 && selectedStudentIds.length === filteredStudents.length ? (
+                      <CheckSquare className="w-4 h-4 text-amber-300" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                  </button>
+                </th>
                 <th className="py-3.5 px-4">Student Name</th>
                 <th className="py-3.5 px-4">Class Level</th>
                 <th className="py-3.5 px-4">Class Teacher</th>
@@ -480,8 +595,25 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredStudents.map((std) => (
-                <tr key={std.id} className="hover:bg-emerald-50/40 transition-colors group">
+              {filteredStudents.map((std) => {
+                const isSelected = selectedStudentIds.includes(std.id);
+                return (
+                <tr key={std.id} className={`transition-colors group ${isSelected ? 'bg-amber-50/60' : 'hover:bg-emerald-50/40'}`}>
+                  {/* Select checkbox */}
+                  <td className="py-3 px-3 text-center">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSelectOne(std.id)}
+                      className="cursor-pointer text-slate-400 hover:text-emerald-700"
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="w-4 h-4 text-emerald-800" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                    </button>
+                  </td>
+
                   {/* 1. Student Name */}
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
@@ -504,9 +636,18 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
 
                   {/* 2. Class Level */}
                   <td className="py-3 px-4">
-                    <span className="font-semibold text-slate-800 bg-emerald-50 text-emerald-900 px-2 py-0.5 rounded-md text-[11px] inline-block">
-                      {std.className}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-slate-800 bg-emerald-50 text-emerald-900 px-2 py-0.5 rounded-md text-[11px] inline-block">
+                        {std.className}
+                      </span>
+                      <button
+                        onClick={() => handleOpenReassignSingle(std)}
+                        className="p-1 text-slate-400 hover:text-emerald-800 hover:bg-emerald-100 rounded transition-colors"
+                        title="Push / Move to another class"
+                      >
+                        <ArrowRightLeft className="w-3 h-3" />
+                      </button>
+                    </div>
                     <span className="text-[11px] text-slate-400 block mt-0.5">Section {std.section}</span>
                   </td>
 
@@ -577,11 +718,18 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
+                        onClick={() => handleOpenReassignSingle(std)}
+                        className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-950 font-bold transition-colors"
+                        title="Push to Class (Move & correct teacher view)"
+                      >
+                        <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-800" />
+                      </button>
+                      <button
                         onClick={() => {
                           setSelectedIdCardStudent(std);
                           setIsIdGeneratorOpen(true);
                         }}
-                        className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 transition-colors"
+                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
                         title="Generate Digital ID Card"
                       >
                         <CreditCard className="w-3.5 h-3.5" />
@@ -626,7 +774,8 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
@@ -1233,6 +1382,119 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                   className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl shadow-sm cursor-pointer"
                 >
                   {editingStudent ? 'Save Changes' : 'Confirm Enrollment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* PUSH / REASSIGN STUDENTS TO CLASS MODAL */}
+      {/* ============================================================= */}
+      {isReassignModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-bold">
+                  <ArrowRightLeft className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base font-['Outfit']">Push / Reassign to Class</h3>
+                  <p className="text-xs text-emerald-200">Move students and update teacher classroom dashboards</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsReassignModalOpen(false)}
+                className="text-white hover:opacity-80 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteReassign} className="p-6 space-y-4 text-xs">
+              {/* Selected Students Info Box */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px] block">
+                  Students to be Moved ({reassignStudentsList.length}):
+                </span>
+                <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
+                  {reassignStudentsList.map((std) => (
+                    <div key={std.id} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-200">
+                      <div>
+                        <span className="font-bold text-slate-900">{std.firstName} {std.lastName}</span>
+                        <span className="text-[10px] text-slate-400 font-mono ml-2">{std.admissionNo}</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
+                        Current: {std.className}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Target Class Selector */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Target Class Level *</label>
+                <select
+                  value={targetReassignClass}
+                  onChange={(e) => setTargetReassignClass(e.target.value)}
+                  required
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-semibold bg-white outline-none focus:ring-2 focus:ring-emerald-600"
+                >
+                  {classList.filter(c => c !== 'All Classes').map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Section Selector */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Section</label>
+                <select
+                  value={targetReassignSection}
+                  onChange={(e) => setTargetReassignSection(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 bg-white outline-none focus:ring-2 focus:ring-emerald-600"
+                >
+                  <option value="A">Section A</option>
+                  <option value="B">Section B</option>
+                  <option value="C">Section C</option>
+                  <option value="D">Section D</option>
+                </select>
+              </div>
+
+              {/* Auto Assign Teacher Checkbox */}
+              <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 flex items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  id="autoAssignTeacher"
+                  checked={autoAssignTeacher}
+                  onChange={(e) => setAutoAssignTeacher(e.target.checked)}
+                  className="mt-0.5 accent-emerald-800 w-4 h-4 rounded cursor-pointer"
+                />
+                <label htmlFor="autoAssignTeacher" className="text-[11px] text-slate-700 cursor-pointer">
+                  <strong className="text-emerald-950 block">Auto-link to Target Class Teacher</strong>
+                  Automatically update student records and associated invoices to link with the designated class teacher of <em>{targetReassignClass || 'target class'}</em>. This ensures the student immediately appears on that teacher's portal and disappears from incorrect teacher dashboards.
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsReassignModalOpen(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <ArrowRightLeft className="w-4 h-4 text-amber-300" />
+                  Confirm & Push to {targetReassignClass}
                 </button>
               </div>
             </form>

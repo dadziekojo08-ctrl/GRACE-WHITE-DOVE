@@ -147,14 +147,23 @@ interface SchoolContextType {
   // Fees & Payments
   feeStructures: FeeStructure[];
   addFeeStructure: (structure: Omit<FeeStructure, 'id'>) => void;
+  updateFeeStructure: (id: string, structure: Partial<FeeStructure>) => void;
+  deleteFeeStructure: (id: string) => void;
   invoices: Invoice[];
   createInvoice: (invoice: Omit<Invoice, 'id' | 'invoiceNo' | 'issueDate'>) => void;
   createBulkInvoices: (invoices: Omit<Invoice, 'id' | 'invoiceNo' | 'issueDate'>[]) => void;
+  updateInvoice: (id: string, invoice: Partial<Invoice>) => void;
   deleteInvoice: (id: string) => void;
   updateStudentArrears: (studentId: string, manualArrears: number, reason?: string) => void;
   payments: Payment[];
   recordPayment: (payment: Omit<Payment, 'id' | 'paymentRef' | 'date'>) => Payment;
-  clearFinancialRecords: () => void;
+  updatePayment: (id: string, payment: Partial<Payment>) => void;
+  deletePayment: (id: string) => void;
+  clearFinancialRecords: (mode?: 'all' | 'arrears-only' | 'payments-only') => void;
+  clearAllArrears: () => void;
+  clearTotalCollected: () => void;
+  reassignStudentClass: (studentId: string, newClassName: string, section?: string, autoAssignTeacher?: boolean) => void;
+  bulkReassignStudentsClass: (studentIds: string[], newClassName: string, section?: string, autoAssignTeacher?: boolean) => void;
 
   // Exams, Marks & Grading
   exams: Exam[];
@@ -1632,7 +1641,66 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
     setFeeStructures(prev => [...prev, newStructure]);
+    saveDocumentToFirestore('feeStructures', newStructure);
     logAuditAction('FEE_STRUCTURE_CREATED', 'Fee Management', `Created fee structure: ${structure.name} (GHS ${structure.totalAmount})`);
+  };
+
+  const updateFeeStructure = (id: string, updatedData: Partial<FeeStructure>) => {
+    setFeeStructures(prev => prev.map(f => {
+      if (f.id === id) {
+        const tuitionFee = updatedData.tuitionFee ?? f.tuitionFee ?? 0;
+        const developmentLevy = updatedData.developmentLevy ?? f.developmentLevy ?? 0;
+        const ictLabFee = updatedData.ictLabFee ?? f.ictLabFee ?? 0;
+        const libraryFee = updatedData.libraryFee ?? f.libraryFee ?? 0;
+        const sportsFee = updatedData.sportsFee ?? f.sportsFee ?? 0;
+        const ptaDues = updatedData.ptaDues ?? f.ptaDues ?? 0;
+        const termFees = updatedData.termFees ?? f.termFees ?? tuitionFee;
+        const books = updatedData.books ?? f.books ?? 0;
+        const accessories = updatedData.accessories ?? f.accessories ?? 0;
+        const arrears = updatedData.arrears ?? f.arrears ?? 0;
+        const totalAmount = updatedData.totalAmount ?? (termFees + books + accessories + arrears);
+
+        const updated: FeeStructure = {
+          ...f,
+          ...updatedData,
+          tuitionFee,
+          developmentLevy,
+          ictLabFee,
+          libraryFee,
+          sportsFee,
+          ptaDues,
+          termFees,
+          books,
+          accessories,
+          arrears,
+          totalAmount,
+          breakdown: {
+            tuitionFee,
+            developmentLevy,
+            ictLabFee,
+            libraryFee,
+            sportsFee,
+            ptaDues,
+            termFees,
+            books,
+            accessories,
+            arrears,
+            ...(f.breakdown || {}),
+            ...(updatedData.breakdown || {})
+          }
+        };
+        saveDocumentToFirestore('feeStructures', updated);
+        return updated;
+      }
+      return f;
+    }));
+    logAuditAction('FEE_STRUCTURE_UPDATED', 'Fee Management', `Updated fee structure ID: ${id}`);
+  };
+
+  const deleteFeeStructure = (id: string) => {
+    setFeeStructures(prev => prev.filter(f => f.id !== id));
+    deleteDocumentFromFirestore('feeStructures', id);
+    logAuditAction('FEE_STRUCTURE_DELETED', 'Fee Management', `Deleted fee structure ID: ${id}`);
   };
 
   const createInvoice = (inv: Omit<Invoice, 'id' | 'invoiceNo' | 'issueDate'>) => {
@@ -1777,6 +1845,67 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAuditAction('BULK_INVOICES_GENERATED', 'Fee Management', `Generated ${bulkList.length} fee invoices in batch with separated arrears tracking`);
   };
 
+  const updateInvoice = (id: string, updatedData: Partial<Invoice>) => {
+    let affectedStudentId = '';
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id === id) {
+        affectedStudentId = inv.studentId;
+        const termFees = updatedData.termFees !== undefined ? updatedData.termFees : (inv.termFees || 0);
+        const books = updatedData.books !== undefined ? updatedData.books : (inv.books || 0);
+        const accessories = updatedData.accessories !== undefined ? updatedData.accessories : (inv.accessories || 0);
+        const arrears = updatedData.arrears !== undefined ? updatedData.arrears : (inv.arrears || 0);
+
+        const currentTermAmount = updatedData.currentTermAmount !== undefined 
+          ? updatedData.currentTermAmount 
+          : ((termFees + books + accessories) > 0 ? (termFees + books + accessories) : (updatedData.totalAmount !== undefined ? updatedData.totalAmount : inv.totalAmount));
+
+        const totalAmount = currentTermAmount;
+        const grandTotal = currentTermAmount + arrears;
+        const paidAmount = updatedData.paidAmount !== undefined ? updatedData.paidAmount : (inv.paidAmount || 0);
+        const balance = Math.max(0, grandTotal - paidAmount);
+        const status = balance === 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Unpaid';
+
+        const updated: Invoice = {
+          ...inv,
+          ...updatedData,
+          termFees,
+          books,
+          accessories,
+          arrears,
+          currentTermAmount,
+          totalAmount,
+          grandTotal,
+          paidAmount,
+          balance,
+          status
+        };
+        saveDocumentToFirestore('invoices', updated);
+        return updated;
+      }
+      return inv;
+    }));
+
+    if (affectedStudentId) {
+      setTimeout(() => {
+        setStudents(prev => prev.map(s => {
+          if (s.id === affectedStudentId) {
+            const studentInvs = invoices.map(i => i.id === id ? {
+              ...i,
+              ...updatedData,
+              balance: Math.max(0, ((updatedData.currentTermAmount ?? i.currentTermAmount ?? i.totalAmount) + (updatedData.arrears ?? i.arrears ?? 0)) - (updatedData.paidAmount ?? i.paidAmount ?? 0))
+            } : i).filter(i => i.studentId === affectedStudentId);
+            const newTotalBalance = studentInvs.reduce((sum, i) => sum + i.balance, 0);
+            const updatedStd = { ...s, balanceDue: newTotalBalance };
+            saveDocumentToFirestore('students', updatedStd);
+            return updatedStd;
+          }
+          return s;
+        }));
+      }, 50);
+    }
+    logAuditAction('INVOICE_UPDATED', 'Fee Management', `Admin/Finance corrected invoice ID ${id}`);
+  };
+
   const updateStudentArrears = (studentId: string, manualArrears: number, reason?: string) => {
     const safeArrears = Math.max(0, Number(manualArrears) || 0);
     setStudents(prev => prev.map(s => {
@@ -1838,11 +1967,244 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const clearFinancialRecords = () => {
-    setInvoices([]);
-    setPayments([]);
-    setStudents(prev => prev.map(s => ({ ...s, balanceDue: 0 })));
-    logAuditAction('FINANCIAL_REPORTS_CLEARED', 'Fee Management', 'Cleared all student fee invoices, payment receipts, and reset student fee balances.');
+  const updatePayment = (id: string, updatedData: Partial<Payment>) => {
+    let affectedInvoiceId = '';
+    let affectedStudentId = '';
+    setPayments(prev => prev.map(p => {
+      if (p.id === id) {
+        affectedInvoiceId = p.invoiceId;
+        affectedStudentId = p.studentId;
+        const updated = { ...p, ...updatedData };
+        saveDocumentToFirestore('payments', updated);
+        return updated;
+      }
+      return p;
+    }));
+
+    if (affectedInvoiceId) {
+      setInvoices(prev => prev.map(inv => {
+        if (inv.id === affectedInvoiceId) {
+          const updatedPaymentList = payments.map(p => p.id === id ? { ...p, ...updatedData } : p);
+          const newPaid = updatedPaymentList.filter(p => p.invoiceId === affectedInvoiceId && p.status !== 'Failed').reduce((sum, p) => sum + (p.amount || 0), 0);
+          const grandTotal = inv.grandTotal || (inv.currentTermAmount || inv.totalAmount) + (inv.arrears || 0);
+          const newBalance = Math.max(0, grandTotal - newPaid);
+          const status = newBalance === 0 ? 'Paid' : newPaid > 0 ? 'Partial' : 'Unpaid';
+          const updatedInv = { ...inv, paidAmount: newPaid, balance: newBalance, status };
+          saveDocumentToFirestore('invoices', updatedInv);
+          return updatedInv;
+        }
+        return inv;
+      }));
+    }
+
+    if (affectedStudentId) {
+      setStudents(prev => prev.map(s => {
+        if (s.id === affectedStudentId) {
+          const studentInvs = invoices.map(inv => {
+            if (inv.id === affectedInvoiceId) {
+              const updatedPaymentList = payments.map(p => p.id === id ? { ...p, ...updatedData } : p);
+              const newPaid = updatedPaymentList.filter(p => p.invoiceId === affectedInvoiceId && p.status !== 'Failed').reduce((sum, p) => sum + (p.amount || 0), 0);
+              const grandTotal = inv.grandTotal || (inv.currentTermAmount || inv.totalAmount) + (inv.arrears || 0);
+              return Math.max(0, grandTotal - newPaid);
+            }
+            return inv.studentId === affectedStudentId ? inv.balance : 0;
+          });
+          const totalBal = studentInvs.reduce((a, b) => a + b, 0);
+          const updatedStd = { ...s, balanceDue: totalBal };
+          saveDocumentToFirestore('students', updatedStd);
+          return updatedStd;
+        }
+        return s;
+      }));
+    }
+    logAuditAction('PAYMENT_UPDATED', 'Fee Management', `Admin/Finance corrected payment record ${id}`);
+  };
+
+  const deletePayment = (id: string) => {
+    const target = payments.find(p => p.id === id);
+    if (!target) return;
+
+    setPayments(prev => prev.filter(p => p.id !== id));
+    deleteDocumentFromFirestore('payments', id);
+
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id === target.invoiceId) {
+        const newPaid = Math.max(0, inv.paidAmount - target.amount);
+        const grandTotal = inv.grandTotal || (inv.currentTermAmount || inv.totalAmount) + (inv.arrears || 0);
+        const newBalance = Math.max(0, grandTotal - newPaid);
+        const status = newBalance === 0 ? 'Paid' : newPaid > 0 ? 'Partial' : 'Unpaid';
+        const updatedInv = { ...inv, paidAmount: newPaid, balance: newBalance, status };
+        saveDocumentToFirestore('invoices', updatedInv);
+        return updatedInv;
+      }
+      return inv;
+    }));
+
+    setStudents(prev => prev.map(s => {
+      if (s.id === target.studentId) {
+        const updatedStd = { ...s, balanceDue: (s.balanceDue || 0) + target.amount };
+        saveDocumentToFirestore('students', updatedStd);
+        return updatedStd;
+      }
+      return s;
+    }));
+
+    logAuditAction('PAYMENT_DELETED', 'Fee Management', `Voided/Deleted payment ${target.paymentRef} of GHS ${target.amount}`);
+  };
+
+  const clearFinancialRecords = (mode: 'all' | 'arrears-only' | 'payments-only' = 'all') => {
+    if (mode === 'all') {
+      invoices.forEach(i => deleteDocumentFromFirestore('invoices', i.id));
+      payments.forEach(p => deleteDocumentFromFirestore('payments', p.id));
+      setInvoices([]);
+      setPayments([]);
+      saveStorage('invoices', []);
+      saveStorage('payments', []);
+      setStudents(prev => prev.map(s => {
+        const updated = { ...s, balanceDue: 0, manualArrears: 0 };
+        saveDocumentToFirestore('students', updated);
+        return updated;
+      }));
+      logAuditAction('FINANCIAL_REPORTS_CLEARED', 'Fee Management', 'Purged all invoices, payments, total collected, and reset all student balances & arrears to 0.');
+    } else if (mode === 'arrears-only') {
+      setInvoices(prev => prev.map(inv => {
+        const currentTermAmount = inv.currentTermAmount || Math.max(0, inv.totalAmount - (inv.arrears || 0));
+        const grandTotal = currentTermAmount;
+        const balance = Math.max(0, grandTotal - inv.paidAmount);
+        const status = balance === 0 ? 'Paid' : inv.paidAmount > 0 ? 'Partial' : 'Unpaid';
+        const updated: Invoice = {
+          ...inv,
+          arrears: 0,
+          currentTermAmount,
+          totalAmount: currentTermAmount,
+          grandTotal,
+          balance,
+          status
+        };
+        saveDocumentToFirestore('invoices', updated);
+        return updated;
+      }));
+      setStudents(prev => prev.map(s => {
+        const updated: Student = {
+          ...s,
+          manualArrears: 0,
+          balanceDue: Math.max(0, (s.balanceDue || 0) - (s.manualArrears || 0))
+        };
+        saveDocumentToFirestore('students', updated);
+        return updated;
+      }));
+      logAuditAction('ARREARS_CLEARED', 'Fee Management', 'Reset all student and invoice arrears to GHS 0.00 across the school.');
+    } else if (mode === 'payments-only') {
+      payments.forEach(p => deleteDocumentFromFirestore('payments', p.id));
+      setPayments([]);
+      saveStorage('payments', []);
+      setInvoices(prev => prev.map(inv => {
+        const grandTotal = inv.grandTotal || (inv.currentTermAmount || inv.totalAmount) + (inv.arrears || 0);
+        const updated: Invoice = {
+          ...inv,
+          paidAmount: 0,
+          balance: grandTotal,
+          status: 'Unpaid'
+        };
+        saveDocumentToFirestore('invoices', updated);
+        return updated;
+      }));
+      setStudents(prev => prev.map(s => {
+        const studentInvs = invoices.filter(i => i.studentId === s.id);
+        const totalBal = studentInvs.reduce((sum, i) => sum + (i.grandTotal || i.totalAmount), 0) + (s.manualArrears || 0);
+        const updated = { ...s, balanceDue: totalBal };
+        saveDocumentToFirestore('students', updated);
+        return updated;
+      }));
+      logAuditAction('TOTAL_COLLECTED_CLEARED', 'Fee Management', 'Cleared all payment receipts and reset Total Collected to GHS 0.00.');
+    }
+  };
+
+  const clearAllArrears = () => clearFinancialRecords('arrears-only');
+  const clearTotalCollected = () => clearFinancialRecords('payments-only');
+
+  const reassignStudentClass = (
+    studentId: string,
+    newClassName: string,
+    section: string = 'A',
+    autoAssignTeacher: boolean = true
+  ) => {
+    const targetStudent = students.find(s => s.id === studentId);
+    if (!targetStudent) return;
+
+    let assignedTeacherName = targetStudent.classTeacher || '';
+    if (autoAssignTeacher) {
+      const matchedTeacher = findTeacherForClass(newClassName, { classes, staff, authUsers });
+      if (matchedTeacher?.teacherName) {
+        assignedTeacherName = matchedTeacher.teacherName;
+      }
+    }
+
+    setStudents(prev => prev.map(s => {
+      if (s.id === studentId) {
+        const updatedStd: Student = {
+          ...s,
+          className: newClassName,
+          section: section || s.section || 'A',
+          classTeacher: assignedTeacherName
+        };
+        saveDocumentToFirestore('students', updatedStd);
+        return updatedStd;
+      }
+      return s;
+    }));
+
+    setInvoices(prev => prev.map(inv => {
+      if (inv.studentId === studentId) {
+        const updatedInv = { ...inv, className: newClassName };
+        saveDocumentToFirestore('invoices', updatedInv);
+        return updatedInv;
+      }
+      return inv;
+    }));
+
+    logAuditAction('STUDENT_CLASS_REASSIGNED', 'Class Management', `Admin reassigned ${targetStudent.firstName} ${targetStudent.lastName} from ${targetStudent.className} to ${newClassName}`);
+  };
+
+  const bulkReassignStudentsClass = (
+    studentIds: string[],
+    newClassName: string,
+    section: string = 'A',
+    autoAssignTeacher: boolean = true
+  ) => {
+    let assignedTeacherName = '';
+    if (autoAssignTeacher) {
+      const matchedTeacher = findTeacherForClass(newClassName, { classes, staff, authUsers });
+      if (matchedTeacher?.teacherName) {
+        assignedTeacherName = matchedTeacher.teacherName;
+      }
+    }
+    const idSet = new Set(studentIds);
+
+    setStudents(prev => prev.map(s => {
+      if (idSet.has(s.id)) {
+        const updatedStd: Student = {
+          ...s,
+          className: newClassName,
+          section: section || s.section || 'A',
+          classTeacher: autoAssignTeacher ? (assignedTeacherName || s.classTeacher) : s.classTeacher
+        };
+        saveDocumentToFirestore('students', updatedStd);
+        return updatedStd;
+      }
+      return s;
+    }));
+
+    setInvoices(prev => prev.map(inv => {
+      if (idSet.has(inv.studentId)) {
+        const updatedInv = { ...inv, className: newClassName };
+        saveDocumentToFirestore('invoices', updatedInv);
+        return updatedInv;
+      }
+      return inv;
+    }));
+
+    logAuditAction('BULK_STUDENTS_REASSIGNED', 'Class Management', `Admin reassigned ${studentIds.length} students to ${newClassName}`);
   };
 
   const recordPayment = (pay: Omit<Payment, 'id' | 'paymentRef' | 'date'>): Payment => {
@@ -1859,14 +2221,18 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     setPayments(prev => [newPayment, ...prev]);
+    saveDocumentToFirestore('payments', newPayment);
 
     // Update invoice & student balance
     setInvoices(prev => prev.map(inv => {
       if (inv.id === pay.invoiceId || inv.studentId === pay.studentId) {
         const newPaid = inv.paidAmount + pay.amount;
-        const newBalance = Math.max(0, inv.totalAmount - newPaid);
+        const grandTotal = inv.grandTotal || (inv.currentTermAmount || inv.totalAmount) + (inv.arrears || 0);
+        const newBalance = Math.max(0, grandTotal - newPaid);
         const status = newBalance === 0 ? 'Paid' : newPaid > 0 ? 'Partial' : 'Unpaid';
-        return { ...inv, paidAmount: newPaid, balance: newBalance, status };
+        const updatedInv = { ...inv, paidAmount: newPaid, balance: newBalance, status };
+        saveDocumentToFirestore('invoices', updatedInv);
+        return updatedInv;
       }
       return inv;
     }));
@@ -1874,7 +2240,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setStudents(prev => prev.map(s => {
       if (s.id === pay.studentId) {
         const newBal = Math.max(0, s.balanceDue - pay.amount);
-        return { ...s, balanceDue: newBal };
+        const updatedStd = { ...s, balanceDue: newBal };
+        saveDocumentToFirestore('students', updatedStd);
+        return updatedStd;
       }
       return s;
     }));
@@ -2403,14 +2771,23 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         gateCheckIn,
         feeStructures,
         addFeeStructure,
+        updateFeeStructure,
+        deleteFeeStructure,
         invoices,
         createInvoice,
         createBulkInvoices,
+        updateInvoice,
         deleteInvoice,
         updateStudentArrears,
         payments,
         recordPayment,
+        updatePayment,
+        deletePayment,
         clearFinancialRecords,
+        clearAllArrears,
+        clearTotalCollected,
+        reassignStudentClass,
+        bulkReassignStudentsClass,
         exams,
         addExam,
         examSchedules,

@@ -100,15 +100,28 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     photoUrl: ''
   });
 
-  // Teacher's assigned students (matching teacherAssignedClass or classTeacher name)
-  const myStudents = students.filter(
-    (s) =>
-      (teacherAssignedClass && (s.className === teacherAssignedClass || s.className?.toLowerCase().includes(teacherAssignedClass.toLowerCase()))) ||
-      s.classTeacher === teacherName ||
-      (currentUser?.name && s.classTeacher?.includes(currentUser.name))
-  );
+  // Teacher's assigned students (strictly matching teacherAssignedClass or classTeacher name)
+  const myStudents = students.filter((s) => {
+    if (teacherAssignedClass) {
+      const assignedLower = teacherAssignedClass.trim().toLowerCase();
+      const studentClassLower = (s.className || '').trim().toLowerCase();
+      if (studentClassLower === assignedLower || studentClassLower.includes(assignedLower) || assignedLower.includes(studentClassLower)) {
+        return true;
+      }
+    }
+    if (s.classTeacher && teacherName && s.classTeacher.toLowerCase() === teacherName.toLowerCase()) {
+      return true;
+    }
+    if (currentUser?.name && s.classTeacher?.toLowerCase().includes(currentUser.name.toLowerCase())) {
+      return true;
+    }
+    return false;
+  });
 
-  const displayStudents = myStudents.length > 0 ? myStudents : (teacherAssignedClass ? students.filter(s => s.className === teacherAssignedClass) : students);
+  // If teacher has an assigned class or is a class teacher, show only their students. If none enrolled yet, keep as empty array rather than dumping all school students.
+  const displayStudents = (teacherAssignedClass || currentUser?.role === 'Teacher')
+    ? (myStudents.length > 0 ? myStudents : (teacherAssignedClass ? students.filter(s => (s.className || '').trim().toLowerCase() === teacherAssignedClass.trim().toLowerCase()) : []))
+    : students;
 
   const filteredMyStudents = displayStudents.filter(
     (s) =>

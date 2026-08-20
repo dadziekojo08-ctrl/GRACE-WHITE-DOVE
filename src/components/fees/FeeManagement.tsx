@@ -30,7 +30,8 @@ import {
   Mail,
   Phone,
   MessageSquare,
-  Save
+  Save,
+  Edit2
 } from 'lucide-react';
 
 interface FeeManagementProps {
@@ -41,13 +42,20 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
   const {
     feeStructures,
     addFeeStructure,
+    updateFeeStructure,
+    deleteFeeStructure,
     invoices,
     createInvoice,
     createBulkInvoices,
+    updateInvoice,
     deleteInvoice,
     payments,
     recordPayment,
+    updatePayment,
+    deletePayment,
     clearFinancialRecords,
+    clearAllArrears,
+    clearTotalCollected,
     students,
     academicYear,
     currentTerm,
@@ -70,9 +78,46 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
   const [isBillStudentOpen, setIsBillStudentOpen] = useState(false);
   const [isProcessFeeOpen, setIsProcessFeeOpen] = useState(false);
   const [isClearReportOpen, setIsClearReportOpen] = useState(false);
+  const [clearMode, setClearMode] = useState<'all' | 'arrears-only' | 'payments-only'>('arrears-only');
   const [isExportPdfOpen, setIsExportPdfOpen] = useState(false);
   const [isNewStructureOpen, setIsNewStructureOpen] = useState(false);
   const [isManualArrearsModalOpen, setIsManualArrearsModalOpen] = useState(false);
+
+  // Edit Modals State
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+  const [isEditInvoiceOpen, setIsEditInvoiceOpen] = useState(false);
+  const [editInvoiceForm, setEditInvoiceForm] = useState({
+    termFees: 0,
+    books: 0,
+    accessories: 0,
+    arrears: 0,
+    dueDate: '',
+    status: 'Unpaid' as 'Paid' | 'Partial' | 'Unpaid' | 'Overdue',
+    paidAmount: 0
+  });
+
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [isEditPaymentOpen, setIsEditPaymentOpen] = useState(false);
+  const [editPaymentForm, setEditPaymentForm] = useState({
+    amount: 0,
+    paymentMethod: 'Cash' as Payment['paymentMethod'],
+    payerPhone: '',
+    remarks: '',
+    receivedBy: '',
+    date: ''
+  });
+
+  const [editingStructure, setEditingStructure] = useState<FeeStructure | null>(null);
+  const [isEditStructureOpen, setIsEditStructureOpen] = useState(false);
+  const [editStructForm, setEditStructForm] = useState({
+    name: '',
+    classLevel: '',
+    termFees: 0,
+    books: 0,
+    accessories: 0,
+    arrears: 0,
+    dueDate: ''
+  });
 
   // Manual Arrears Override State
   const [selectedStudentForArrears, setSelectedStudentForArrears] = useState<Student | null>(null);
@@ -84,6 +129,130 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
     setOverrideArrearsAmount(student.manualArrears || 0);
     setOverrideArrearsReason('');
     setIsManualArrearsModalOpen(true);
+  };
+
+  // Edit Invoice Handlers
+  const handleOpenEditInvoice = (inv: Invoice) => {
+    setEditingInvoice(inv);
+    setEditInvoiceForm({
+      termFees: inv.termFees || (inv.items?.find(i => i.description.includes('Term'))?.amount) || 0,
+      books: inv.books || (inv.items?.find(i => i.description.includes('Book'))?.amount) || 0,
+      accessories: inv.accessories || (inv.items?.find(i => i.description.includes('Accessories'))?.amount) || 0,
+      arrears: inv.arrears || (inv.items?.find(i => i.description.includes('Arrear'))?.amount) || 0,
+      dueDate: inv.dueDate || '',
+      status: inv.status as any,
+      paidAmount: inv.paidAmount || 0
+    });
+    setIsEditInvoiceOpen(true);
+  };
+
+  const handleSaveEditInvoice = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingInvoice) return;
+
+    const termFees = Number(editInvoiceForm.termFees) || 0;
+    const books = Number(editInvoiceForm.books) || 0;
+    const accessories = Number(editInvoiceForm.accessories) || 0;
+    const arrears = Number(editInvoiceForm.arrears) || 0;
+    const currentTermAmount = termFees + books + accessories;
+    const totalAmount = currentTermAmount + arrears;
+    const paidAmount = Number(editInvoiceForm.paidAmount) || 0;
+    const balance = Math.max(0, totalAmount - paidAmount);
+    const status = balance === 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Unpaid';
+
+    updateInvoice(editingInvoice.id, {
+      termFees,
+      books,
+      accessories,
+      arrears,
+      currentTermAmount,
+      totalAmount,
+      paidAmount,
+      balance,
+      status,
+      dueDate: editInvoiceForm.dueDate,
+      items: [
+        { description: 'Term Fees', amount: termFees },
+        { description: 'Books (Text Books & Exercise Books)', amount: books },
+        { description: 'Accessories', amount: accessories },
+        { description: 'Arrears (Previous Term Outstanding)', amount: arrears }
+      ].filter(i => i.amount > 0)
+    });
+
+    showToast(`Invoice ${editingInvoice.invoiceNo} successfully updated!`, 'success');
+    setIsEditInvoiceOpen(false);
+  };
+
+  // Edit Payment Handlers
+  const handleOpenEditPayment = (p: Payment) => {
+    setEditingPayment(p);
+    setEditPaymentForm({
+      amount: p.amount,
+      paymentMethod: p.paymentMethod,
+      payerPhone: p.payerPhone || '',
+      remarks: p.remarks || '',
+      receivedBy: p.receivedBy || currentUser?.name || 'School Bursar',
+      date: p.date || new Date().toISOString().split('T')[0]
+    });
+    setIsEditPaymentOpen(true);
+  };
+
+  const handleSaveEditPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPayment) return;
+
+    updatePayment(editingPayment.id, {
+      amount: Number(editPaymentForm.amount) || 0,
+      paymentMethod: editPaymentForm.paymentMethod,
+      payerPhone: editPaymentForm.payerPhone,
+      remarks: editPaymentForm.remarks,
+      receivedBy: editPaymentForm.receivedBy,
+      date: editPaymentForm.date
+    });
+
+    showToast(`Payment receipt ${editingPayment.reference} updated successfully!`, 'success');
+    setIsEditPaymentOpen(false);
+  };
+
+  // Edit Structure Handlers
+  const handleOpenEditStructure = (s: FeeStructure) => {
+    setEditingStructure(s);
+    setEditStructForm({
+      name: s.name,
+      classLevel: s.classLevel || s.className || '',
+      termFees: s.breakdown?.termFees ?? s.termFees ?? s.tuitionFee ?? 0,
+      books: s.breakdown?.books ?? s.books ?? s.libraryFee ?? 0,
+      accessories: s.breakdown?.accessories ?? s.accessories ?? s.developmentLevy ?? 0,
+      arrears: s.breakdown?.arrears ?? s.arrears ?? 0,
+      dueDate: s.dueDate || '2026-09-30'
+    });
+    setIsEditStructureOpen(true);
+  };
+
+  const handleSaveEditStructure = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStructure) return;
+
+    const termFees = Number(editStructForm.termFees) || 0;
+    const books = Number(editStructForm.books) || 0;
+    const accessories = Number(editStructForm.accessories) || 0;
+    const arrears = Number(editStructForm.arrears) || 0;
+    const totalAmount = termFees + books + accessories + arrears;
+
+    updateFeeStructure(editingStructure.id, {
+      name: editStructForm.name,
+      classLevel: editStructForm.classLevel,
+      termFees,
+      books,
+      accessories,
+      arrears,
+      breakdown: { termFees, books, accessories, arrears },
+      totalAmount,
+      dueDate: editStructForm.dueDate
+    });
+
+    showToast(`Fee structure "${editStructForm.name}" updated successfully!`, 'success');
+    setIsEditStructureOpen(false);
   };
 
   const handleSaveArrearsOverride = (e: React.FormEvent) => {
@@ -442,8 +611,17 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
       return;
     }
 
-    clearFinancialRecords();
-    showToast('Financial report data has been cleared and reset.', 'info');
+    if (clearMode === 'arrears-only') {
+      clearAllArrears();
+      showToast('All previous arrears have been successfully cleared to GHS 0.00 across all students!', 'success');
+    } else if (clearMode === 'payments-only') {
+      clearTotalCollected();
+      showToast('Total collected figures and payment receipts cleared successfully!', 'success');
+    } else {
+      clearFinancialRecords('all');
+      showToast('All financial records, invoices, and payment receipts have been reset cleanly.', 'info');
+    }
+
     setIsClearReportOpen(false);
     setClearConfirmText('');
   };
@@ -1042,6 +1220,13 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                               <Printer className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              onClick={() => handleOpenEditInvoice(inv)}
+                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 cursor-pointer transition-colors"
+                              title="Edit & Correct Fee Bill Inputs"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
                               onClick={() => {
                                 if (window.confirm(`Are you sure you want to delete invoice ${inv.invoiceNo} for ${inv.studentName}?`)) {
                                   deleteInvoice(inv.id);
@@ -1125,13 +1310,35 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                       </td>
                       <td className="py-3 px-4 text-slate-600 text-[11px]">{p.receivedBy || 'Bursar'}</td>
                       <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => setSelectedPaymentReceipt(p)}
-                          className="px-2.5 py-1 bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 font-bold rounded-lg text-[11px] inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <Printer className="w-3 h-3" />
-                          View Receipt
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setSelectedPaymentReceipt(p)}
+                            className="px-2 py-1 bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 font-bold rounded-lg text-[11px] inline-flex items-center gap-1 cursor-pointer"
+                            title="View and Print Payment Receipt"
+                          >
+                            <Printer className="w-3 h-3" />
+                            <span>Receipt</span>
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditPayment(p)}
+                            className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 cursor-pointer transition-colors"
+                            title="Edit / Correct Payment Entry"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to delete payment receipt ${p.paymentRef} (GHS ${p.amount.toLocaleString()}) for ${p.studentName}?`)) {
+                                deletePayment(p.id);
+                                showToast(`Deleted payment ${p.paymentRef}`);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 cursor-pointer transition-colors"
+                            title="Delete Payment Entry"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1249,6 +1456,28 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                     <span>Arrears (Previous Term Outstanding):</span>
                     <span className="font-bold text-slate-800">GHS {struct.breakdown?.arrears ?? struct.arrears ?? 0}</span>
                   </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => handleOpenEditStructure(struct)}
+                    className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-lg text-xs flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Edit Template</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to delete fee structure "${struct.name}"?`)) {
+                        deleteFeeStructure(struct.id);
+                        showToast(`Deleted structure ${struct.name}`);
+                      }
+                    }}
+                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 cursor-pointer transition-colors"
+                    title="Delete Template"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -1884,16 +2113,88 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
               <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 space-y-1.5">
                 <p className="font-bold flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                  Warning: Irreversible Financial Reset
+                  Select Clearing Option
                 </p>
                 <p className="text-[11px] leading-relaxed text-rose-800">
-                  This action will delete all issued fee invoices ({invoices.length}), clear all payment transaction receipts ({payments.length}), and reset all active student fee balances to GHS 0.00.
+                  Choose precisely which financial ledger records you want to clear without causing cumulative billing issues.
                 </p>
+              </div>
+
+              {/* Mode Selection Options */}
+              <div className="space-y-2">
+                <label
+                  onClick={() => setClearMode('arrears-only')}
+                  className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                    clearMode === 'arrears-only'
+                      ? 'border-rose-600 bg-rose-50/70 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="clearMode"
+                    checked={clearMode === 'arrears-only'}
+                    onChange={() => setClearMode('arrears-only')}
+                    className="mt-0.5 accent-rose-700"
+                  />
+                  <div>
+                    <strong className="text-slate-900 block font-bold">1. Clear Arrears Only (Reset Previous Unpaid Debts)</strong>
+                    <span className="text-[11px] text-slate-500 block mt-0.5">
+                      Resets all previous term arrears to GHS 0.00 across all students and student ledger profiles without deleting current term bills.
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => setClearMode('payments-only')}
+                  className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                    clearMode === 'payments-only'
+                      ? 'border-rose-600 bg-rose-50/70 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="clearMode"
+                    checked={clearMode === 'payments-only'}
+                    onChange={() => setClearMode('payments-only')}
+                    className="mt-0.5 accent-rose-700"
+                  />
+                  <div>
+                    <strong className="text-slate-900 block font-bold">2. Clear Total Collected Only</strong>
+                    <span className="text-[11px] text-slate-500 block mt-0.5">
+                      Clears recorded cashier payment receipts and resets total collected figures back to GHS 0.00.
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => setClearMode('all')}
+                  className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                    clearMode === 'all'
+                      ? 'border-rose-600 bg-rose-50/70 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="clearMode"
+                    checked={clearMode === 'all'}
+                    onChange={() => setClearMode('all')}
+                    className="mt-0.5 accent-rose-700"
+                  />
+                  <div>
+                    <strong className="text-slate-900 block font-bold">3. Full Reset (Clear Invoices, Arrears & Payments)</strong>
+                    <span className="text-[11px] text-slate-500 block mt-0.5">
+                      Completely wipes all {invoices.length} invoices, {payments.length} receipts, and resets all student balances to 0.00.
+                    </span>
+                  </div>
+                </label>
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Type <span className="font-mono text-rose-700 font-extrabold">CONFIRM</span> to proceed:
+                  Type <span className="font-mono text-rose-700 font-extrabold">CONFIRM</span> to authorize:
                 </label>
                 <input
                   type="text"
@@ -1922,10 +2223,406 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                       : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   }`}
                 >
-                  Clear Financial Data
+                  {clearMode === 'arrears-only'
+                    ? 'Clear All Arrears'
+                    : clearMode === 'payments-only'
+                    ? 'Clear Total Collected'
+                    : 'Clear All Financial Data'}
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* EDIT INVOICE / BILL MODAL */}
+      {/* ============================================================= */}
+      {isEditInvoiceOpen && editingInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-8 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-400 text-emerald-950 flex items-center justify-center font-bold">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base font-['Outfit']">Edit & Correct Fee Bill</h3>
+                  <p className="text-xs text-emerald-200">Modify invoice #{editingInvoice.invoiceNo} for {editingInvoice.studentName}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsEditInvoiceOpen(false)} className="text-white hover:opacity-80 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditInvoice} className="p-6 space-y-4 text-xs">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center">
+                <div>
+                  <span className="font-bold text-slate-900 block">{editingInvoice.studentName}</span>
+                  <span className="text-slate-500 text-[11px]">{editingInvoice.className} • {editingInvoice.term}</span>
+                </div>
+                <span className="bg-emerald-100 text-emerald-900 text-xs font-bold px-2.5 py-1 rounded-full font-mono">
+                  Invoice #{editingInvoice.invoiceNo}
+                </span>
+              </div>
+
+              {/* 4 Item Breakdown Fields */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Term Fees (GHS)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editInvoiceForm.termFees}
+                    onChange={(e) => setEditInvoiceForm({ ...editInvoiceForm, termFees: Number(e.target.value) || 0 })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Books (Textbooks & Workbooks) (GHS)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editInvoiceForm.books}
+                    onChange={(e) => setEditInvoiceForm({ ...editInvoiceForm, books: Number(e.target.value) || 0 })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Accessories (GHS)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editInvoiceForm.accessories}
+                    onChange={(e) => setEditInvoiceForm({ ...editInvoiceForm, accessories: Number(e.target.value) || 0 })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Arrears / Prior Debt (GHS)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editInvoiceForm.arrears}
+                    onChange={(e) => setEditInvoiceForm({ ...editInvoiceForm, arrears: Number(e.target.value) || 0 })}
+                    className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-3 py-2 text-amber-900 font-bold focus:ring-2 focus:ring-amber-600 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Due Date & Paid Amount */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    value={editInvoiceForm.dueDate}
+                    onChange={(e) => setEditInvoiceForm({ ...editInvoiceForm, dueDate: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Paid Amount (GHS)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editInvoiceForm.paidAmount}
+                    onChange={(e) => setEditInvoiceForm({ ...editInvoiceForm, paidAmount: Number(e.target.value) || 0 })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Calculated Totals Preview */}
+              <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200 grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block">Current Bill</span>
+                  <span className="text-sm font-bold text-slate-900 font-mono">
+                    GHS {(Number(editInvoiceForm.termFees) + Number(editInvoiceForm.books) + Number(editInvoiceForm.accessories)).toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-amber-700 block">Total + Arrears</span>
+                  <span className="text-sm font-black text-amber-900 font-mono">
+                    GHS {(Number(editInvoiceForm.termFees) + Number(editInvoiceForm.books) + Number(editInvoiceForm.accessories) + Number(editInvoiceForm.arrears)).toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-emerald-800 block">Balance Due</span>
+                  <span className="text-sm font-black text-emerald-950 font-mono">
+                    GHS {Math.max(0, (Number(editInvoiceForm.termFees) + Number(editInvoiceForm.books) + Number(editInvoiceForm.accessories) + Number(editInvoiceForm.arrears)) - Number(editInvoiceForm.paidAmount)).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsEditInvoiceOpen(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl shadow-sm cursor-pointer"
+                >
+                  Save Corrections
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* EDIT PAYMENT RECEIPT MODAL */}
+      {/* ============================================================= */}
+      {isEditPaymentOpen && editingPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-8 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-400 text-emerald-950 flex items-center justify-center font-bold">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base font-['Outfit']">Edit Payment Receipt</h3>
+                  <p className="text-xs text-emerald-200">Correct transaction receipt #{editingPayment.paymentRef || editingPayment.reference}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsEditPaymentOpen(false)} className="text-white hover:opacity-80 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPayment} className="p-6 space-y-4 text-xs">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <span className="font-bold text-slate-900 block">{editingPayment.studentName}</span>
+                <span className="text-slate-500 text-[11px]">Original Ref: {editingPayment.paymentRef || editingPayment.reference}</span>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Payment Amount (GHS) *</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="any"
+                  required
+                  value={editPaymentForm.amount}
+                  onChange={(e) => setEditPaymentForm({ ...editPaymentForm, amount: Number(e.target.value) || 0 })}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold text-base focus:ring-2 focus:ring-emerald-600 outline-none font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Payment Method</label>
+                  <select
+                    value={editPaymentForm.paymentMethod}
+                    onChange={(e) => setEditPaymentForm({ ...editPaymentForm, paymentMethod: e.target.value as any })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 bg-white focus:ring-2 focus:ring-emerald-600 outline-none font-semibold"
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Mobile Money">Mobile Money</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Paystack">Paystack Online</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Payment Date</label>
+                  <input
+                    type="date"
+                    value={editPaymentForm.date}
+                    onChange={(e) => setEditPaymentForm({ ...editPaymentForm, date: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Payer Phone / Reference</label>
+                <input
+                  type="text"
+                  value={editPaymentForm.payerPhone}
+                  onChange={(e) => setEditPaymentForm({ ...editPaymentForm, payerPhone: e.target.value })}
+                  placeholder="e.g. 0244123456"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Received By (Cashier / Staff)</label>
+                <input
+                  type="text"
+                  value={editPaymentForm.receivedBy}
+                  onChange={(e) => setEditPaymentForm({ ...editPaymentForm, receivedBy: e.target.value })}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Payment Purpose & Remarks</label>
+                <input
+                  type="text"
+                  value={editPaymentForm.remarks}
+                  onChange={(e) => setEditPaymentForm({ ...editPaymentForm, remarks: e.target.value })}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsEditPaymentOpen(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl shadow-sm cursor-pointer"
+                >
+                  Save Corrections
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* EDIT FEE STRUCTURE MODAL */}
+      {/* ============================================================= */}
+      {isEditStructureOpen && editingStructure && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-8 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-400 text-emerald-950 flex items-center justify-center font-bold">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base font-['Outfit']">Edit Fee Structure Template</h3>
+                  <p className="text-xs text-emerald-200">Update default billing template for {editingStructure.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsEditStructureOpen(false)} className="text-white hover:opacity-80 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditStructure} className="p-6 space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Structure Template Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editStructForm.name}
+                  onChange={(e) => setEditStructForm({ ...editStructForm, name: e.target.value })}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Class Level</label>
+                  <input
+                    type="text"
+                    value={editStructForm.classLevel}
+                    onChange={(e) => setEditStructForm({ ...editStructForm, classLevel: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    value={editStructForm.dueDate}
+                    onChange={(e) => setEditStructForm({ ...editStructForm, dueDate: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* 4 Categories */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Term Fees (GHS)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editStructForm.termFees}
+                    onChange={(e) => setEditStructForm({ ...editStructForm, termFees: Number(e.target.value) || 0 })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Books (GHS)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editStructForm.books}
+                    onChange={(e) => setEditStructForm({ ...editStructForm, books: Number(e.target.value) || 0 })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Accessories (GHS)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editStructForm.accessories}
+                    onChange={(e) => setEditStructForm({ ...editStructForm, accessories: Number(e.target.value) || 0 })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Arrears (GHS)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editStructForm.arrears}
+                    onChange={(e) => setEditStructForm({ ...editStructForm, arrears: Number(e.target.value) || 0 })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex justify-between items-center">
+                <span className="font-bold text-slate-700">Total Standard Levies:</span>
+                <span className="font-black text-emerald-950 font-mono text-base">
+                  GHS {(Number(editStructForm.termFees) + Number(editStructForm.books) + Number(editStructForm.accessories) + Number(editStructForm.arrears)).toLocaleString()}
+                </span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsEditStructureOpen(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl shadow-sm cursor-pointer"
+                >
+                  Save Structure
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
