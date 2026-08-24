@@ -73,9 +73,9 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
   const [cardConfig, setCardConfig] = useState({
     schoolName: 'Grace White Dove School Complex',
     motto: 'Excellence, Integrity & Discipline',
-    campus: 'Main Campus, Achimota - Accra',
+    campus: 'Main Campus, Cape Coast',
     phone: '+233 24 412 3456 / +233 20 890 1234',
-    email: 'info@gracewhitedove.edu.gh',
+    email: 'gracewhitedoveschool@gmail.com',
     academicYearDisplay: academicYear || '2025/2026',
     expiryDate: '31 JUL 2026',
     issueDate: '01 SEP 2025',
@@ -289,9 +289,11 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
             </div>
 
             <div className="flex items-center justify-center gap-2 mb-1">
-              <div className="w-7 h-7 rounded-full bg-amber-400 text-emerald-950 flex items-center justify-center font-black text-xs shadow-sm ring-2 ring-white/30">
-                🕊️
-              </div>
+              <img
+                src="/logo.jpg"
+                alt="Logo"
+                className="w-8 h-8 rounded-full object-contain bg-white p-0.5 shadow-sm ring-2 ring-white/30"
+              />
               <div className="text-left">
                 <h3 className="font-extrabold text-white text-[12px] tracking-tight leading-none uppercase font-['Outfit']">
                   Grace White Dove
@@ -407,9 +409,11 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
         {/* Top Header Strip */}
         <div className={`${themeStyle.headerBg} px-4 py-2.5 flex items-center justify-between border-b border-amber-400/30`}>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-amber-400 text-emerald-950 flex items-center justify-center font-black text-sm shadow-sm ring-2 ring-white/30">
-              🕊️
-            </div>
+            <img
+              src="/logo.jpg"
+              alt="Logo"
+              className="w-8 h-8 rounded-full object-contain bg-white p-0.5 shadow-sm ring-2 ring-white/30"
+            />
             <div>
               <h3 className="font-extrabold text-white text-xs tracking-tight uppercase font-['Outfit']">
                 Grace White Dove School Complex
@@ -581,7 +585,7 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
 
           {/* Address & Hotline footer */}
           <div className="text-center pt-1 text-[7px] text-slate-400 leading-tight">
-            Off Accra-Kumasi Highway, Achimota, Accra, Ghana • {cardConfig.email}
+            Off Cape Coast - Takoradi Road, Cape Coast, Ghana • {cardConfig.email}
           </div>
         </div>
       );
@@ -659,7 +663,7 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
         </div>
 
         <div className="text-center pt-1.5 border-t border-white/10 text-[7.5px] text-slate-400">
-          Grace White Dove School Complex, Main Campus, Achimota - Accra, Ghana • {cardConfig.email}
+          Grace White Dove School Complex, Main Campus, Cape Coast, Ghana • {cardConfig.email}
         </div>
       </div>
     );

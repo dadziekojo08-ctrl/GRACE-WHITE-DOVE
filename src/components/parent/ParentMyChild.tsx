@@ -210,16 +210,21 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
           <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6 print:p-0 print:border-none print:shadow-none">
             {/* School Header */}
             <div className="border-b-2 border-emerald-900 pb-5 text-center relative">
-              <div className="flex items-center justify-center gap-3 mb-2">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-950 text-amber-400 flex items-center justify-center font-black text-xl shadow-md border border-amber-400/40">
-                  <GraduationCap className="w-7 h-7" />
-                </div>
+              <div className="flex items-center justify-center gap-3.5 mb-2">
+                <img
+                  src="/logo.jpg"
+                  alt="Grace White Dove Logo"
+                  className="w-14 h-14 rounded-2xl object-contain bg-white p-1 shadow-md border-2 border-amber-400/80 shrink-0"
+                />
                 <div className="text-left">
                   <h2 className="text-xl sm:text-2xl font-black text-emerald-950 tracking-tight font-['Outfit']">
                     GRACE WHITE DOVE SCHOOL COMPLEX
                   </h2>
                   <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">
                     Official Terminal Student Evaluation & Continuous Assessment Report
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                    Cape Coast, Ghana • Tel: 0244403541 • Email: gracewhitedoveschool@gmail.com
                   </p>
                 </div>
               </div>
@@ -609,8 +614,13 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
 
             <div className="p-6 space-y-4 text-xs">
               <div className="text-center pb-2 border-b border-slate-200">
+                <img
+                  src="/logo.jpg"
+                  alt="Grace White Dove"
+                  className="w-10 h-10 rounded-xl object-contain mx-auto mb-1.5 bg-white p-0.5 border border-amber-400/60"
+                />
                 <h4 className="font-bold text-base text-slate-900 font-['Outfit']">Grace White Dove School Complex</h4>
-                <p className="text-[11px] text-slate-500 font-medium">Student Tuition & Fee Payment Voucher</p>
+                <p className="text-[11px] text-slate-500 font-medium">Student Tuition & Fee Payment Voucher • Cape Coast, Ghana</p>
                 <p className="text-[11px] text-emerald-900 font-medium mt-0.5">
                   Email: <span className="font-semibold">gracewhitedoveschool@gmail.com</span> • Phone: <span className="font-semibold font-mono">0244403541</span>
                 </p>

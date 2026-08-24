@@ -1537,7 +1537,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               guardianName: a.parentName,
               guardianEmail: a.parentEmail,
               guardianPhone: a.parentPhone,
-              address: a.parentAddress || 'Accra, Ghana',
+              address: a.parentAddress || 'Cape Coast, Ghana',
               status: 'Active',
               photoUrl: `https://api.dicebear.com/7.x/micah/svg?seed=${encodeURIComponent(a.applicantName)}`,
               balanceDue: 0

@@ -2154,10 +2154,17 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
             <div className="p-8 space-y-6 text-xs text-slate-900 bg-white font-sans">
               {/* Official Header */}
               <div className="border-b-2 border-emerald-900 pb-4 flex items-center justify-between">
-                <div>
-                  <h1 className="text-2xl font-black text-emerald-950 font-['Outfit']">Grace White Dove School Complex</h1>
-                  <p className="text-xs text-slate-600 font-medium">Email: gracewhitedoveschool@gmail.com • Tel: 0244403541</p>
-                  <p className="text-xs text-emerald-800 font-bold mt-1">OFFICIAL FINANCIAL & FEE RECOVERY AUDIT REPORT</p>
+                <div className="flex items-center gap-3">
+                  <img
+                    src="/logo.jpg"
+                    alt="Grace White Dove"
+                    className="w-14 h-14 rounded-2xl object-contain bg-white p-1 border border-amber-400 shrink-0"
+                  />
+                  <div>
+                    <h1 className="text-2xl font-black text-emerald-950 font-['Outfit']">Grace White Dove School Complex</h1>
+                    <p className="text-xs text-slate-600 font-medium">Cape Coast, Ghana • Email: gracewhitedoveschool@gmail.com • Tel: 0244403541</p>
+                    <p className="text-xs text-emerald-800 font-bold mt-0.5">OFFICIAL FINANCIAL & FEE RECOVERY AUDIT REPORT</p>
+                  </div>
                 </div>
                 <div className="text-right font-mono">
                   <span className="text-[11px] text-slate-500 block">Generated On:</span>
@@ -2271,9 +2278,16 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
             <div className="bg-emerald-900 text-white p-6 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold font-['Outfit']">Grace White Dove School Complex Official Invoice</h3>
-                <p className="text-xs text-emerald-200">Invoice #{selectedInvoice.invoiceNo}</p>
+              <div className="flex items-center gap-3">
+                <img
+                  src="/logo.jpg"
+                  alt="Grace White Dove"
+                  className="w-11 h-11 rounded-xl object-contain bg-white p-0.5 border border-amber-400 shrink-0"
+                />
+                <div>
+                  <h3 className="text-lg font-bold font-['Outfit']">Grace White Dove School Complex</h3>
+                  <p className="text-xs text-emerald-200">Official Student Fee Invoice #{selectedInvoice.invoiceNo} • Cape Coast, Ghana</p>
+                </div>
               </div>
               <button
                 onClick={() => setSelectedInvoice(null)}

@@ -614,8 +614,13 @@ export const ParentDashboard: React.FC = () => {
 
             <div className="p-6 space-y-4 text-xs">
               <div className="text-center pb-2 border-b border-slate-200">
+                <img
+                  src="/logo.jpg"
+                  alt="Grace White Dove"
+                  className="w-10 h-10 rounded-xl object-contain mx-auto mb-1.5 bg-white p-0.5 border border-amber-400/60"
+                />
                 <h4 className="font-bold text-base text-slate-900 font-['Outfit']">Grace White Dove School Complex</h4>
-                <p className="text-[11px] text-slate-500 font-medium">Student Tuition & Fee Payment Voucher</p>
+                <p className="text-[11px] text-slate-500 font-medium">Student Tuition & Fee Payment Voucher • Cape Coast, Ghana</p>
                 <p className="text-[11px] text-emerald-900 font-medium mt-0.5">
                   Email: <span className="font-semibold">gracewhitedoveschool@gmail.com</span> • Phone: <span className="font-semibold font-mono">0244403541</span>
                 </p>

@@ -156,14 +156,21 @@ export const PaystackModal: React.FC<PaystackModalProps> = ({
         {/* Header with Paystack styling */}
         <div className="bg-[#0ba4db] text-white p-5 flex items-center justify-between relative overflow-hidden">
           <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-xl tracking-tight">paystack</span>
-              <span className="bg-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded text-white">
-                Secured Checkout
-              </span>
+          <div className="flex items-center gap-3">
+            <img
+              src="/logo.jpg"
+              alt="Grace White Dove"
+              className="w-10 h-10 rounded-xl object-contain bg-white p-0.5 shadow-sm shrink-0"
+            />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-xl tracking-tight">paystack</span>
+                <span className="bg-white/20 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded text-white">
+                  Secured Checkout
+                </span>
+              </div>
+              <p className="text-xs text-blue-50 mt-0.5">Grace White Dove • Cape Coast, Ghana</p>
             </div>
-            <p className="text-xs text-blue-50 mt-1">grace white dove — Fee Portal</p>
           </div>
           <button
             onClick={onClose}
@@ -383,7 +390,10 @@ export const PaystackModal: React.FC<PaystackModalProps> = ({
                   {/* Printable Receipt Card */}
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-left mb-5 text-xs space-y-2 font-mono">
                     <div className="flex justify-between border-b border-slate-200 pb-2 font-sans font-bold text-emerald-950">
-                      <span>Grace White Dove Official Receipt</span>
+                      <div>
+                        <span>Grace White Dove Official Receipt</span>
+                        <span className="text-[10px] text-slate-500 font-normal block font-sans">Cape Coast, Ghana</span>
+                      </div>
                       <span className="text-emerald-600 font-mono">PAID</span>
                     </div>
                     <div className="flex justify-between">

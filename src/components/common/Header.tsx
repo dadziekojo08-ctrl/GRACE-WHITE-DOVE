@@ -71,9 +71,11 @@ export const Header: React.FC<{ onOpenMobileSidebar?: () => void; onOpenPaystack
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-400 flex items-center justify-center text-emerald-950 shadow-md ring-2 ring-amber-300">
-            <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
-          </div>
+          <img
+            src="/logo.jpg"
+            alt="Grace White Dove Logo"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain bg-white p-0.5 shadow-md ring-2 ring-amber-400 shrink-0"
+          />
           <div>
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="font-extrabold text-base sm:text-lg tracking-tight text-white font-['Outfit']">Grace White Dove</span>

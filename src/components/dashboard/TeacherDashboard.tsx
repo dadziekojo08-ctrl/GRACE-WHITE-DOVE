@@ -97,7 +97,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     guardianName: '',
     guardianPhone: '',
     guardianEmail: '',
-    address: 'Accra, Ghana',
+    address: 'Cape Coast, Ghana',
     photoUrl: ''
   });
 
@@ -237,7 +237,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
       guardianName: admitFormData.guardianName || 'Parent / Guardian',
       guardianPhone: admitFormData.guardianPhone || '+233 24 100 0000',
       guardianEmail: admitFormData.guardianEmail || '',
-      address: admitFormData.address || 'Accra, Ghana',
+      address: admitFormData.address || 'Cape Coast, Ghana',
       status: 'Active',
       photoUrl: autoPhoto,
       balanceDue: 0,
@@ -257,7 +257,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
       guardianName: '',
       guardianPhone: '',
       guardianEmail: '',
-      address: 'Accra, Ghana',
+      address: 'Cape Coast, Ghana',
       photoUrl: ''
     });
   };
@@ -269,9 +269,11 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
         <div className="absolute right-0 top-0 -mt-8 -mr-8 h-48 w-48 rounded-full bg-amber-400/10 blur-2xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-amber-400 text-emerald-950 flex items-center justify-center font-bold text-xl shadow-inner shrink-0 border-2 border-amber-300">
-              <GraduationCap className="w-8 h-8" />
-            </div>
+            <img
+              src="/logo.jpg"
+              alt="Grace White Dove"
+              className="w-14 h-14 rounded-2xl object-contain bg-white p-1 shadow-inner shrink-0 border-2 border-amber-300"
+            />
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="bg-amber-400 text-emerald-950 font-extrabold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full">
@@ -1232,7 +1234,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Residential Address</label>
                   <input
                     type="text"
-                    placeholder="e.g. Hse No 14, East Legon, Accra"
+                    placeholder="e.g. Hse No 14, Pedu Estate, Cape Coast"
                     value={admitFormData.address}
                     onChange={(e) => setAdmitFormData({ ...admitFormData, address: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"

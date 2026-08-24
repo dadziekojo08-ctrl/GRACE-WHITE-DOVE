@@ -84,7 +84,7 @@ export const AdmissionManagement: React.FC = () => {
       enrollmentDate: adm.enrollmentDate || new Date().toISOString().split('T')[0],
       parentName: adm.parentName,
       parentPhone: adm.parentPhone,
-      parentAddress: adm.parentAddress || 'Accra, Ghana'
+      parentAddress: adm.parentAddress || 'Cape Coast, Ghana'
     });
 
     // Also trigger toast notification
@@ -172,7 +172,7 @@ export const AdmissionManagement: React.FC = () => {
       enrollmentDate: form.enrollmentDate || new Date().toISOString().split('T')[0],
       appliedClass: form.appliedClass,
       parentName: form.parentName.trim(),
-      parentAddress: form.parentAddress.trim() || 'Accra, Ghana',
+      parentAddress: form.parentAddress.trim() || 'Cape Coast, Ghana',
       parentEmail: form.parentEmail.trim() || `${form.applicantName.toLowerCase().replace(/\s+/g, '')}@guardian.edu.gh`,
       parentPhone: form.parentPhone.trim(),
       status: 'Pending',
@@ -479,7 +479,7 @@ export const AdmissionManagement: React.FC = () => {
                   <span className="text-slate-500 flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-emerald-700" /> Parent Address:
                   </span>
-                  <span className="font-semibold text-right max-w-[200px]">{selectedAdmission.parentAddress || 'Accra, Ghana'}</span>
+                  <span className="font-semibold text-right max-w-[200px]">{selectedAdmission.parentAddress || 'Cape Coast, Ghana'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 flex items-center gap-1.5">
@@ -714,7 +714,7 @@ export const AdmissionManagement: React.FC = () => {
                       value={form.parentAddress}
                       onChange={(e) => setForm({ ...form, parentAddress: e.target.value })}
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
-                      placeholder="e.g. House 45, Off Spintex Road, Accra"
+                      placeholder="e.g. House 45, Pedu Junction, Cape Coast"
                     />
                   </div>
                 </div>

@@ -1045,9 +1045,16 @@ export const FinancialReportsPage: React.FC<{
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
             <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
               <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold text-base font-['Outfit']">Grace White Dove School Complex</h3>
-                  <p className="text-xs text-emerald-200">Official Student Fee Invoice</p>
+                <div className="flex items-center gap-3">
+                  <img
+                    src="/logo.jpg"
+                    alt="Grace White Dove"
+                    className="w-10 h-10 rounded-xl object-contain bg-white p-0.5 border border-amber-400 shrink-0"
+                  />
+                  <div>
+                    <h3 className="font-bold text-base font-['Outfit']">Grace White Dove School Complex</h3>
+                    <p className="text-xs text-emerald-200">Official Student Fee Invoice • Cape Coast, Ghana</p>
+                  </div>
                 </div>
                 <button
                   onClick={() => setViewingInvoice(null)}

@@ -264,9 +264,11 @@ export const AuthPage: React.FC = () => {
           {/* Top Brand Info */}
           <div className="relative z-10 space-y-6">
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-amber-400 text-emerald-950 flex items-center justify-center shadow-lg ring-4 ring-amber-400/30">
-                <GraduationCap className="w-7 h-7 stroke-[2.5]" />
-              </div>
+              <img
+                src="/logo.jpg"
+                alt="Grace White Dove Logo"
+                className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-contain bg-white p-1 shadow-lg ring-4 ring-amber-400/30 shrink-0"
+              />
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-extrabold text-2xl tracking-tight text-white font-['Outfit']">BenDaz IT Consult</span>

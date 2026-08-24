@@ -146,7 +146,7 @@ export const ExamManagement: React.FC = () => {
     guardianName: 'Mr. Kofi Mensah',
     guardianPhone: '0244123456',
     guardianEmail: 'kofi.mensah@gmail.com',
-    address: 'Accra, Ghana',
+    address: 'Cape Coast, Ghana',
     photoUrl: '',
     status: 'Active',
     joinedDate: '2023-09-01',
@@ -859,10 +859,12 @@ export const ExamManagement: React.FC = () => {
           <div className="bg-white rounded-3xl border-2 border-emerald-950 p-6 sm:p-10 shadow-xl max-w-4xl mx-auto text-xs space-y-6 print:border-none print:shadow-none print:p-0 print:m-0 relative">
             {/* 1. Official Header & School Identity */}
             <div className="border-b-2 border-emerald-950 pb-5 text-center relative">
-              <div className="flex items-center justify-center gap-3 mb-2">
-                <div className="w-14 h-14 rounded-2xl bg-emerald-950 text-amber-400 flex items-center justify-center font-black shadow-md border-2 border-amber-400">
-                  <GraduationCap className="w-8 h-8" />
-                </div>
+              <div className="flex items-center justify-center gap-3.5 mb-2">
+                <img
+                  src="/logo.jpg"
+                  alt="Grace White Dove Logo"
+                  className="w-16 h-16 rounded-2xl object-contain bg-white p-1 shadow-md border-2 border-amber-400 shrink-0"
+                />
                 <div className="text-center sm:text-left">
                   <h1 className="text-xl sm:text-3xl font-black text-emerald-950 uppercase tracking-tight font-['Outfit']">
                     Grace White Dove School Complex
@@ -871,7 +873,7 @@ export const ExamManagement: React.FC = () => {
                     Official Terminal Student Continuous Assessment & Evaluation Report
                   </p>
                   <p className="text-[11px] text-slate-500 font-mono">
-                    Tel: 0244403541 | Email: gracewhitedoveschool@gmail.com | Accra, Ghana
+                    Tel: 0244403541 | Email: gracewhitedoveschool@gmail.com | Cape Coast, Ghana
                   </p>
                 </div>
               </div>
