@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { SchoolLogo } from '../common/SchoolLogo';
 import { Role, AuthMode } from '../../types';
 import {
   GraduationCap,
@@ -264,8 +265,7 @@ export const AuthPage: React.FC = () => {
           {/* Top Brand Info */}
           <div className="relative z-10 space-y-6">
             <div className="flex items-center gap-3.5">
-              <img
-                src="/logo.jpg"
+              <SchoolLogo
                 alt="Grace White Dove Logo"
                 className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-contain bg-white p-1 shadow-lg ring-4 ring-amber-400/30 shrink-0"
               />

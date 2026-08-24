@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { SchoolLogo } from '../common/SchoolLogo';
 import { Invoice, Payment, Student, PayrollRecord } from '../../types';
 import {
   BarChart3,
@@ -1046,8 +1047,7 @@ export const FinancialReportsPage: React.FC<{
             <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
               <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <img
-                    src="/logo.jpg"
+                  <SchoolLogo
                     alt="Grace White Dove"
                     className="w-10 h-10 rounded-xl object-contain bg-white p-0.5 border border-amber-400 shrink-0"
                   />

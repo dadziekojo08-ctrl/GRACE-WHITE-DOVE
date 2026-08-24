@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { SchoolLogo } from '../common/SchoolLogo';
 import {
   GraduationCap,
   CreditCard,
@@ -614,8 +615,7 @@ export const ParentDashboard: React.FC = () => {
 
             <div className="p-6 space-y-4 text-xs">
               <div className="text-center pb-2 border-b border-slate-200">
-                <img
-                  src="/logo.jpg"
+                <SchoolLogo
                   alt="Grace White Dove"
                   className="w-10 h-10 rounded-xl object-contain mx-auto mb-1.5 bg-white p-0.5 border border-amber-400/60"
                 />

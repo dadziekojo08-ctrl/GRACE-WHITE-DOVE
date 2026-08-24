@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { SchoolLogo } from '../common/SchoolLogo';
 import { Student } from '../../types';
 import {
   CreditCard,
@@ -289,8 +290,7 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
             </div>
 
             <div className="flex items-center justify-center gap-2 mb-1">
-              <img
-                src="/logo.jpg"
+              <SchoolLogo
                 alt="Logo"
                 className="w-8 h-8 rounded-full object-contain bg-white p-0.5 shadow-sm ring-2 ring-white/30"
               />
@@ -409,8 +409,7 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
         {/* Top Header Strip */}
         <div className={`${themeStyle.headerBg} px-4 py-2.5 flex items-center justify-between border-b border-amber-400/30`}>
           <div className="flex items-center gap-2">
-            <img
-              src="/logo.jpg"
+            <SchoolLogo
               alt="Logo"
               className="w-8 h-8 rounded-full object-contain bg-white p-0.5 shadow-sm ring-2 ring-white/30"
             />

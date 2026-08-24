@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { SchoolLogo } from '../common/SchoolLogo';
 import { Invoice, Payment } from '../../types';
 import {
   CreditCard,
@@ -157,8 +158,7 @@ export const PaystackModal: React.FC<PaystackModalProps> = ({
         <div className="bg-[#0ba4db] text-white p-5 flex items-center justify-between relative overflow-hidden">
           <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
           <div className="flex items-center gap-3">
-            <img
-              src="/logo.jpg"
+            <SchoolLogo
               alt="Grace White Dove"
               className="w-10 h-10 rounded-xl object-contain bg-white p-0.5 shadow-sm shrink-0"
             />

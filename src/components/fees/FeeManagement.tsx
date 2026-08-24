@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { SchoolLogo } from '../common/SchoolLogo';
 import { FeeStructure, Invoice, Payment, Student } from '../../types';
 import {
   CreditCard,
@@ -2155,8 +2156,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
               {/* Official Header */}
               <div className="border-b-2 border-emerald-900 pb-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <img
-                    src="/logo.jpg"
+                  <SchoolLogo
                     alt="Grace White Dove"
                     className="w-14 h-14 rounded-2xl object-contain bg-white p-1 border border-amber-400 shrink-0"
                   />
@@ -2279,8 +2279,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
             <div className="bg-emerald-900 text-white p-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img
-                  src="/logo.jpg"
+                <SchoolLogo
                   alt="Grace White Dove"
                   className="w-11 h-11 rounded-xl object-contain bg-white p-0.5 border border-amber-400 shrink-0"
                 />

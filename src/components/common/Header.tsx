@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { SchoolLogo } from './SchoolLogo';
 import { Role } from '../../types';
 import {
   GraduationCap,
@@ -71,8 +72,7 @@ export const Header: React.FC<{ onOpenMobileSidebar?: () => void; onOpenPaystack
             <Menu className="w-5 h-5" />
           </button>
 
-          <img
-            src="/logo.jpg"
+          <SchoolLogo
             alt="Grace White Dove Logo"
             className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain bg-white p-0.5 shadow-md ring-2 ring-amber-400 shrink-0"
           />

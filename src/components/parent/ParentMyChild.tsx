@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { SchoolLogo } from '../common/SchoolLogo';
 import {
   GraduationCap,
   Award,
@@ -211,8 +212,7 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
             {/* School Header */}
             <div className="border-b-2 border-emerald-900 pb-5 text-center relative">
               <div className="flex items-center justify-center gap-3.5 mb-2">
-                <img
-                  src="/logo.jpg"
+                <SchoolLogo
                   alt="Grace White Dove Logo"
                   className="w-14 h-14 rounded-2xl object-contain bg-white p-1 shadow-md border-2 border-amber-400/80 shrink-0"
                 />
@@ -614,8 +614,7 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
 
             <div className="p-6 space-y-4 text-xs">
               <div className="text-center pb-2 border-b border-slate-200">
-                <img
-                  src="/logo.jpg"
+                <SchoolLogo
                   alt="Grace White Dove"
                   className="w-10 h-10 rounded-xl object-contain mx-auto mb-1.5 bg-white p-0.5 border border-amber-400/60"
                 />

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { SchoolLogo } from '../common/SchoolLogo';
 import { Exam, ExamSchedule, MarkEntry, Student } from '../../types';
 import {
   Award,
@@ -860,8 +861,7 @@ export const ExamManagement: React.FC = () => {
             {/* 1. Official Header & School Identity */}
             <div className="border-b-2 border-emerald-950 pb-5 text-center relative">
               <div className="flex items-center justify-center gap-3.5 mb-2">
-                <img
-                  src="/logo.jpg"
+                <SchoolLogo
                   alt="Grace White Dove Logo"
                   className="w-16 h-16 rounded-2xl object-contain bg-white p-1 shadow-md border-2 border-amber-400 shrink-0"
                 />

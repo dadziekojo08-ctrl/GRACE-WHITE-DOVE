@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { SchoolLogo } from '../common/SchoolLogo';
 import {
   Users,
   CheckSquare,
@@ -269,8 +270,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
         <div className="absolute right-0 top-0 -mt-8 -mr-8 h-48 w-48 rounded-full bg-amber-400/10 blur-2xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <img
-              src="/logo.jpg"
+            <SchoolLogo
               alt="Grace White Dove"
               className="w-14 h-14 rounded-2xl object-contain bg-white p-1 shadow-inner shrink-0 border-2 border-amber-300"
             />
