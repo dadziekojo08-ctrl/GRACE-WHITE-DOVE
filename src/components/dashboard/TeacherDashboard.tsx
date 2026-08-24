@@ -39,6 +39,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
+import { calculateGradeForClass, isLowerPrimaryOrPreschool } from '../../utils/jhsGrading';
 
 export type TeacherDashboardTab = 'overview' | 'my-students' | 'attendance' | 'student-grade' | 'my-salary';
 
@@ -69,7 +70,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
   const [currentTab, setCurrentTab] = useState<TeacherDashboardTab>(initialTab);
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedGradeSubject, setSelectedGradeSubject] = useState('Core Mathematics');
-  const [gradeInputMap, setGradeInputMap] = useState<{ [studentId: string]: { classwork: number; midterm: number; exam: number } }>({});
+  const [gradeInputMap, setGradeInputMap] = useState<{ [studentId: string]: { rawScore: number } }>({});
   const [gradeSaveSuccess, setGradeSaveSuccess] = useState(false);
   const [isReimburseModalOpen, setIsReimburseModalOpen] = useState(false);
   const [reimburseForm, setReimburseForm] = useState({
@@ -153,12 +154,14 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
   const totalClassScoreAvg = marks.length > 0 ? Math.round(marks.reduce((acc, m) => acc + (m.score || m.totalScore || 0), 0) / marks.length) : 0;
 
   const gradeDistributionData = [
-    { grade: 'A1 (80-100%)', count: marks.filter((m) => (m.score || m.totalScore) >= 80).length, fill: '#059669' },
-    { grade: 'B2 (70-79%)', count: marks.filter((m) => (m.score || m.totalScore) >= 70 && (m.score || m.totalScore) < 80).length, fill: '#10b981' },
-    { grade: 'B3 (65-69%)', count: marks.filter((m) => (m.score || m.totalScore) >= 65 && (m.score || m.totalScore) < 70).length, fill: '#34d399' },
-    { grade: 'C4-C6 (50-64%)', count: marks.filter((m) => (m.score || m.totalScore) >= 50 && (m.score || m.totalScore) < 65).length, fill: '#f59e0b' },
-    { grade: 'D7-E8 (40-49%)', count: marks.filter((m) => (m.score || m.totalScore) >= 40 && (m.score || m.totalScore) < 50).length, fill: '#f97316' },
-    { grade: 'F9 (0-39%)', count: marks.filter((m) => (m.score || m.totalScore) < 40).length, fill: '#ef4444' }
+    { grade: 'A (80-100%)', count: marks.filter((m) => (m.score || m.totalScore || 0) >= 80).length, fill: '#059669' },
+    { grade: 'B+ (75-79%)', count: marks.filter((m) => (m.score || m.totalScore || 0) >= 75 && (m.score || m.totalScore || 0) < 80).length, fill: '#10b981' },
+    { grade: 'B (70-74%)', count: marks.filter((m) => (m.score || m.totalScore || 0) >= 70 && (m.score || m.totalScore || 0) < 75).length, fill: '#34d399' },
+    { grade: 'C+ (65-69%)', count: marks.filter((m) => (m.score || m.totalScore || 0) >= 65 && (m.score || m.totalScore || 0) < 70).length, fill: '#6ee7b7' },
+    { grade: 'C (60-64%)', count: marks.filter((m) => (m.score || m.totalScore || 0) >= 60 && (m.score || m.totalScore || 0) < 65).length, fill: '#f59e0b' },
+    { grade: 'D+ (55-59%)', count: marks.filter((m) => (m.score || m.totalScore || 0) >= 55 && (m.score || m.totalScore || 0) < 60).length, fill: '#fbbf24' },
+    { grade: 'D (50-54%)', count: marks.filter((m) => (m.score || m.totalScore || 0) >= 50 && (m.score || m.totalScore || 0) < 55).length, fill: '#f97316' },
+    { grade: 'E (<50%)', count: marks.filter((m) => (m.score || m.totalScore || 0) < 50).length, fill: '#ef4444' }
   ];
 
   // Quick mark all present
@@ -174,32 +177,25 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
   // Save quick grades
   const handleSaveGrades = (e: React.FormEvent) => {
     e.preventDefault();
-    displayStudents.forEach((s) => {
-      const inputs = gradeInputMap[s.id];
-      if (inputs) {
-        const total = Math.round(inputs.classwork * 0.3 + inputs.midterm * 0.3 + inputs.exam * 0.4);
-        let grade = 'B2';
-        if (total >= 80) grade = 'A1';
-        else if (total >= 70) grade = 'B2';
-        else if (total >= 65) grade = 'B3';
-        else if (total >= 60) grade = 'C4';
-        else if (total >= 50) grade = 'C5';
-        else grade = 'D7';
+    displayStudents.forEach((s, idx) => {
+      const inputs = gradeInputMap[s.id] || { rawScore: Math.max(50, 85 - idx * 3) };
+      const rawScore = Math.min(100, Math.max(0, inputs.rawScore));
+      const gradeResult = calculateGradeForClass(rawScore, s.className);
 
-        recordMark({
-          examId: 'ex-midterm-01',
-          studentId: s.id,
-          studentName: `${s.firstName} ${s.lastName}`,
-          className: s.className,
-          subject: selectedGradeSubject,
-          score: total,
-          classScore: inputs.classwork,
-          examScore: inputs.exam,
-          maxMarks: 100,
-          grade,
-          remarks: total >= 75 ? 'Excellent work' : 'Satisfactory progress'
-        });
-      }
+      recordMark({
+        examId: 'ex-term-01',
+        studentId: s.id,
+        studentName: `${s.firstName} ${s.lastName}`,
+        className: s.className,
+        subject: selectedGradeSubject,
+        score: rawScore,
+        totalScore: rawScore,
+        maxMarks: 100,
+        grade: gradeResult.grade,
+        gradePoint: gradeResult.gradePoint,
+        interpretation: gradeResult.interpretation,
+        remarks: rawScore >= 80 ? 'Outstanding performance and high diligence' : rawScore >= 70 ? 'Good comprehension and steady effort' : rawScore >= 50 ? 'Satisfactory progress' : 'Requires remedial attention'
+      });
     });
     setGradeSaveSuccess(true);
     setTimeout(() => setGradeSaveSuccess(false), 3000);
@@ -733,7 +729,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="font-bold text-sm text-slate-900">Continuous Assessment & Grade Book</h3>
-                <p className="text-xs text-slate-400">Classwork (30%), Mid-Term Exam (30%), Final Exam (40%)</p>
+                <p className="text-xs text-slate-400">JHS Raw Score Conversion Scheme (80-100 A to Below 50 E)</p>
               </div>
               <div className="flex items-center gap-2">
                 <select
@@ -769,94 +765,70 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                   <tr className="bg-slate-50 text-slate-500 font-bold border-y border-slate-100">
                     <th className="py-3 px-3">Roll #</th>
                     <th className="py-3 px-3">Student</th>
-                    <th className="py-3 px-3">Classwork (30%)</th>
-                    <th className="py-3 px-3">Mid-Term (30%)</th>
-                    <th className="py-3 px-3">Exam (40%)</th>
-                    <th className="py-3 px-3">Total Score</th>
-                    <th className="py-3 px-3">Grade</th>
+                    <th className="py-3 px-3 text-center">Raw Score (0-100)</th>
+                    {isLowerPrimaryOrPreschool(teacherAssignedClass || displayStudents[0]?.className) ? (
+                      <th className="py-3 px-3 text-center">Position</th>
+                    ) : (
+                      <>
+                        <th className="py-3 px-3 text-center">Grade</th>
+                        <th className="py-3 px-3 text-center">GP</th>
+                      </>
+                    )}
+                    <th className="py-3 px-3">Interpretation</th>
                     <th className="py-3 px-3 text-right">Remarks</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {displayStudents.map((std, idx) => {
                     const inputs = gradeInputMap[std.id] || {
-                      classwork: 80 - idx * 2,
-                      midterm: 85 - idx * 3,
-                      exam: 78 - idx * 2
+                      rawScore: Math.max(50, 85 - idx * 3)
                     };
-                    const total = Math.round(inputs.classwork * 0.3 + inputs.midterm * 0.3 + inputs.exam * 0.4);
-                    let grade = 'B2';
-                    if (total >= 80) grade = 'A1';
-                    else if (total >= 70) grade = 'B2';
-                    else if (total >= 65) grade = 'B3';
-                    else if (total >= 60) grade = 'C4';
-                    else grade = 'C5';
+                    const rawScore = Math.min(100, Math.max(0, inputs.rawScore));
+                    const gradeResult = calculateGradeForClass(rawScore, std.className);
+                    const isLower = isLowerPrimaryOrPreschool(std.className);
 
                     return (
                       <tr key={std.id} className="hover:bg-slate-50/80">
                         <td className="py-3 px-3 font-mono font-bold text-slate-800">{std.rollNo}</td>
                         <td className="py-3 px-3 font-bold text-slate-900">{std.firstName} {std.lastName}</td>
-                        <td className="py-3 px-3">
+                        <td className="py-3 px-3 text-center">
                           <input
                             type="number"
                             min="0"
                             max="100"
-                            value={inputs.classwork}
+                            value={inputs.rawScore}
                             onChange={(e) =>
                               setGradeInputMap((prev) => ({
                                 ...prev,
-                                [std.id]: { ...inputs, classwork: parseInt(e.target.value) || 0 }
+                                [std.id]: { rawScore: parseInt(e.target.value) || 0 }
                               }))
                             }
-                            className="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-center font-bold text-slate-800"
+                            className="w-20 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-center font-bold text-slate-800 focus:ring-2 focus:ring-emerald-700 outline-none"
                           />
                         </td>
-                        <td className="py-3 px-3">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={inputs.midterm}
-                            onChange={(e) =>
-                              setGradeInputMap((prev) => ({
-                                ...prev,
-                                [std.id]: { ...inputs, midterm: parseInt(e.target.value) || 0 }
-                              }))
-                            }
-                            className="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-center font-bold text-slate-800"
-                          />
+                        {isLower ? (
+                          <td className="py-3 px-3 text-center">
+                            <span className={`px-2.5 py-0.5 rounded text-[11px] font-black border ${gradeResult.badgeClass}`}>
+                              {gradeResult.position || gradeResult.grade}
+                            </span>
+                          </td>
+                        ) : (
+                          <>
+                            <td className="py-3 px-3 text-center">
+                              <span className={`px-2.5 py-0.5 rounded text-[11px] font-black border ${gradeResult.badgeClass}`}>
+                                {gradeResult.grade}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-center font-mono font-black text-slate-800">
+                              {gradeResult.gradePoint.toFixed(1)}
+                            </td>
+                          </>
+                        )}
+                        <td className="py-3 px-3 font-semibold text-slate-700">
+                          {gradeResult.interpretation}
                         </td>
-                        <td className="py-3 px-3">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={inputs.exam}
-                            onChange={(e) =>
-                              setGradeInputMap((prev) => ({
-                                ...prev,
-                                [std.id]: { ...inputs, exam: parseInt(e.target.value) || 0 }
-                              }))
-                            }
-                            className="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-center font-bold text-slate-800"
-                          />
-                        </td>
-                        <td className="py-3 px-3 font-mono font-bold text-sm text-emerald-950">{total}%</td>
-                        <td className="py-3 px-3">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
-                              grade === 'A1'
-                                ? 'bg-emerald-100 text-emerald-900'
-                                : grade === 'B2'
-                                ? 'bg-emerald-50 text-emerald-800'
-                                : 'bg-amber-50 text-amber-900'
-                            }`}
-                          >
-                            {grade}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right text-slate-500 font-medium">
-                          {total >= 80 ? 'Excellent' : total >= 70 ? 'Very Good' : 'Credit'}
+                        <td className="py-3 px-3 text-right text-slate-500 font-medium italic text-[11px]">
+                          {rawScore >= 80 ? 'Outstanding performance' : rawScore >= 70 ? 'Good comprehension' : 'Satisfactory progress'}
                         </td>
                       </tr>
                     );

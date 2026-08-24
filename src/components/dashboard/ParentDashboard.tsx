@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { PaystackModal } from '../paystack/PaystackModal';
 import { Payment, Student } from '../../types';
+import { calculateGradeForClass, isLowerPrimaryOrPreschool } from '../../utils/jhsGrading';
 
 export const ParentDashboard: React.FC = () => {
   const {
@@ -326,26 +327,54 @@ export const ParentDashboard: React.FC = () => {
                   <thead>
                     <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase text-[10px]">
                       <th className="pb-2.5">Subject</th>
-                      <th className="pb-2.5 text-center">Class (30%)</th>
-                      <th className="pb-2.5 text-center">Exam (70%)</th>
-                      <th className="pb-2.5 text-center">Total (100%)</th>
-                      <th className="pb-2.5 text-right">Grade</th>
+                      <th className="pb-2.5 text-center">Raw Score</th>
+                      {isLowerPrimaryOrPreschool(ward.className) ? (
+                        <th className="pb-2.5 text-center">Position</th>
+                      ) : (
+                        <>
+                          <th className="pb-2.5 text-center">Grade</th>
+                          <th className="pb-2.5 text-center">GP</th>
+                        </>
+                      )}
+                      <th className="pb-2.5 text-right">Interpretation</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {wardMarks.map((sub, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-2.5 font-bold text-slate-800">{sub.subjectName}</td>
-                        <td className="py-2.5 text-center text-slate-600 font-mono">{sub.classScore}</td>
-                        <td className="py-2.5 text-center text-slate-600 font-mono">{sub.examScore}</td>
-                        <td className="py-2.5 text-center font-bold text-slate-900 font-mono">{sub.totalScore}%</td>
-                        <td className="py-2.5 text-right">
-                          <span className="font-extrabold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px]">
-                            {sub.grade}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {wardMarks.map((sub, idx) => {
+                      const totalSc = sub.totalScore ?? sub.score ?? 0;
+                      const gradeRes = calculateGradeForClass(totalSc, ward.className, sub.specialStatus);
+                      const isLower = isLowerPrimaryOrPreschool(ward.className);
+
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-2.5 font-bold text-slate-800">{sub.subjectName || sub.subject}</td>
+                          <td className="py-2.5 text-center font-bold text-slate-900 font-mono">
+                            {sub.specialStatus === 'IC' ? 'IC' : sub.specialStatus === 'Audit' ? 'AUDIT' : `${totalSc}%`}
+                          </td>
+                          {isLower ? (
+                            <td className="py-2.5 text-center">
+                              <span className={`font-black px-2 py-0.5 rounded text-[11px] border ${gradeRes.badgeClass}`}>
+                                {gradeRes.position || gradeRes.grade}
+                              </span>
+                            </td>
+                          ) : (
+                            <>
+                              <td className="py-2.5 text-center">
+                                <span className={`font-black px-2 py-0.5 rounded text-[11px] border ${gradeRes.badgeClass}`}>
+                                  {gradeRes.grade}
+                                </span>
+                              </td>
+                              <td className="py-2.5 text-center font-mono font-bold text-slate-800">
+                                {gradeRes.gradePoint.toFixed(1)}
+                              </td>
+                            </>
+                          )}
+                          <td className="py-2.5 text-right font-medium text-slate-700 text-[11px]">
+                            {gradeRes.interpretation}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

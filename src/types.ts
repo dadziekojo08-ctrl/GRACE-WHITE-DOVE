@@ -292,6 +292,9 @@ export interface MarkEntry {
   examScore?: number;
   maxMarks?: number;
   grade: string;
+  gradePoint?: number;
+  interpretation?: string;
+  specialStatus?: 'None' | 'IC' | 'Audit';
   remark?: string;
   remarks?: string;
 }

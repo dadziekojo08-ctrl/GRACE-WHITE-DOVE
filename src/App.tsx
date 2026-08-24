@@ -74,7 +74,18 @@ const MainContent: React.FC = () => {
     if (activeRole === 'Parent') {
       switch (activeTab) {
         case 'my-child':
-          return <ParentMyChild onOpenPaystackForStudent={(std) => handleOpenPaystack(undefined, std.balanceDue, `${std.firstName} ${std.lastName}`, std.id)} />;
+          return (
+            <ParentMyChild
+              onOpenPaystackForStudent={(std) =>
+                handleOpenPaystack(
+                  undefined,
+                  std?.balanceDue || 0,
+                  std ? `${std.firstName} ${std.lastName}` : 'Student',
+                  std?.id
+                )
+              }
+            />
+          );
         case 'dashboard':
         default:
           return <ParentDashboard onOpenPaystack={handleOpenPaystack} />;
@@ -100,7 +111,18 @@ const MainContent: React.FC = () => {
     if (activeRole === 'Teacher') {
       switch (activeTab) {
         case 'students':
-          return <StudentManagement onOpenPaystackForStudent={(std) => handleOpenPaystack(undefined, std.balanceDue, `${std.firstName} ${std.lastName}`, std.id)} />;
+          return (
+            <StudentManagement
+              onOpenPaystackForStudent={(std) =>
+                handleOpenPaystack(
+                  undefined,
+                  std?.balanceDue || 0,
+                  std ? `${std.firstName} ${std.lastName}` : 'Student',
+                  std?.id
+                )
+              }
+            />
+          );
         case 'library':
           return <LibraryManagement />;
         case 'classes':
@@ -128,9 +150,31 @@ const MainContent: React.FC = () => {
       case 'dashboard':
         return <DashboardOverview onOpenPaystack={() => handleOpenPaystack()} onOpenGateScanner={() => {}} />;
       case 'my-child':
-        return <ParentMyChild onOpenPaystackForStudent={(std) => handleOpenPaystack(undefined, std.balanceDue, `${std.firstName} ${std.lastName}`, std.id)} />;
+        return (
+          <ParentMyChild
+            onOpenPaystackForStudent={(std) =>
+              handleOpenPaystack(
+                undefined,
+                std?.balanceDue || 0,
+                std ? `${std.firstName} ${std.lastName}` : 'Student',
+                std?.id
+              )
+            }
+          />
+        );
       case 'students':
-        return <StudentManagement onOpenPaystackForStudent={(std) => handleOpenPaystack(undefined, std.balanceDue, `${std.firstName} ${std.lastName}`, std.id)} />;
+        return (
+          <StudentManagement
+            onOpenPaystackForStudent={(std) =>
+              handleOpenPaystack(
+                undefined,
+                std?.balanceDue || 0,
+                std ? `${std.firstName} ${std.lastName}` : 'Student',
+                std?.id
+              )
+            }
+          />
+        );
       case 'classes':
         return <ClassManagement />;
       case 'subjects':
