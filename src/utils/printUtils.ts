@@ -78,7 +78,7 @@ export function printReportSheet(elementId: string, title = 'Grace White Dove Sc
         <style>
           @page {
             size: A4 portrait;
-            margin: 5mm 7mm;
+            margin: 6mm 7mm;
           }
           *, *::before, *::after {
             -webkit-print-color-adjust: exact !important;
@@ -93,10 +93,10 @@ export function printReportSheet(elementId: string, title = 'Grace White Dove Sc
             margin: 0 !important;
             padding: 0 !important;
             width: 100% !important;
-            height: auto !important;
-            overflow: visible !important;
+            height: 100% !important;
+            overflow: hidden !important;
             font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
-            font-size: 10pt !important;
+            font-size: 9.5pt !important;
             line-height: 1.3 !important;
             visibility: visible !important;
             display: block !important;
@@ -110,6 +110,7 @@ export function printReportSheet(elementId: string, title = 'Grace White Dove Sc
           .printable-container {
             width: 100% !important;
             max-width: 100% !important;
+            height: 100% !important;
             margin: 0 auto !important;
             padding: 0 !important;
             display: block !important;
@@ -117,42 +118,50 @@ export function printReportSheet(elementId: string, title = 'Grace White Dove Sc
             opacity: 1 !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
           }
-          .printable-sheet {
+
+          /* Full-page single sheet styling for official report cards */
+          .printable-sheet,
+          .report-card-print-sheet {
+            width: 100% !important;
             max-width: 100% !important;
+            height: 283mm !important;
+            max-height: 283mm !important;
+            min-height: 280mm !important;
             margin: 0 !important;
-            padding: 0 !important;
-            border: none !important;
+            padding: 5mm 6mm !important;
+            border: 2.5px solid #064e3b !important;
+            border-radius: 8px !important;
             box-shadow: none !important;
+            box-sizing: border-box !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            overflow: hidden !important;
           }
-          /* Ensure single-page fit for report cards */
-          .printable-sheet.space-y-6 > * + *,
-          .printable-sheet.space-y-5 > * + *,
-          .printable-sheet .space-y-6 > * + *,
-          .printable-sheet .space-y-5 > * + * {
-            margin-top: 0.45rem !important;
-          }
-          .printable-sheet .space-y-4 > * + * {
-            margin-top: 0.35rem !important;
-          }
-          .printable-sheet .space-y-3 > * + * {
-            margin-top: 0.25rem !important;
-          }
-          .printable-sheet .space-y-2 > * + * {
-            margin-top: 0.2rem !important;
-          }
-          /* Compact tables for print */
+
+          /* Compact & elegant tables for print */
           table {
             width: 100% !important;
             border-collapse: collapse !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
-          th, td {
-            padding: 2.5px 5px !important;
-            font-size: 8pt !important;
+          th {
+            padding: 4px 6px !important;
+            font-size: 8.5pt !important;
+            font-weight: 800 !important;
+            line-height: 1.2 !important;
+          }
+          td {
+            padding: 3.5px 6px !important;
+            font-size: 8.5pt !important;
             line-height: 1.2 !important;
           }
           thead {

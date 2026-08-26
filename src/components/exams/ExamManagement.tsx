@@ -850,29 +850,29 @@ export const ExamManagement: React.FC = () => {
           {/* ============================================================= */}
           <div
             id="official-terminal-report-sheet"
-            className="print-area printable-sheet bg-white rounded-3xl border-2 border-emerald-950 p-6 sm:p-8 shadow-xl max-w-4xl mx-auto text-xs space-y-4 print:space-y-2 print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-full relative"
+            className="print-area printable-sheet report-card-print-sheet bg-white rounded-3xl border-2 border-emerald-950 p-6 sm:p-8 shadow-xl max-w-4xl mx-auto text-xs space-y-3.5 print:space-y-0 print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-full relative"
           >
             {/* 1. Official Header & School Identity */}
-            <div className="border-b-2 border-emerald-950 pb-3 print:pb-1.5 text-center relative">
-              <div className="flex items-center justify-center gap-3 mb-1.5 print:mb-1">
+            <div className="border-b-2 border-emerald-950 pb-2.5 print:pb-1.5 text-center relative shrink-0">
+              <div className="flex items-center justify-center gap-3 mb-1 print:mb-0.5">
                 <SchoolLogo
                   alt="Grace White Dove Logo"
-                  className="w-14 h-14 print:w-11 print:h-11 rounded-xl object-contain bg-white p-1 shadow-xs border border-amber-400 shrink-0"
+                  className="w-14 h-14 print:w-12 print:h-12 rounded-xl object-contain bg-white p-1 shadow-xs border border-amber-400 shrink-0"
                 />
                 <div className="text-center sm:text-left">
-                  <h1 className="text-xl sm:text-2xl print:text-lg font-black text-emerald-950 uppercase tracking-tight font-['Outfit']">
+                  <h1 className="text-xl sm:text-2xl print:text-xl font-black text-emerald-950 uppercase tracking-tight font-['Outfit']">
                     Grace White Dove School Complex
                   </h1>
-                  <p className="text-xs print:text-[9px] text-slate-600 font-semibold uppercase tracking-wider">
+                  <p className="text-xs print:text-[9.5pt] text-slate-600 font-semibold uppercase tracking-wider">
                     Official Terminal Student Continuous Assessment & Evaluation Report
                   </p>
-                  <p className="text-[11px] print:text-[8.5px] text-slate-500 font-mono">
+                  <p className="text-[11px] print:text-[8.5pt] text-slate-500 font-mono">
                     Tel: 0244403541 | Email: gracewhitedoveschool@gmail.com | Cape Coast, Ghana
                   </p>
                 </div>
               </div>
 
-              <div className="inline-block bg-emerald-950 text-amber-400 text-[10px] print:text-[8.5px] font-black uppercase px-3 py-0.5 rounded-full tracking-wider mt-0.5">
+              <div className="inline-block bg-emerald-950 text-amber-400 text-[10px] print:text-[9pt] font-black uppercase px-3 py-0.5 rounded-full tracking-wider mt-0.5">
                 {isStudentLowerPrimary 
                   ? `Pre-School & Lower Primary Academic Transcript • ${currentTerm} (${academicYear})`
                   : `Upper Primary & JHS Standard Academic Transcript • ${currentTerm} (${academicYear})`}
@@ -880,25 +880,25 @@ export const ExamManagement: React.FC = () => {
             </div>
 
             {/* 2. Student Particulars Card */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 print:gap-1.5 bg-emerald-50/70 p-3 print:p-1.5 rounded-xl border border-emerald-300 text-xs print:text-[8.5pt]">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 print:gap-1.5 bg-emerald-50/70 p-3 print:p-2 rounded-xl border border-emerald-300 text-xs print:text-[9pt] shrink-0 print:my-1">
               <div>
-                <span className="text-emerald-900 block text-[9px] print:text-[7.5pt] uppercase font-bold">Student Name</span>
-                <span className="font-black text-slate-900 text-xs print:text-[8.5pt]">
+                <span className="text-emerald-900 block text-[9px] print:text-[8pt] uppercase font-bold">Student Name</span>
+                <span className="font-black text-slate-900 text-xs print:text-[9pt]">
                   {currentReportStudent.firstName} {currentReportStudent.lastName}
                 </span>
               </div>
               <div>
-                <span className="text-emerald-900 block text-[9px] print:text-[7.5pt] uppercase font-bold">Admission Number</span>
+                <span className="text-emerald-900 block text-[9px] print:text-[8pt] uppercase font-bold">Admission Number</span>
                 <span className="font-mono font-bold text-slate-900">{currentReportStudent.admissionNo}</span>
               </div>
               <div>
-                <span className="text-emerald-900 block text-[9px] print:text-[7.5pt] uppercase font-bold">Class & Section</span>
+                <span className="text-emerald-900 block text-[9px] print:text-[8pt] uppercase font-bold">Class & Section</span>
                 <span className="font-extrabold text-emerald-950">
                   {currentReportStudent.className} (Sec {currentReportStudent.section || 'A'})
                 </span>
               </div>
               <div>
-                <span className="text-emerald-900 block text-[9px] print:text-[7.5pt] uppercase font-bold">Roll / Position</span>
+                <span className="text-emerald-900 block text-[9px] print:text-[8pt] uppercase font-bold">Roll / Position</span>
                 <span className="font-bold text-slate-900">
                   Roll #{currentReportStudent.rollNo || '01'}
                 </span>
@@ -906,56 +906,56 @@ export const ExamManagement: React.FC = () => {
             </div>
 
             {/* 3. Academic KPI Banner */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 print:gap-1.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 print:gap-1.5 shrink-0 print:my-1">
               {isStudentLowerPrimary ? (
-                <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1 rounded-lg text-center">
-                  <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-slate-500 block">Overall Position</span>
-                  <span className="text-xl print:text-sm font-black text-emerald-950 font-['Outfit']">
+                <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1.5 rounded-lg text-center">
+                  <span className="text-[9px] print:text-[8pt] font-extrabold uppercase text-slate-500 block">Overall Position</span>
+                  <span className="text-xl print:text-base font-black text-emerald-950 font-['Outfit']">
                     {averagePositionResult.position}
                   </span>
                 </div>
               ) : (
-                <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1 rounded-lg text-center">
-                  <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-slate-500 block">Overall Grade</span>
-                  <span className="text-xl print:text-sm font-black text-emerald-950 font-mono font-['Outfit']">
+                <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1.5 rounded-lg text-center">
+                  <span className="text-[9px] print:text-[8pt] font-extrabold uppercase text-slate-500 block">Overall Grade</span>
+                  <span className="text-xl print:text-base font-black text-emerald-950 font-mono font-['Outfit']">
                     Grade {calculateJHSGrade(averagePercentage).grade}
                   </span>
                 </div>
               )}
-              <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1 rounded-lg text-center">
-                <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-slate-500 block">Average Raw Score</span>
-                <span className="text-xl print:text-sm font-black text-emerald-950 font-mono font-['Outfit']">
+              <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1.5 rounded-lg text-center">
+                <span className="text-[9px] print:text-[8pt] font-extrabold uppercase text-slate-500 block">Average Raw Score</span>
+                <span className="text-xl print:text-base font-black text-emerald-950 font-mono font-['Outfit']">
                   {averagePercentage}%
                 </span>
               </div>
-              <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1 rounded-lg text-center">
-                <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-slate-500 block">Subjects Assessed</span>
-                <span className="text-xl print:text-sm font-black text-emerald-950 font-mono font-['Outfit']">
+              <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1.5 rounded-lg text-center">
+                <span className="text-[9px] print:text-[8pt] font-extrabold uppercase text-slate-500 block">Subjects Assessed</span>
+                <span className="text-xl print:text-base font-black text-emerald-950 font-mono font-['Outfit']">
                   {studentMarks.length}
                 </span>
               </div>
-              <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1 rounded-lg text-center">
-                <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-slate-500 block">Overall Standing</span>
-                <span className="text-xs print:text-[8pt] font-black text-emerald-800 block mt-0.5">
+              <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1.5 rounded-lg text-center">
+                <span className="text-[9px] print:text-[8pt] font-extrabold uppercase text-slate-500 block">Overall Standing</span>
+                <span className="text-xs print:text-[8.5pt] font-black text-emerald-800 block mt-0.5">
                   {isStudentLowerPrimary ? averagePositionResult.interpretation : calculateJHSGrade(averagePercentage).interpretation}
                 </span>
               </div>
             </div>
 
             {/* 4. Detailed Assessment Breakdown Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse border border-slate-300 text-xs print:text-[8pt]">
+            <div className="overflow-x-auto print:overflow-visible print:my-1 flex-1">
+              <table className="w-full text-left border-collapse border border-slate-300 text-xs print:text-[8.5pt]">
                 <thead>
-                  <tr className="bg-emerald-950 text-white uppercase text-[9.5px] print:text-[7.5pt] tracking-wider font-bold">
-                    <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900">Subject Name</th>
-                    <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900 text-center">Raw Score</th>
+                  <tr className="bg-emerald-950 text-white uppercase text-[9.5px] print:text-[8pt] tracking-wider font-bold">
+                    <th className="py-2 px-2.5 print:py-1.5 print:px-2 border border-emerald-900">Subject Name</th>
+                    <th className="py-2 px-2.5 print:py-1.5 print:px-2 border border-emerald-900 text-center">Raw Score</th>
                     {isStudentLowerPrimary ? (
-                      <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900 text-center">Position</th>
+                      <th className="py-2 px-2.5 print:py-1.5 print:px-2 border border-emerald-900 text-center">Position</th>
                     ) : (
-                      <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900 text-center">Grade</th>
+                      <th className="py-2 px-2.5 print:py-1.5 print:px-2 border border-emerald-900 text-center">Grade</th>
                     )}
-                    <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900 text-center">Interpretation</th>
-                    <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900">Teacher's Remarks</th>
+                    <th className="py-2 px-2.5 print:py-1.5 print:px-2 border border-emerald-900 text-center">Interpretation</th>
+                    <th className="py-2 px-2.5 print:py-1.5 print:px-2 border border-emerald-900">Teacher's Remarks</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -965,29 +965,29 @@ export const ExamManagement: React.FC = () => {
 
                     return (
                       <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
-                        <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 font-bold text-slate-900 border border-slate-200">{m.subject || m.subjectName}</td>
-                        <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center font-black font-mono text-emerald-950 border border-slate-200">
+                        <td className="py-1.5 px-2.5 print:py-1 print:px-2 font-bold text-slate-900 border border-slate-200">{m.subject || m.subjectName}</td>
+                        <td className="py-1.5 px-2.5 print:py-1 print:px-2 text-center font-black font-mono text-emerald-950 border border-slate-200">
                           {m.specialStatus === 'IC' ? 'IC' : m.specialStatus === 'Audit' ? 'AUDIT' : `${rawTotal}%`}
                         </td>
                         
                         {isStudentLowerPrimary ? (
-                          <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center font-black border border-slate-200">
-                            <span className={`px-2 py-0.5 rounded text-[10px] print:text-[7.5pt] font-black border ${gradeInfo.badgeClass}`}>
+                          <td className="py-1.5 px-2.5 print:py-1 print:px-2 text-center font-black border border-slate-200">
+                            <span className={`px-2 py-0.5 rounded text-[10px] print:text-[8pt] font-black border ${gradeInfo.badgeClass}`}>
                               {gradeInfo.position || gradeInfo.grade}
                             </span>
                           </td>
                         ) : (
-                          <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center font-black border border-slate-200">
-                            <span className={`px-2 py-0.5 rounded text-[10px] print:text-[7.5pt] font-black border ${gradeInfo.badgeClass}`}>
+                          <td className="py-1.5 px-2.5 print:py-1 print:px-2 text-center font-black border border-slate-200">
+                            <span className={`px-2 py-0.5 rounded text-[10px] print:text-[8pt] font-black border ${gradeInfo.badgeClass}`}>
                               {gradeInfo.grade}
                             </span>
                           </td>
                         )}
 
-                        <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center font-bold text-slate-900 border border-slate-200 text-[10.5px] print:text-[7.5pt]">
+                        <td className="py-1.5 px-2.5 print:py-1 print:px-2 text-center font-bold text-slate-900 border border-slate-200 text-[10.5px] print:text-[8pt]">
                           {gradeInfo.interpretation}
                         </td>
-                        <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-slate-600 border border-slate-200 italic text-[10.5px] print:text-[7.5pt]">
+                        <td className="py-1.5 px-2.5 print:py-1 print:px-2 text-slate-600 border border-slate-200 italic text-[10.5px] print:text-[8pt]">
                           {m.remarks || m.remark || gradeInfo.interpretation}
                         </td>
                       </tr>
@@ -1002,8 +1002,8 @@ export const ExamManagement: React.FC = () => {
             {/* ============================================================= */}
             {isStudentLowerPrimary ? (
               /* EXACT PRE-SCHOOL & LOWER PRIMARY GRADING SYSTEM */
-              <div className="border border-slate-300 rounded-xl p-2.5 print:p-1.5 bg-white relative overflow-hidden space-y-1.5 print:space-y-1">
-                <div className="text-center pb-1 border-b border-slate-200">
+              <div className="border border-slate-300 rounded-xl p-2.5 print:p-1.5 bg-white relative overflow-hidden space-y-1 print:space-y-0.5 shrink-0 print:my-1">
+                <div className="text-center pb-0.5 border-b border-slate-200">
                   <h4 className="font-extrabold text-[10px] print:text-[8pt] text-emerald-950 uppercase tracking-wide font-['Outfit']">
                     GRACE WHITE DOVE SCHOOL COMPLEX • PRE-SCHOOL & LOWER PRIMARY GRADING SYSTEM
                   </h4>
@@ -1021,7 +1021,7 @@ export const ExamManagement: React.FC = () => {
               </div>
             ) : (
               /* JHS & UPPER PRIMARY NUMERICAL CONVERSION REFERENCE */
-              <div className="border border-slate-300 rounded-xl p-2.5 print:p-1.5 bg-slate-50/80 space-y-1.5 print:space-y-1">
+              <div className="border border-slate-300 rounded-xl p-2.5 print:p-1.5 bg-slate-50/80 space-y-1 print:space-y-0.5 shrink-0 print:my-1">
                 <div className="flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-emerald-800" />
                   <span className="font-extrabold text-[10px] print:text-[8pt] text-emerald-950 uppercase tracking-wider font-['Outfit']">
@@ -1047,7 +1047,7 @@ export const ExamManagement: React.FC = () => {
             )}
 
             {/* 6. Qualitative Appraisal, Signatures & Stamp */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 print:gap-2 pt-1 print:pt-0.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 print:gap-2 pt-1 print:pt-0.5 shrink-0 print:my-1">
               <div className="border border-slate-300 rounded-xl p-3 print:p-1.5 space-y-1 print:space-y-0.5 bg-white text-xs print:text-[8pt]">
                 <span className="font-bold text-emerald-950 block text-[10px] print:text-[7.5pt] uppercase tracking-wider">
                   Class Teacher's General Appraisal:

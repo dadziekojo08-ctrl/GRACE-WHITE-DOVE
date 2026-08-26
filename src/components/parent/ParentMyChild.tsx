@@ -217,76 +217,76 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
           {/* Printable Report Card Sheet */}
           <div
             id="parent-ward-report-sheet"
-            className="print-area printable-sheet bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-4 print:space-y-2 print:p-0 print:border-none print:shadow-none print:max-w-full"
+            className="print-area printable-sheet report-card-print-sheet bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-3.5 print:space-y-0 print:p-0 print:border-none print:shadow-none print:max-w-full"
           >
             {/* School Header */}
-            <div className="border-b-2 border-emerald-900 pb-3 print:pb-1.5 text-center relative">
-              <div className="flex items-center justify-center gap-3 mb-1.5 print:mb-1">
+            <div className="border-b-2 border-emerald-900 pb-2.5 print:pb-1.5 text-center relative shrink-0">
+              <div className="flex items-center justify-center gap-3 mb-1 print:mb-0.5">
                 <SchoolLogo
                   alt="Grace White Dove Logo"
-                  className="w-14 h-14 print:w-11 print:h-11 rounded-xl object-contain bg-white p-1 shadow-xs border border-amber-400/80 shrink-0"
+                  className="w-14 h-14 print:w-12 print:h-12 rounded-xl object-contain bg-white p-1 shadow-xs border border-amber-400/80 shrink-0"
                 />
                 <div className="text-left">
-                  <h2 className="text-xl sm:text-2xl print:text-lg font-black text-emerald-950 tracking-tight font-['Outfit']">
+                  <h2 className="text-xl sm:text-2xl print:text-xl font-black text-emerald-950 tracking-tight font-['Outfit']">
                     GRACE WHITE DOVE SCHOOL COMPLEX
                   </h2>
-                  <p className="text-xs print:text-[9px] text-slate-500 font-semibold uppercase tracking-wider">
+                  <p className="text-xs print:text-[9.5pt] text-slate-500 font-semibold uppercase tracking-wider">
                     Official Terminal Student Evaluation & Continuous Assessment Report
                   </p>
-                  <p className="text-[10px] print:text-[8px] text-slate-500 font-mono mt-0.5">
+                  <p className="text-[10px] print:text-[8.5pt] text-slate-500 font-mono mt-0.5">
                     Cape Coast, Ghana • Tel: 0244403541 • Email: gracewhitedoveschool@gmail.com
                   </p>
                 </div>
               </div>
 
-              <div className="mt-2.5 print:mt-1 grid grid-cols-2 sm:grid-cols-4 gap-2.5 print:gap-1.5 bg-slate-50 p-2.5 print:p-1.5 rounded-xl border border-slate-200 text-left text-xs print:text-[8.5pt]">
+              <div className="mt-2 print:mt-1 grid grid-cols-2 sm:grid-cols-4 gap-2.5 print:gap-1.5 bg-emerald-50/70 p-2.5 print:p-2 rounded-xl border border-emerald-200 text-left text-xs print:text-[9pt] shrink-0 print:my-1">
                 <div>
-                  <span className="text-slate-400 text-[9px] print:text-[7.5pt] uppercase font-bold block">Student Name</span>
+                  <span className="text-emerald-900 text-[9px] print:text-[8pt] uppercase font-bold block">Student Name</span>
                   <span className="font-extrabold text-slate-900">{ward.firstName} {ward.lastName}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 text-[9px] print:text-[7.5pt] uppercase font-bold block">Class & Level</span>
+                  <span className="text-emerald-900 text-[9px] print:text-[8pt] uppercase font-bold block">Class & Level</span>
                   <span className="font-extrabold text-emerald-800">{ward.className || 'Not Assigned'}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 text-[9px] print:text-[7.5pt] uppercase font-bold block">Admission / Roll No</span>
+                  <span className="text-emerald-900 text-[9px] print:text-[8pt] uppercase font-bold block">Admission / Roll No</span>
                   <span className="font-mono font-bold text-slate-900">{ward.admissionNo} {ward.rollNo ? `(Roll: ${ward.rollNo})` : ''}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 text-[9px] print:text-[7.5pt] uppercase font-bold block">Academic Period</span>
+                  <span className="text-emerald-900 text-[9px] print:text-[8pt] uppercase font-bold block">Academic Period</span>
                   <span className="font-bold text-slate-900">{academicYear} • {currentTerm}</span>
                 </div>
               </div>
             </div>
 
             {/* Performance Summary Banner */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 print:gap-1.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 print:gap-1.5 shrink-0 print:my-1">
               {isLowerPrimaryOrPreschool(ward.className) ? (
-                <div className="bg-emerald-50 border border-emerald-200 p-2.5 print:p-1 rounded-lg text-center">
-                  <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-emerald-800 block">Class Level</span>
-                  <span className="text-xs print:text-[8.5pt] font-black text-emerald-950 font-['Outfit'] block mt-0.5">
+                <div className="bg-emerald-50 border border-emerald-200 p-2.5 print:p-1.5 rounded-lg text-center">
+                  <span className="text-[9px] print:text-[8pt] font-extrabold uppercase text-emerald-800 block">Class Level</span>
+                  <span className="text-xs print:text-[9pt] font-black text-emerald-950 font-['Outfit'] block mt-0.5">
                     {ward.className}
                   </span>
                 </div>
               ) : (
-                <div className="bg-emerald-50 border border-emerald-200 p-2.5 print:p-1 rounded-lg text-center">
-                  <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-emerald-800 block">Overall Numerical Grade</span>
-                  <span className="text-lg print:text-sm font-black text-emerald-950 font-mono font-['Outfit']">
+                <div className="bg-emerald-50 border border-emerald-200 p-2.5 print:p-1.5 rounded-lg text-center">
+                  <span className="text-[9px] print:text-[8pt] font-extrabold uppercase text-emerald-800 block">Overall Numerical Grade</span>
+                  <span className="text-lg print:text-base font-black text-emerald-950 font-mono font-['Outfit']">
                     Grade {calculateJHSGrade(averageScore).grade}
                   </span>
                 </div>
               )}
-              <div className="bg-emerald-50 border border-emerald-200 p-2.5 print:p-1 rounded-lg text-center">
-                <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-emerald-800 block">Average Raw Score</span>
-                <span className="text-lg print:text-sm font-black text-emerald-950 font-mono font-['Outfit']">{wardMarks.length > 0 ? `${averageScore}%` : '—'}</span>
+              <div className="bg-emerald-50 border border-emerald-200 p-2.5 print:p-1.5 rounded-lg text-center">
+                <span className="text-[9px] print:text-[8pt] font-extrabold uppercase text-emerald-800 block">Average Raw Score</span>
+                <span className="text-lg print:text-base font-black text-emerald-950 font-mono font-['Outfit']">{wardMarks.length > 0 ? `${averageScore}%` : '—'}</span>
               </div>
-              <div className="bg-emerald-50 border border-emerald-200 p-2.5 print:p-1 rounded-lg text-center">
-                <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-emerald-800 block">Subjects Assessed</span>
-                <span className="text-lg print:text-sm font-black text-emerald-950 font-mono font-['Outfit']">{wardMarks.length}</span>
+              <div className="bg-emerald-50 border border-emerald-200 p-2.5 print:p-1.5 rounded-lg text-center">
+                <span className="text-[9px] print:text-[8pt] font-extrabold uppercase text-emerald-800 block">Subjects Assessed</span>
+                <span className="text-lg print:text-base font-black text-emerald-950 font-mono font-['Outfit']">{wardMarks.length}</span>
               </div>
-              <div className="bg-emerald-50 border border-emerald-200 p-2.5 print:p-1 rounded-lg text-center">
-                <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-emerald-800 block">Standing</span>
-                <span className="text-xs print:text-[8pt] font-black text-emerald-800 block mt-0.5">
+              <div className="bg-emerald-50 border border-emerald-200 p-2.5 print:p-1.5 rounded-lg text-center">
+                <span className="text-[9px] print:text-[8pt] font-extrabold uppercase text-emerald-800 block">Standing</span>
+                <span className="text-xs print:text-[8.5pt] font-black text-emerald-800 block mt-0.5">
                   {isLowerPrimaryOrPreschool(ward.className)
                     ? calculateLowerPrimaryGrade(averageScore).interpretation
                     : calculateJHSGrade(averageScore).interpretation}
@@ -296,19 +296,19 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
 
             {/* Subject Score Breakdown Table */}
             {wardMarks.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs print:text-[8pt] border border-slate-200 rounded-xl overflow-hidden">
-                  <thead className="bg-emerald-950 text-white text-[9.5px] print:text-[7.5pt] uppercase font-bold">
+              <div className="overflow-x-auto print:overflow-visible print:my-1 flex-1">
+                <table className="w-full text-left text-xs print:text-[8.5pt] border border-slate-200 rounded-xl overflow-hidden">
+                  <thead className="bg-emerald-950 text-white text-[9.5px] print:text-[8pt] uppercase font-bold">
                     <tr>
-                      <th className="py-2 px-2.5 print:py-1 print:px-1.5">Subject Name</th>
-                      <th className="py-2 px-2.5 print:py-1 print:px-1.5 text-center">Raw Score</th>
+                      <th className="py-2 px-2.5 print:py-1.5 print:px-2">Subject Name</th>
+                      <th className="py-2 px-2.5 print:py-1.5 print:px-2 text-center">Raw Score</th>
                       {isLowerPrimaryOrPreschool(ward.className) ? (
-                        <th className="py-2 px-2.5 print:py-1 print:px-1.5 text-center">Position</th>
+                        <th className="py-2 px-2.5 print:py-1.5 print:px-2 text-center">Position</th>
                       ) : (
-                        <th className="py-2 px-2.5 print:py-1 print:px-1.5 text-center">Grade</th>
+                        <th className="py-2 px-2.5 print:py-1.5 print:px-2 text-center">Grade</th>
                       )}
-                      <th className="py-2 px-2.5 print:py-1 print:px-1.5 text-center">Interpretation</th>
-                      <th className="py-2 px-2.5 print:py-1 print:px-1.5">Teacher's Remark</th>
+                      <th className="py-2 px-2.5 print:py-1.5 print:px-2 text-center">Interpretation</th>
+                      <th className="py-2 px-2.5 print:py-1.5 print:px-2">Teacher's Remark</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -319,27 +319,27 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
 
                       return (
                         <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}>
-                          <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 font-bold text-slate-900">{sub.subjectName || sub.subject}</td>
-                          <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center font-mono font-extrabold text-slate-900">
+                          <td className="py-1.5 px-2.5 print:py-1 print:px-2 font-bold text-slate-900">{sub.subjectName || sub.subject}</td>
+                          <td className="py-1.5 px-2.5 print:py-1 print:px-2 text-center font-mono font-extrabold text-slate-900">
                             {sub.specialStatus === 'IC' ? 'IC' : sub.specialStatus === 'Audit' ? 'AUDIT' : `${rawScore}%`}
                           </td>
                           {isLower ? (
-                            <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center">
-                              <span className={`font-black px-2 py-0.5 rounded text-[10px] print:text-[7.5pt] border ${gradeInfo.badgeClass}`}>
+                            <td className="py-1.5 px-2.5 print:py-1 print:px-2 text-center">
+                              <span className={`font-black px-2 py-0.5 rounded text-[10px] print:text-[8pt] border ${gradeInfo.badgeClass}`}>
                                 {gradeInfo.position || gradeInfo.grade}
                               </span>
                             </td>
                           ) : (
-                            <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center">
-                              <span className={`font-black px-2 py-0.5 rounded text-[10px] print:text-[7.5pt] border ${gradeInfo.badgeClass}`}>
+                            <td className="py-1.5 px-2.5 print:py-1 print:px-2 text-center">
+                              <span className={`font-black px-2 py-0.5 rounded text-[10px] print:text-[8pt] border ${gradeInfo.badgeClass}`}>
                                 {gradeInfo.grade}
                               </span>
                             </td>
                           )}
-                          <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center font-semibold text-slate-700 text-[10.5px] print:text-[7.5pt]">
+                          <td className="py-1.5 px-2.5 print:py-1 print:px-2 text-center font-semibold text-slate-700 text-[10.5px] print:text-[8pt]">
                             {gradeInfo.interpretation}
                           </td>
-                          <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-slate-600 text-[10.5px] print:text-[7.5pt] italic">{sub.remarks || sub.remark || gradeInfo.interpretation}</td>
+                          <td className="py-1.5 px-2.5 print:py-1 print:px-2 text-slate-600 text-[10.5px] print:text-[8pt] italic">{sub.remarks || sub.remark || gradeInfo.interpretation}</td>
                         </tr>
                       );
                     })}
@@ -347,7 +347,7 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                 </table>
               </div>
             ) : (
-              <div className="p-8 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center space-y-1.5">
+              <div className="p-6 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center space-y-1 my-2">
                 <Award className="w-6 h-6 text-slate-300 mx-auto" />
                 <h4 className="text-xs font-bold text-slate-700">No Terminal Assessment Scores Yet</h4>
                 <p className="text-[10px] text-slate-400 max-w-md mx-auto">
@@ -358,8 +358,8 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
 
             {/* Official Grading Scheme Reference Footer */}
             {isLowerPrimaryOrPreschool(ward.className) ? (
-              <div className="border border-slate-300 rounded-xl p-2.5 print:p-1.5 bg-white space-y-1.5 print:space-y-1 text-xs">
-                <div className="text-center pb-1 border-b border-slate-200">
+              <div className="border border-slate-300 rounded-xl p-2.5 print:p-1.5 bg-white space-y-1 print:space-y-0.5 text-xs shrink-0 print:my-1">
+                <div className="text-center pb-0.5 border-b border-slate-200">
                   <span className="font-extrabold text-emerald-950 block text-[10px] print:text-[8pt] uppercase tracking-wider font-['Outfit']">
                     GRACE WHITE DOVE SCHOOL COMPLEX • PRE-SCHOOL & LOWER PRIMARY GRADING
                   </span>
@@ -375,7 +375,7 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                 </div>
               </div>
             ) : (
-              <div className="border border-slate-200 rounded-xl p-2.5 print:p-1.5 bg-slate-50 space-y-1.5 print:space-y-1 text-xs">
+              <div className="border border-slate-200 rounded-xl p-2.5 print:p-1.5 bg-slate-50 space-y-1 print:space-y-0.5 text-xs shrink-0 print:my-1">
                 <span className="font-extrabold text-emerald-950 block text-[10px] print:text-[8pt] uppercase tracking-wider font-['Outfit']">
                   Upper Primary & JHS Official Numerical Grading System (Basic 4 to JHS 3)
                 </span>
@@ -396,7 +396,7 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
             )}
 
             {/* Qualitative Evaluations & Remarks */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 print:gap-2 pt-1 print:pt-0.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 print:gap-2 pt-1 print:pt-0.5 shrink-0 print:my-1">
               <div className="p-3 print:p-1.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1 print:space-y-0.5">
                 <span className="text-[10px] print:text-[7.5pt] font-bold text-slate-900 block uppercase tracking-wider">
                   Class Teacher's Appraisal & Signature
