@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { SchoolLogo } from '../common/SchoolLogo';
+import { printReportSheet } from '../../utils/printUtils';
 import { Student } from '../../types';
 import {
   CreditCard,
@@ -128,7 +129,11 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
 
   // Execute native print
   const handlePrint = () => {
-    window.print();
+    if (activeMode === 'single') {
+      printReportSheet('single-id-card-sheet', `Grace White Dove Student ID - ${activeStudent ? `${activeStudent.firstName} ${activeStudent.lastName}` : 'Card'}`);
+    } else {
+      printReportSheet('batch-id-cards-sheet', `Grace White Dove Class ID Cards - ${batchClass}`);
+    }
   };
 
   if (!isOpen) return null;
@@ -850,7 +855,7 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
                 </div>
 
                 {/* The Rendered Card (Front or Back) */}
-                <div className="transition-all duration-300 transform hover:scale-[1.01]">
+                <div id="single-id-card-sheet" className="print-area printable-sheet transition-all duration-300 transform hover:scale-[1.01]">
                   {activeStudent ? (
                     isFlipped ? (
                       renderCardBack(activeStudent, orientation === 'portrait')
@@ -1136,7 +1141,7 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
               </div>
 
               {/* A4 Printable Multi-Card Sheet Preview */}
-              <div className="bg-slate-200 p-6 rounded-2xl border border-slate-300">
+              <div id="batch-id-cards-sheet" className="print-area printable-sheet bg-slate-200 p-6 rounded-2xl border border-slate-300">
                 <div className="flex items-center justify-between mb-4">
                   <div className="text-xs text-slate-700 font-semibold">
                     A4 Sheet Layout Preview ({selectedBatchStudentIds.length} cards selected for printing)

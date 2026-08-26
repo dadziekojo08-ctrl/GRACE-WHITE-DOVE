@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { calculateAggregatedFinancials } from '../../utils/feeBreakdown';
 import {
   BarChart3,
   FileSpreadsheet,
@@ -46,41 +47,17 @@ export const CustomReportsAnalytics: React.FC = () => {
     return { subject, averageScore: avg, passRate };
   });
 
-  // Financial data computed dynamically from actual records with clean separation
-  const totalTermFeesVal = invoices.reduce((acc, i) => {
-    const it = i.items?.find(x => x.description.toLowerCase().includes('term') || x.description.toLowerCase().includes('tuition'));
-    return acc + (i.termFees !== undefined ? i.termFees : it ? it.amount : 0);
-  }, 0);
-  const totalBooksVal = invoices.reduce((acc, i) => {
-    const it = i.items?.find(x => x.description.toLowerCase().includes('book'));
-    return acc + (i.books !== undefined ? i.books : it ? it.amount : 0);
-  }, 0);
-  const totalAccessoriesVal = invoices.reduce((acc, i) => {
-    const it = i.items?.find(x => x.description.toLowerCase().includes('accessor') || x.description.toLowerCase().includes('uniform'));
-    return acc + (i.accessories !== undefined ? i.accessories : it ? it.amount : 0);
-  }, 0);
+  // Financial data computed dynamically with mathematical guarantee: Total Fees + Books + Accessories === Total Amount
+  const {
+    totalTuitionFees: totalTermFeesVal,
+    totalBooksValue: totalBooksVal,
+    totalAccessoriesValue: totalAccessoriesVal,
+    totalAmountBilled: totalCurrentBilledVal,
+    totalArrears: totalArrearsVal,
+    cumulativeBillable: totalCumulativeBillable,
+  } = calculateAggregatedFinancials(invoices, students);
 
-  // Total Amount = Current Term Amount (Term Fees + Books + Accessories)
-  const totalCurrentBilledVal = invoices.reduce((acc, i) => {
-    if (i.currentTermAmount !== undefined) return acc + i.currentTermAmount;
-    const tf = (i.termFees ?? 0) + (i.books ?? 0) + (i.accessories ?? 0);
-    if (tf > 0) return acc + tf;
-    const arr = i.arrears ?? (i.items?.find(x => x.description.toLowerCase().includes('arrear'))?.amount || 0);
-    return acc + Math.max(0, i.totalAmount - arr);
-  }, 0);
-
-  // Total Arrears = Standalone Prior Arrears (Entered manually by admin/finance)
-  const totalArrearsVal = invoices.reduce((acc, i) => {
-    if (i.arrears !== undefined) return acc + i.arrears;
-    const it = i.items?.find(x => x.description.toLowerCase().includes('arrear'));
-    return acc + (it ? it.amount : 0);
-  }, 0) + students.reduce((acc, s) => {
-    const hasInvArrears = invoices.some(i => i.studentId === s.id && (i.arrears || 0) > 0);
-    return acc + (hasInvArrears ? 0 : (s.manualArrears || 0));
-  }, 0);
-
-  const totalCollectedVal = payments.reduce((acc, p) => acc + p.amount, 0);
-  const totalCumulativeBillable = totalCurrentBilledVal + totalArrearsVal;
+  const totalCollectedVal = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
   const totalOutstandingVal = Math.max(0, totalCumulativeBillable - totalCollectedVal);
 
   const financialData = [

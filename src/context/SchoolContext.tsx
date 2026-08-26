@@ -71,6 +71,8 @@ import {
   MatchedTeacherResult
 } from '../utils/teacherAssignment';
 
+import { getInvoiceFinancialBreakdown } from '../utils/feeBreakdown';
+
 interface SchoolContextType {
   // Cloud Sync Status
   isSyncing: boolean;
@@ -1724,31 +1726,11 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const createInvoice = (inv: Omit<Invoice, 'id' | 'invoiceNo' | 'issueDate'>) => {
     const invoiceNo = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     
-    // Calculate separated components
-    const termFees = inv.termFees !== undefined 
-      ? inv.termFees 
-      : (inv.items?.find(it => it.description.toLowerCase().includes('term') || it.description.toLowerCase().includes('tuition'))?.amount || 0);
-    
-    const books = inv.books !== undefined
-      ? inv.books
-      : (inv.items?.find(it => it.description.toLowerCase().includes('book'))?.amount || 0);
-      
-    const accessories = inv.accessories !== undefined
-      ? inv.accessories
-      : (inv.items?.find(it => it.description.toLowerCase().includes('accessor') || it.description.toLowerCase().includes('uniform') || it.description.toLowerCase().includes('crest'))?.amount || 0);
-      
-    const arrears = inv.arrears !== undefined
-      ? inv.arrears
-      : (inv.items?.find(it => it.description.toLowerCase().includes('arrear'))?.amount || 0);
-
-    const currentTermAmount = inv.currentTermAmount !== undefined
-      ? inv.currentTermAmount
-      : (termFees + books + accessories > 0 ? (termFees + books + accessories) : Math.max(0, inv.totalAmount - arrears));
-
+    // Calculate separated components using universal breakdown engine
+    const bk = getInvoiceFinancialBreakdown(inv);
+    const { termFees, books, accessories, arrears, currentTermAmount, grandTotal, paidAmount, balanceDue } = bk;
     const totalAmount = currentTermAmount;
-    const grandTotal = currentTermAmount + arrears;
-    const paidAmount = inv.paidAmount || 0;
-    const balance = Math.max(0, grandTotal - paidAmount);
+    const balance = balanceDue;
     const status = balance === 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Unpaid';
 
     const newInvoice: Invoice = {
@@ -1791,30 +1773,10 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const createBulkInvoices = (bulkList: Omit<Invoice, 'id' | 'invoiceNo' | 'issueDate'>[]) => {
     const newInvoices: Invoice[] = bulkList.map((inv, idx) => {
       const invoiceNo = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-      const termFees = inv.termFees !== undefined 
-        ? inv.termFees 
-        : (inv.items?.find(it => it.description.toLowerCase().includes('term') || it.description.toLowerCase().includes('tuition'))?.amount || 0);
-      
-      const books = inv.books !== undefined
-        ? inv.books
-        : (inv.items?.find(it => it.description.toLowerCase().includes('book'))?.amount || 0);
-        
-      const accessories = inv.accessories !== undefined
-        ? inv.accessories
-        : (inv.items?.find(it => it.description.toLowerCase().includes('accessor') || it.description.toLowerCase().includes('uniform') || it.description.toLowerCase().includes('crest'))?.amount || 0);
-        
-      const arrears = inv.arrears !== undefined
-        ? inv.arrears
-        : (inv.items?.find(it => it.description.toLowerCase().includes('arrear'))?.amount || 0);
-
-      const currentTermAmount = inv.currentTermAmount !== undefined
-        ? inv.currentTermAmount
-        : (termFees + books + accessories > 0 ? (termFees + books + accessories) : Math.max(0, inv.totalAmount - arrears));
-
+      const bk = getInvoiceFinancialBreakdown(inv);
+      const { termFees, books, accessories, arrears, currentTermAmount, grandTotal, paidAmount, balanceDue } = bk;
       const totalAmount = currentTermAmount;
-      const grandTotal = currentTermAmount + arrears;
-      const paidAmount = inv.paidAmount || 0;
-      const balance = Math.max(0, grandTotal - paidAmount);
+      const balance = balanceDue;
       const status = balance === 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Unpaid';
 
       return {
@@ -1870,17 +1832,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setInvoices(prev => prev.map(inv => {
       if (inv.id === id) {
         affectedStudentId = inv.studentId;
-        const termFees = updatedData.termFees !== undefined ? updatedData.termFees : (inv.termFees || 0);
-        const books = updatedData.books !== undefined ? updatedData.books : (inv.books || 0);
-        const accessories = updatedData.accessories !== undefined ? updatedData.accessories : (inv.accessories || 0);
-        const arrears = updatedData.arrears !== undefined ? updatedData.arrears : (inv.arrears || 0);
-
-        const currentTermAmount = updatedData.currentTermAmount !== undefined 
-          ? updatedData.currentTermAmount 
-          : ((termFees + books + accessories) > 0 ? (termFees + books + accessories) : (updatedData.totalAmount !== undefined ? updatedData.totalAmount : inv.totalAmount));
-
-        const totalAmount = currentTermAmount;
-        const grandTotal = currentTermAmount + arrears;
+        const merged: Partial<Invoice> = { ...inv, ...updatedData };
+        const bk = getInvoiceFinancialBreakdown(merged);
+        const { termFees, books, accessories, arrears, currentTermAmount, grandTotal } = bk;
         const paidAmount = updatedData.paidAmount !== undefined ? updatedData.paidAmount : (inv.paidAmount || 0);
         const balance = Math.max(0, grandTotal - paidAmount);
         const status = balance === 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Unpaid';
@@ -1893,7 +1847,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           accessories,
           arrears,
           currentTermAmount,
-          totalAmount,
+          totalAmount: currentTermAmount,
           grandTotal,
           paidAmount,
           balance,

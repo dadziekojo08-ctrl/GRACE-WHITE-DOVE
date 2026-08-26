@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { SchoolLogo } from '../common/SchoolLogo';
+import { printReportSheet } from '../../utils/printUtils';
+import { getInvoiceFinancialBreakdown, calculateAggregatedFinancials } from '../../utils/feeBreakdown';
 import { Invoice, Payment, Student, PayrollRecord } from '../../types';
 import {
   BarChart3,
@@ -186,68 +188,21 @@ export const FinancialReportsPage: React.FC<{
   // CALCULATIONS FOR METRICS & BREAKDOWNS
   // -------------------------------------------------------------
 
-  // Helper to extract separated billing components for any invoice
-  const getInvoiceBreakdown = (inv: Invoice) => {
-    const tuitionItem = inv.items?.find((it) => it.description.toLowerCase().includes('term') || it.description.toLowerCase().includes('tuition'));
-    const bookItem = inv.items?.find((it) => it.description.toLowerCase().includes('book'));
-    const accItem = inv.items?.find((it) => it.description.toLowerCase().includes('accessor') || it.description.toLowerCase().includes('uniform'));
-    const arrearsItem = inv.items?.find((it) => it.description.toLowerCase().includes('arrear'));
+  // Helper to extract separated billing components for any invoice (Universal guarantee)
+  const getInvoiceBreakdown = (inv: Invoice) => getInvoiceFinancialBreakdown(inv);
 
-    const termFees = inv.termFees !== undefined ? inv.termFees : (tuitionItem ? tuitionItem.amount : 0);
-    const books = inv.books !== undefined ? inv.books : (bookItem ? bookItem.amount : 0);
-    const accessories = inv.accessories !== undefined ? inv.accessories : (accItem ? accItem.amount : 0);
-    const arrears = inv.arrears !== undefined ? inv.arrears : (arrearsItem ? arrearsItem.amount : 0);
-
-    // Current Term Amount = Term Fees + Books + Accessories
-    const currentTermAmount = inv.currentTermAmount !== undefined 
-      ? inv.currentTermAmount 
-      : ((termFees + books + accessories) > 0 ? (termFees + books + accessories) : Math.max(0, inv.totalAmount - arrears));
-
-    // Grand Total = Current Term Amount + Prior Manual Arrears
-    const grandTotal = inv.grandTotal !== undefined 
-      ? inv.grandTotal 
-      : (currentTermAmount + arrears);
-
-    const paidAmount = inv.paidAmount || 0;
-    const balanceDue = inv.balance !== undefined ? inv.balance : Math.max(0, grandTotal - paidAmount);
-
-    return {
-      termFees,
-      books,
-      accessories,
-      currentTermAmount,
-      arrears,
-      grandTotal,
-      paidAmount,
-      balanceDue
-    };
-  };
-
-  // 1. Ledger & Summary Metrics
-  // Total Tuition/Academic Term Fees
-  const totalTuitionFees = invoices.reduce((sum, inv) => sum + getInvoiceBreakdown(inv).termFees, 0);
-
-  // Total Books
-  const totalBooksValue = invoices.reduce((sum, inv) => sum + getInvoiceBreakdown(inv).books, 0);
-
-  // Total Accessories (PE kit, uniforms, crests)
-  const totalAccessoriesValue = invoices.reduce((sum, inv) => sum + getInvoiceBreakdown(inv).accessories, 0);
-
-  // Total Amount (Current Term Sum: Term Fees + Books + Accessories)
-  const totalAmountBilled = invoices.reduce((sum, inv) => sum + getInvoiceBreakdown(inv).currentTermAmount, 0);
-
-  // Total Arrears (Entered manually by admin / finance)
-  const totalArrears = invoices.reduce((sum, inv) => sum + getInvoiceBreakdown(inv).arrears, 0) + 
-    students.reduce((sum, s) => {
-      const hasInv = invoices.some(i => i.studentId === s.id && (i.arrears || 0) > 0);
-      return sum + (hasInv ? 0 : (s.manualArrears || 0));
-    }, 0);
-
-  // Cumulative Billable = Current Term Total Amount + Standalone Prior Arrears
-  const cumulativeBillable = totalAmountBilled + totalArrears;
+  // 1. Ledger & Summary Metrics (Mathematically verified: Total Fees + Total Books + Total Accessories === Total Amount)
+  const {
+    totalTuitionFees,
+    totalBooksValue,
+    totalAccessoriesValue,
+    totalAmountBilled,
+    totalArrears,
+    cumulativeBillable,
+  } = calculateAggregatedFinancials(invoices, students);
 
   // 2. Student Fees Desk Metrics
-  const totalCompletedPaidFees = payments.reduce((sum, p) => sum + p.amount, 0);
+  const totalCompletedPaidFees = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   const totalPendingArrears = Math.max(0, cumulativeBillable - totalCompletedPaidFees);
 
   // 3. Staff Payroll Desk Metrics
@@ -1044,7 +999,7 @@ export const FinancialReportsPage: React.FC<{
         const std = students.find((s) => s.id === viewingInvoice.studentId);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+            <div id="official-student-invoice-sheet" className="print-area printable-sheet bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
               <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <SchoolLogo
@@ -1166,7 +1121,7 @@ export const FinancialReportsPage: React.FC<{
                     Close
                   </button>
                   <button
-                    onClick={() => window.print()}
+                    onClick={() => printReportSheet('official-student-invoice-sheet', `Invoice - ${viewingInvoice.invoiceNo} - ${viewingInvoice.studentName}`)}
                     className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
                   >
                     <Printer className="w-4 h-4 text-amber-300" />

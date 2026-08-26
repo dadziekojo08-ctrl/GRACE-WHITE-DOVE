@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { SchoolLogo } from '../common/SchoolLogo';
+import { printReportSheet } from '../../utils/printUtils';
 import {
   GraduationCap,
   Award,
@@ -134,7 +135,11 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
     wardAttendance.length > 0 ? Math.round((presentDays / wardAttendance.length) * 100) : 0;
 
   const handlePrint = () => {
-    window.print();
+    if (currentTab === 'academic-report') {
+      printReportSheet('parent-ward-report-sheet', `Grace White Dove Report - ${ward.firstName} ${ward.lastName}`);
+    } else {
+      window.print();
+    }
   };
 
   return (
@@ -208,7 +213,10 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
       {currentTab === 'academic-report' && (
         <div className="space-y-6">
           {/* Printable Report Card Sheet */}
-          <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6 print:p-0 print:border-none print:shadow-none">
+          <div
+            id="parent-ward-report-sheet"
+            className="print-area printable-sheet bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6 print:p-0 print:border-none print:shadow-none"
+          >
             {/* School Header */}
             <div className="border-b-2 border-emerald-900 pb-5 text-center relative">
               <div className="flex items-center justify-center gap-3.5 mb-2">

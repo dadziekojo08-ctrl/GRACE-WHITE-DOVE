@@ -12,20 +12,48 @@
 }
 
 @media print {
-  body * {
-    visibility: hidden;
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
   }
-  .print-area, .print-area * {
-    visibility: visible;
+
+  /* Universal print color accuracy */
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
-  .print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
+
+  html, body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
   }
-  .no-print {
+
+  /* Hide interactive controls and chrome during print */
+  header,
+  nav,
+  aside,
+  button,
+  .no-print,
+  .print-hidden,
+  [data-no-print] {
     display: none !important;
+  }
+
+  /* Print container resets */
+  .print-area,
+  .printable-sheet {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
   }
 }
 

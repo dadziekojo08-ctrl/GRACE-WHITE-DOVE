@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { SchoolLogo } from '../common/SchoolLogo';
+import { printReportSheet } from '../../utils/printUtils';
 import { Exam, ExamSchedule, MarkEntry, Student } from '../../types';
 import {
   Award,
@@ -846,7 +847,7 @@ export const ExamManagement: React.FC = () => {
             </div>
 
             <button
-              onClick={() => window.print()}
+              onClick={() => printReportSheet('official-terminal-report-sheet', `Grace White Dove Report - ${currentReportStudent.firstName} ${currentReportStudent.lastName}`)}
               className="px-5 py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold rounded-xl shadow-sm flex items-center gap-2 cursor-pointer transition-all"
             >
               <Printer className="w-4 h-4 text-amber-300" />
@@ -857,7 +858,10 @@ export const ExamManagement: React.FC = () => {
           {/* ============================================================= */}
           {/* PRINTABLE OFFICIAL TERMINAL REPORT CARD SHEET */}
           {/* ============================================================= */}
-          <div className="bg-white rounded-3xl border-2 border-emerald-950 p-6 sm:p-10 shadow-xl max-w-4xl mx-auto text-xs space-y-6 print:border-none print:shadow-none print:p-0 print:m-0 relative">
+          <div
+            id="official-terminal-report-sheet"
+            className="print-area printable-sheet bg-white rounded-3xl border-2 border-emerald-950 p-6 sm:p-10 shadow-xl max-w-4xl mx-auto text-xs space-y-6 print:border-none print:shadow-none print:p-0 print:m-0 relative"
+          >
             {/* 1. Official Header & School Identity */}
             <div className="border-b-2 border-emerald-950 pb-5 text-center relative">
               <div className="flex items-center justify-center gap-3.5 mb-2">
