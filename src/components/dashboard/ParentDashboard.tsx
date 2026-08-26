@@ -332,10 +332,7 @@ export const ParentDashboard: React.FC = () => {
                       {isLowerPrimaryOrPreschool(ward.className) ? (
                         <th className="pb-2.5 text-center">Position</th>
                       ) : (
-                        <>
-                          <th className="pb-2.5 text-center">Grade</th>
-                          <th className="pb-2.5 text-center">GP</th>
-                        </>
+                        <th className="pb-2.5 text-center">Grade</th>
                       )}
                       <th className="pb-2.5 text-right">Interpretation</th>
                     </tr>
@@ -359,16 +356,11 @@ export const ParentDashboard: React.FC = () => {
                               </span>
                             </td>
                           ) : (
-                            <>
-                              <td className="py-2.5 text-center">
-                                <span className={`font-black px-2 py-0.5 rounded text-[11px] border ${gradeRes.badgeClass}`}>
-                                  {gradeRes.grade}
-                                </span>
-                              </td>
-                              <td className="py-2.5 text-center font-mono font-bold text-slate-800">
-                                {gradeRes.gradePoint.toFixed(1)}
-                              </td>
-                            </>
+                            <td className="py-2.5 text-center">
+                              <span className={`font-black px-2 py-0.5 rounded text-[11px] border ${gradeRes.badgeClass}`}>
+                                {gradeRes.grade}
+                              </span>
+                            </td>
                           )}
                           <td className="py-2.5 text-right font-medium text-slate-700 text-[11px]">
                             {gradeRes.interpretation}

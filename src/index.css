@@ -14,7 +14,7 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm 10mm;
+    margin: 4mm 6mm;
   }
 
   /* Universal print color accuracy */
@@ -22,6 +22,7 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
+    box-sizing: border-box !important;
   }
 
   html, body {
@@ -32,6 +33,8 @@
     padding: 0 !important;
     height: auto !important;
     overflow: visible !important;
+    font-size: 9.5pt !important;
+    line-height: 1.25 !important;
   }
 
   /* Hide interactive controls and chrome during print */
@@ -45,7 +48,7 @@
     display: none !important;
   }
 
-  /* Print container resets */
+  /* Print container resets and single-sheet constraints */
   .print-area,
   .printable-sheet {
     box-shadow: none !important;
@@ -54,6 +57,31 @@
     padding: 0 !important;
     max-width: 100% !important;
     width: 100% !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Compact margins between sections on single-sheet print */
+  .printable-sheet > * + *,
+  .printable-sheet.space-y-6 > * + *,
+  .printable-sheet.space-y-5 > * + *,
+  .printable-sheet .space-y-6 > * + *,
+  .printable-sheet .space-y-5 > * + * {
+    margin-top: 0.35rem !important;
+  }
+  .printable-sheet .space-y-4 > * + * {
+    margin-top: 0.25rem !important;
+  }
+  .printable-sheet .space-y-3 > * + * {
+    margin-top: 0.2rem !important;
+  }
+
+  /* Compact table padding for print */
+  .printable-sheet table th,
+  .printable-sheet table td {
+    padding: 2.5px 5px !important;
+    font-size: 8pt !important;
+    line-height: 1.2 !important;
   }
 }
 

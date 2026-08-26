@@ -78,7 +78,7 @@ export function printReportSheet(elementId: string, title = 'Grace White Dove Sc
         <style>
           @page {
             size: A4 portrait;
-            margin: 8mm 10mm;
+            margin: 5mm 7mm;
           }
           *, *::before, *::after {
             -webkit-print-color-adjust: exact !important;
@@ -96,8 +96,8 @@ export function printReportSheet(elementId: string, title = 'Grace White Dove Sc
             height: auto !important;
             overflow: visible !important;
             font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
-            font-size: 11pt !important;
-            line-height: 1.4 !important;
+            font-size: 10pt !important;
+            line-height: 1.3 !important;
             visibility: visible !important;
             display: block !important;
           }
@@ -115,16 +115,45 @@ export function printReportSheet(elementId: string, title = 'Grace White Dove Sc
             display: block !important;
             visibility: visible !important;
             opacity: 1 !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
-          /* Ensure cards, badges and tables are preserved */
+          .printable-sheet {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          /* Ensure single-page fit for report cards */
+          .printable-sheet.space-y-6 > * + *,
+          .printable-sheet.space-y-5 > * + *,
+          .printable-sheet .space-y-6 > * + *,
+          .printable-sheet .space-y-5 > * + * {
+            margin-top: 0.45rem !important;
+          }
+          .printable-sheet .space-y-4 > * + * {
+            margin-top: 0.35rem !important;
+          }
+          .printable-sheet .space-y-3 > * + * {
+            margin-top: 0.25rem !important;
+          }
+          .printable-sheet .space-y-2 > * + * {
+            margin-top: 0.2rem !important;
+          }
+          /* Compact tables for print */
           table {
             width: 100% !important;
             border-collapse: collapse !important;
-            page-break-inside: auto;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
-          tr {
-            page-break-inside: avoid;
-            page-break-after: auto;
+          th, td {
+            padding: 2.5px 5px !important;
+            font-size: 8pt !important;
+            line-height: 1.2 !important;
           }
           thead {
             display: table-header-group;

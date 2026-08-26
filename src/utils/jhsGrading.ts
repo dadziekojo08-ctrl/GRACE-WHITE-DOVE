@@ -16,15 +16,15 @@
  * 0 - 35    | 10TH     | FAIL
  * 
  * 2. JHS & UPPER PRIMARY GRADING SYSTEM (Basic 4 to JHS 3)
- * Raw Score | Grade | Grade Point | Interpretation
- * 80 - 100  | A     | 4.0         | Excellent
- * 75 - 79   | B+    | 3.5         | Very Good
- * 70 - 74   | B     | 3.0         | Good
- * 65 - 69   | C+    | 2.5         | Average
- * 60 - 64   | C     | 2.0         | Fair
- * 55 - 59   | D+    | 1.5         | barely satisfactory
- * 50 - 54   | D     | 1.0         | Weak Pass
- * Below 50  | E     | 0           | Fail
+ * Raw Score | Grade | Interpretation
+ * 80 - 100  | 1     | Excellent
+ * 75 - 79   | 2     | Very Good
+ * 70 - 74   | 3     | Good
+ * 65 - 69   | 4     | Average
+ * 60 - 64   | 5     | Fair
+ * 55 - 59   | 6     | Barely Satisfactory
+ * 50 - 54   | 7     | Weak Pass
+ * Below 50  | 8     | Fail
  */
 
 export interface LowerPrimaryGradeTier {
@@ -145,7 +145,7 @@ export const JHS_GRADING_SCHEME: JHSGradeTier[] = [
     minScore: 80,
     maxScore: 100,
     scoreRangeLabel: '80 – 100',
-    grade: 'A',
+    grade: '1',
     gradePoint: 4.0,
     interpretation: 'Excellent',
     badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300'
@@ -154,7 +154,7 @@ export const JHS_GRADING_SCHEME: JHSGradeTier[] = [
     minScore: 75,
     maxScore: 79.99,
     scoreRangeLabel: '75 – 79',
-    grade: 'B+',
+    grade: '2',
     gradePoint: 3.5,
     interpretation: 'Very Good',
     badgeClass: 'bg-teal-100 text-teal-800 border-teal-300'
@@ -163,7 +163,7 @@ export const JHS_GRADING_SCHEME: JHSGradeTier[] = [
     minScore: 70,
     maxScore: 74.99,
     scoreRangeLabel: '70 – 74',
-    grade: 'B',
+    grade: '3',
     gradePoint: 3.0,
     interpretation: 'Good',
     badgeClass: 'bg-blue-100 text-blue-800 border-blue-300'
@@ -172,7 +172,7 @@ export const JHS_GRADING_SCHEME: JHSGradeTier[] = [
     minScore: 65,
     maxScore: 69.99,
     scoreRangeLabel: '65 – 69',
-    grade: 'C+',
+    grade: '4',
     gradePoint: 2.5,
     interpretation: 'Average',
     badgeClass: 'bg-cyan-100 text-cyan-800 border-cyan-300'
@@ -181,7 +181,7 @@ export const JHS_GRADING_SCHEME: JHSGradeTier[] = [
     minScore: 60,
     maxScore: 64.99,
     scoreRangeLabel: '60 – 64',
-    grade: 'C',
+    grade: '5',
     gradePoint: 2.0,
     interpretation: 'Fair',
     badgeClass: 'bg-amber-100 text-amber-900 border-amber-300'
@@ -190,16 +190,16 @@ export const JHS_GRADING_SCHEME: JHSGradeTier[] = [
     minScore: 55,
     maxScore: 59.99,
     scoreRangeLabel: '55 – 59',
-    grade: 'D+',
+    grade: '6',
     gradePoint: 1.5,
-    interpretation: 'barely satisfactory',
+    interpretation: 'Barely Satisfactory',
     badgeClass: 'bg-orange-100 text-orange-900 border-orange-300'
   },
   {
     minScore: 50,
     maxScore: 54.99,
     scoreRangeLabel: '50 – 54',
-    grade: 'D',
+    grade: '7',
     gradePoint: 1.0,
     interpretation: 'Weak Pass',
     badgeClass: 'bg-rose-100 text-rose-800 border-rose-300'
@@ -208,7 +208,7 @@ export const JHS_GRADING_SCHEME: JHSGradeTier[] = [
     minScore: 0,
     maxScore: 49.99,
     scoreRangeLabel: 'Below 50',
-    grade: 'E',
+    grade: '8',
     gradePoint: 0,
     interpretation: 'Fail',
     badgeClass: 'bg-red-100 text-red-800 border-red-300'
@@ -368,8 +368,8 @@ export function calculateJHSGrade(
 
   // Fallback for below 50
   return {
-    grade: 'E',
-    position: 'E',
+    grade: '8',
+    position: '8',
     gradePoint: 0,
     interpretation: 'Fail',
     scoreRangeLabel: 'Below 50',

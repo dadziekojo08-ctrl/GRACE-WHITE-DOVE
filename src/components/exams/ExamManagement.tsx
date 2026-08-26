@@ -410,11 +410,11 @@ export const ExamManagement: React.FC = () => {
                 ? 'bg-amber-100 text-amber-950 border-amber-300'
                 : 'bg-emerald-100 text-emerald-950 border-emerald-300'
             }`}>
-              {isCurrentClassLowerPrimary ? 'Pre-School & Lower Primary Grading (Nursery – Basic 3)' : 'JHS Standard Grading (Basic 4 – JHS 3)'}
+              {isCurrentClassLowerPrimary ? 'Pre-School & Lower Primary Grading (Nursery – Basic 3)' : 'Upper Primary & JHS Numerical Grading (Basic 4 – JHS 3)'}
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Dual official assessment system: Pre-School & Lower Primary (Nursery to Basic 3: 1ST Distinction to 10TH Fail) and JHS (Basic 4 to JHS 3: A to E with 4.0 GPA scale).
+            Dual official assessment system: Pre-School & Lower Primary (Nursery to Basic 3: 1ST Distinction to 10TH Fail) and Upper Primary & JHS (Basic 4 to JHS 3: Numerical Grades 1 to 8).
           </p>
         </div>
 
@@ -491,12 +491,12 @@ export const ExamManagement: React.FC = () => {
                 <h4 className="text-xs font-extrabold text-slate-900 font-['Outfit']">
                   {isCurrentClassLowerPrimary
                     ? 'GRACE WHITE DOVE SCHOOL COMPLEX • PRE-SCHOOL & LOWER PRIMARY GRADING (NURSERY TO BASIC 3)'
-                    : 'JHS & UPPER PRIMARY GRADING SYSTEM (BASIC 4 TO JHS 3)'}
+                    : 'UPPER PRIMARY & JHS NUMERICAL GRADING SYSTEM (BASIC 4 TO JHS 3)'}
                 </h4>
                 <p className="text-[11px] text-slate-500">
                   {isCurrentClassLowerPrimary
                     ? 'Raw score percentage conversion into official position rank (1ST to 10TH) and qualitative interpretation.'
-                    : 'Raw score conversion into official Letter Grades (A to E) and Grade Points (4.0 to 0.0).'}
+                    : 'Raw score conversion into official Numerical Grades (1 to 8) and qualitative evaluation.'}
                 </p>
               </div>
             </div>
@@ -539,8 +539,7 @@ export const ExamManagement: React.FC = () => {
                 <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] border-b border-slate-200">
                   <tr>
                     <th className="py-2 px-3">Raw Score</th>
-                    <th className="py-2 px-3 text-center">Grade</th>
-                    <th className="py-2 px-3 text-center">Grade Point</th>
+                    <th className="py-2 px-3 text-center">Grade (1 – 8)</th>
                     <th className="py-2 px-3">Interpretation</th>
                   </tr>
                 </thead>
@@ -549,11 +548,10 @@ export const ExamManagement: React.FC = () => {
                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
                       <td className="py-1.5 px-3 font-bold text-slate-800">{tier.scoreRangeLabel}</td>
                       <td className="py-1.5 px-3 text-center">
-                        <span className={`px-2 py-0.5 rounded font-black text-xs ${tier.badgeClass}`}>
-                          {tier.grade}
+                        <span className={`px-2.5 py-0.5 rounded font-black text-xs border ${tier.badgeClass}`}>
+                          Grade {tier.grade}
                         </span>
                       </td>
-                      <td className="py-1.5 px-3 text-center font-bold text-slate-900">{tier.gradePoint.toFixed(1)}</td>
                       <td className="py-1.5 px-3 font-sans font-medium text-slate-700">{tier.interpretation}</td>
                     </tr>
                   ))}
@@ -700,10 +698,7 @@ export const ExamManagement: React.FC = () => {
                     {isCurrentClassLowerPrimary ? (
                       <th className="py-3 px-3 text-center">Position</th>
                     ) : (
-                      <>
-                        <th className="py-3 px-3 text-center">Grade</th>
-                        <th className="py-3 px-3 text-center">Grade Point</th>
-                      </>
+                      <th className="py-3 px-3 text-center">Grade</th>
                     )}
                     <th className="py-3 px-3">Interpretation</th>
                     <th className="py-3 px-3">Status</th>
@@ -748,16 +743,11 @@ export const ExamManagement: React.FC = () => {
                             </span>
                           </td>
                         ) : (
-                          <>
-                            <td className="py-3 px-3 text-center">
-                              <span className={`px-2 py-0.5 rounded font-black text-xs border ${gradeResult.badgeClass}`}>
-                                {gradeResult.grade}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3 text-center font-black font-mono text-slate-800">
-                              {gradeResult.gradePoint.toFixed(1)}
-                            </td>
-                          </>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`px-2.5 py-0.5 rounded font-black text-xs border ${gradeResult.badgeClass}`}>
+                              Grade {gradeResult.grade}
+                            </span>
+                          </td>
                         )}
 
                         <td className="py-3 px-3 font-bold text-slate-800">
@@ -860,55 +850,55 @@ export const ExamManagement: React.FC = () => {
           {/* ============================================================= */}
           <div
             id="official-terminal-report-sheet"
-            className="print-area printable-sheet bg-white rounded-3xl border-2 border-emerald-950 p-6 sm:p-10 shadow-xl max-w-4xl mx-auto text-xs space-y-6 print:border-none print:shadow-none print:p-0 print:m-0 relative"
+            className="print-area printable-sheet bg-white rounded-3xl border-2 border-emerald-950 p-6 sm:p-8 shadow-xl max-w-4xl mx-auto text-xs space-y-4 print:space-y-2 print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-full relative"
           >
             {/* 1. Official Header & School Identity */}
-            <div className="border-b-2 border-emerald-950 pb-5 text-center relative">
-              <div className="flex items-center justify-center gap-3.5 mb-2">
+            <div className="border-b-2 border-emerald-950 pb-3 print:pb-1.5 text-center relative">
+              <div className="flex items-center justify-center gap-3 mb-1.5 print:mb-1">
                 <SchoolLogo
                   alt="Grace White Dove Logo"
-                  className="w-16 h-16 rounded-2xl object-contain bg-white p-1 shadow-md border-2 border-amber-400 shrink-0"
+                  className="w-14 h-14 print:w-11 print:h-11 rounded-xl object-contain bg-white p-1 shadow-xs border border-amber-400 shrink-0"
                 />
                 <div className="text-center sm:text-left">
-                  <h1 className="text-xl sm:text-3xl font-black text-emerald-950 uppercase tracking-tight font-['Outfit']">
+                  <h1 className="text-xl sm:text-2xl print:text-lg font-black text-emerald-950 uppercase tracking-tight font-['Outfit']">
                     Grace White Dove School Complex
                   </h1>
-                  <p className="text-xs text-slate-600 font-semibold uppercase tracking-wider">
+                  <p className="text-xs print:text-[9px] text-slate-600 font-semibold uppercase tracking-wider">
                     Official Terminal Student Continuous Assessment & Evaluation Report
                   </p>
-                  <p className="text-[11px] text-slate-500 font-mono">
+                  <p className="text-[11px] print:text-[8.5px] text-slate-500 font-mono">
                     Tel: 0244403541 | Email: gracewhitedoveschool@gmail.com | Cape Coast, Ghana
                   </p>
                 </div>
               </div>
 
-              <div className="inline-block bg-emerald-950 text-amber-400 text-[11px] font-black uppercase px-4 py-1 rounded-full tracking-widest mt-1">
+              <div className="inline-block bg-emerald-950 text-amber-400 text-[10px] print:text-[8.5px] font-black uppercase px-3 py-0.5 rounded-full tracking-wider mt-0.5">
                 {isStudentLowerPrimary 
                   ? `Pre-School & Lower Primary Academic Transcript • ${currentTerm} (${academicYear})`
-                  : `JHS Standard Academic Performance Transcript • ${currentTerm} (${academicYear})`}
+                  : `Upper Primary & JHS Standard Academic Transcript • ${currentTerm} (${academicYear})`}
               </div>
             </div>
 
             {/* 2. Student Particulars Card */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-emerald-50/70 p-4 rounded-2xl border border-emerald-300">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 print:gap-1.5 bg-emerald-50/70 p-3 print:p-1.5 rounded-xl border border-emerald-300 text-xs print:text-[8.5pt]">
               <div>
-                <span className="text-emerald-900 block text-[10px] uppercase font-bold">Student Name</span>
-                <span className="font-black text-slate-900 text-sm">
+                <span className="text-emerald-900 block text-[9px] print:text-[7.5pt] uppercase font-bold">Student Name</span>
+                <span className="font-black text-slate-900 text-xs print:text-[8.5pt]">
                   {currentReportStudent.firstName} {currentReportStudent.lastName}
                 </span>
               </div>
               <div>
-                <span className="text-emerald-900 block text-[10px] uppercase font-bold">Admission Number</span>
+                <span className="text-emerald-900 block text-[9px] print:text-[7.5pt] uppercase font-bold">Admission Number</span>
                 <span className="font-mono font-bold text-slate-900">{currentReportStudent.admissionNo}</span>
               </div>
               <div>
-                <span className="text-emerald-900 block text-[10px] uppercase font-bold">Class & Section</span>
+                <span className="text-emerald-900 block text-[9px] print:text-[7.5pt] uppercase font-bold">Class & Section</span>
                 <span className="font-extrabold text-emerald-950">
                   {currentReportStudent.className} (Sec {currentReportStudent.section || 'A'})
                 </span>
               </div>
               <div>
-                <span className="text-emerald-900 block text-[10px] uppercase font-bold">Roll / Position</span>
+                <span className="text-emerald-900 block text-[9px] print:text-[7.5pt] uppercase font-bold">Roll / Position</span>
                 <span className="font-bold text-slate-900">
                   Roll #{currentReportStudent.rollNo || '01'}
                 </span>
@@ -916,59 +906,56 @@ export const ExamManagement: React.FC = () => {
             </div>
 
             {/* 3. Academic KPI Banner */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 print:gap-1.5">
               {isStudentLowerPrimary ? (
-                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-center">
-                  <span className="text-[10px] font-extrabold uppercase text-slate-500 block">Overall Rank / Position</span>
-                  <span className="text-2xl font-black text-emerald-950 font-['Outfit']">
+                <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1 rounded-lg text-center">
+                  <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-slate-500 block">Overall Position</span>
+                  <span className="text-xl print:text-sm font-black text-emerald-950 font-['Outfit']">
                     {averagePositionResult.position}
                   </span>
                 </div>
               ) : (
-                <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-center">
-                  <span className="text-[10px] font-extrabold uppercase text-slate-500 block">Cumulative GPA</span>
-                  <span className="text-2xl font-black text-emerald-950 font-mono font-['Outfit']">
-                    {gpaStats.formattedGpa} <span className="text-xs text-slate-400">/ 4.00</span>
+                <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1 rounded-lg text-center">
+                  <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-slate-500 block">Overall Grade</span>
+                  <span className="text-xl print:text-sm font-black text-emerald-950 font-mono font-['Outfit']">
+                    Grade {calculateJHSGrade(averagePercentage).grade}
                   </span>
                 </div>
               )}
-              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-center">
-                <span className="text-[10px] font-extrabold uppercase text-slate-500 block">Average Raw Score</span>
-                <span className="text-2xl font-black text-emerald-950 font-mono font-['Outfit']">
+              <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1 rounded-lg text-center">
+                <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-slate-500 block">Average Raw Score</span>
+                <span className="text-xl print:text-sm font-black text-emerald-950 font-mono font-['Outfit']">
                   {averagePercentage}%
                 </span>
               </div>
-              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-center">
-                <span className="text-[10px] font-extrabold uppercase text-slate-500 block">Subjects Assessed</span>
-                <span className="text-2xl font-black text-emerald-950 font-mono font-['Outfit']">
+              <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1 rounded-lg text-center">
+                <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-slate-500 block">Subjects Assessed</span>
+                <span className="text-xl print:text-sm font-black text-emerald-950 font-mono font-['Outfit']">
                   {studentMarks.length}
                 </span>
               </div>
-              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-center">
-                <span className="text-[10px] font-extrabold uppercase text-slate-500 block">Overall Standing</span>
-                <span className="text-xs font-black text-emerald-800 block mt-1">
-                  {averagePositionResult.interpretation}
+              <div className="bg-slate-50 border border-slate-200 p-2.5 print:p-1 rounded-lg text-center">
+                <span className="text-[9px] print:text-[7.5pt] font-extrabold uppercase text-slate-500 block">Overall Standing</span>
+                <span className="text-xs print:text-[8pt] font-black text-emerald-800 block mt-0.5">
+                  {isStudentLowerPrimary ? averagePositionResult.interpretation : calculateJHSGrade(averagePercentage).interpretation}
                 </span>
               </div>
             </div>
 
             {/* 4. Detailed Assessment Breakdown Table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse border border-slate-300 text-xs">
+              <table className="w-full text-left border-collapse border border-slate-300 text-xs print:text-[8pt]">
                 <thead>
-                  <tr className="bg-emerald-950 text-white uppercase text-[10px] tracking-wider font-bold">
-                    <th className="py-2.5 px-3 border border-emerald-900">Subject Name</th>
-                    <th className="py-2.5 px-3 border border-emerald-900 text-center">Raw Score</th>
+                  <tr className="bg-emerald-950 text-white uppercase text-[9.5px] print:text-[7.5pt] tracking-wider font-bold">
+                    <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900">Subject Name</th>
+                    <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900 text-center">Raw Score</th>
                     {isStudentLowerPrimary ? (
-                      <th className="py-2.5 px-3 border border-emerald-900 text-center">Position</th>
+                      <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900 text-center">Position</th>
                     ) : (
-                      <>
-                        <th className="py-2.5 px-3 border border-emerald-900 text-center">Grade</th>
-                        <th className="py-2.5 px-3 border border-emerald-900 text-center">Grade Point</th>
-                      </>
+                      <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900 text-center">Grade</th>
                     )}
-                    <th className="py-2.5 px-3 border border-emerald-900 text-center">Interpretation</th>
-                    <th className="py-2.5 px-3 border border-emerald-900">Teacher's Remarks</th>
+                    <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900 text-center">Interpretation</th>
+                    <th className="py-2 px-2.5 print:py-1 print:px-1.5 border border-emerald-900">Teacher's Remarks</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -978,34 +965,29 @@ export const ExamManagement: React.FC = () => {
 
                     return (
                       <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
-                        <td className="py-2.5 px-3 font-bold text-slate-900 border border-slate-200">{m.subject || m.subjectName}</td>
-                        <td className="py-2.5 px-3 text-center font-black font-mono text-emerald-950 border border-slate-200">
+                        <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 font-bold text-slate-900 border border-slate-200">{m.subject || m.subjectName}</td>
+                        <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center font-black font-mono text-emerald-950 border border-slate-200">
                           {m.specialStatus === 'IC' ? 'IC' : m.specialStatus === 'Audit' ? 'AUDIT' : `${rawTotal}%`}
                         </td>
                         
                         {isStudentLowerPrimary ? (
-                          <td className="py-2.5 px-3 text-center font-black border border-slate-200">
-                            <span className={`px-2.5 py-0.5 rounded text-[11px] font-black border ${gradeInfo.badgeClass}`}>
+                          <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center font-black border border-slate-200">
+                            <span className={`px-2 py-0.5 rounded text-[10px] print:text-[7.5pt] font-black border ${gradeInfo.badgeClass}`}>
                               {gradeInfo.position || gradeInfo.grade}
                             </span>
                           </td>
                         ) : (
-                          <>
-                            <td className="py-2.5 px-3 text-center font-black border border-slate-200">
-                              <span className={`px-2 py-0.5 rounded text-[11px] font-black border ${gradeInfo.badgeClass}`}>
-                                {gradeInfo.grade}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-900 border border-slate-200">
-                              {gradeInfo.gradePoint.toFixed(1)}
-                            </td>
-                          </>
+                          <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center font-black border border-slate-200">
+                            <span className={`px-2 py-0.5 rounded text-[10px] print:text-[7.5pt] font-black border ${gradeInfo.badgeClass}`}>
+                              {gradeInfo.grade}
+                            </span>
+                          </td>
                         )}
 
-                        <td className="py-2.5 px-3 text-center font-bold text-slate-900 border border-slate-200 text-[11px]">
+                        <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-center font-bold text-slate-900 border border-slate-200 text-[10.5px] print:text-[7.5pt]">
                           {gradeInfo.interpretation}
                         </td>
-                        <td className="py-2.5 px-3 text-slate-600 border border-slate-200 italic text-[11px]">
+                        <td className="py-1.5 px-2.5 print:py-0.5 print:px-1.5 text-slate-600 border border-slate-200 italic text-[10.5px] print:text-[7.5pt]">
                           {m.remarks || m.remark || gradeInfo.interpretation}
                         </td>
                       </tr>
@@ -1019,109 +1001,74 @@ export const ExamManagement: React.FC = () => {
             {/* 5. OFFICIAL GRADING CONVERSION SCHEME REFERENCE KEY (FOOTER) */}
             {/* ============================================================= */}
             {isStudentLowerPrimary ? (
-              /* EXACT PRE-SCHOOL & LOWER PRIMARY GRADING SYSTEM AS REQUESTED FROM IMAGE */
-              <div className="border-2 border-slate-400 rounded-2xl p-4 bg-white relative overflow-hidden space-y-3">
-                {/* Watermark Crest Background */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">
-                  <div className="text-center font-black text-emerald-950">
-                    <span className="text-7xl block font-['Outfit']">GRACE WHITE DOVE</span>
-                    <span className="text-4xl block">SCHOOL COMPLEX</span>
-                    <span className="text-xl block tracking-widest mt-2">GRACE AND GLORY OUR GOAL</span>
-                  </div>
-                </div>
-
-                <div className="text-center pb-2 border-b border-slate-300">
-                  <h3 className="font-bold text-xs uppercase tracking-wider text-slate-900 font-['Outfit']">
-                    GRACE WHITE DOVE SCHOOL COMPLEX
-                  </h3>
-                  <h4 className="font-black text-xs text-emerald-950 uppercase tracking-wide">
-                    GRADING SYSTEM FOR PRE-SCHOOL & LOWER PRIMARY
+              /* EXACT PRE-SCHOOL & LOWER PRIMARY GRADING SYSTEM */
+              <div className="border border-slate-300 rounded-xl p-2.5 print:p-1.5 bg-white relative overflow-hidden space-y-1.5 print:space-y-1">
+                <div className="text-center pb-1 border-b border-slate-200">
+                  <h4 className="font-extrabold text-[10px] print:text-[8pt] text-emerald-950 uppercase tracking-wide font-['Outfit']">
+                    GRACE WHITE DOVE SCHOOL COMPLEX • PRE-SCHOOL & LOWER PRIMARY GRADING SYSTEM
                   </h4>
                 </div>
 
-                <div className="overflow-hidden border border-slate-400 rounded-xl">
-                  <table className="w-full text-center text-[11px] border-collapse">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-900 font-black uppercase text-[10px] border-b border-slate-400">
-                        <th className="py-2 px-3 border-r border-slate-300">MARKS (%)</th>
-                        <th className="py-2 px-3 border-r border-slate-300">POSITION</th>
-                        <th className="py-2 px-3">INTERPRETATION</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-300 font-semibold text-slate-800">
-                      {LOWER_PRIMARY_GRADING_SCHEME.map((row, idx) => (
-                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}>
-                          <td className="py-1.5 px-3 border-r border-slate-300 font-mono font-bold">{row.scoreRangeLabel}</td>
-                          <td className="py-1.5 px-3 border-r border-slate-300 font-black text-emerald-950">{row.position}</td>
-                          <td className="py-1.5 px-3 font-bold text-slate-900">{row.interpretation}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 print:gap-1 text-[9px] print:text-[7.5pt]">
+                  {LOWER_PRIMARY_GRADING_SCHEME.map((row, idx) => (
+                    <div key={idx} className="bg-slate-50 p-1.5 print:p-1 rounded border border-slate-200 text-center">
+                      <span className="font-mono font-bold text-slate-800 block">{row.scoreRangeLabel}</span>
+                      <span className="font-black text-emerald-950 block text-[10px] print:text-[8pt]">{row.position}</span>
+                      <span className="text-slate-500 text-[8.5px] print:text-[7pt] block">{row.interpretation}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : (
-              /* JHS CONVERSION REFERENCE */
-              <div className="border border-slate-300 rounded-2xl p-4 bg-slate-50/80 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-emerald-800" />
-                  <span className="font-extrabold text-xs text-emerald-950 uppercase tracking-wider font-['Outfit']">
-                    Official JHS Grading Scheme & Conversion Scale Reference
+              /* JHS & UPPER PRIMARY NUMERICAL CONVERSION REFERENCE */
+              <div className="border border-slate-300 rounded-xl p-2.5 print:p-1.5 bg-slate-50/80 space-y-1.5 print:space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-800" />
+                  <span className="font-extrabold text-[10px] print:text-[8pt] text-emerald-950 uppercase tracking-wider font-['Outfit']">
+                    Upper Primary & JHS Official Numerical Grading System (Basic 4 to JHS 3)
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500">
-                  Examination and continuous assessment raw scores are converted according to the following official scheme:
-                </p>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-1.5 print:gap-1 text-[9px] print:text-[7.5pt]">
                   {JHS_GRADING_SCHEME.map((tier, idx) => (
-                    <div key={idx} className="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-slate-900 block font-mono">{tier.scoreRangeLabel}</span>
-                        <span className="text-slate-500">{tier.interpretation}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-black text-xs text-emerald-900 block">{tier.grade}</span>
-                        <span className="font-mono text-slate-600 font-bold">{tier.gradePoint.toFixed(1)} GP</span>
-                      </div>
+                    <div key={idx} className="bg-white p-1.5 print:p-1 rounded border border-slate-200 text-center">
+                      <span className="font-bold text-slate-900 block font-mono">{tier.scoreRangeLabel}</span>
+                      <span className="font-black text-[11px] print:text-[8.5pt] text-emerald-900 block font-mono">Grade {tier.grade}</span>
+                      <span className="text-slate-500 text-[8.5px] print:text-[7pt] block">{tier.interpretation}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-[10px] text-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <strong className="text-slate-900">Audit:</strong> The grade point is zero.
-                  </div>
-                  <div>
-                    <strong className="text-slate-900">Incomplete (IC):</strong> A student is graded IC when he/she misses one or more components of the assessment.
-                  </div>
+                <div className="bg-white p-1.5 print:p-1 rounded border border-slate-200 text-[9px] print:text-[7.5pt] text-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <div><strong className="text-slate-900">Audit:</strong> Audited coursework without numerical grade.</div>
+                  <div><strong className="text-slate-900">Incomplete (IC):</strong> Missing one or more assessment components.</div>
                 </div>
               </div>
             )}
 
             {/* 6. Qualitative Appraisal, Signatures & Stamp */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div className="border border-slate-300 rounded-2xl p-4 space-y-2 bg-white">
-                <span className="font-bold text-emerald-950 block text-xs uppercase tracking-wider">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 print:gap-2 pt-1 print:pt-0.5">
+              <div className="border border-slate-300 rounded-xl p-3 print:p-1.5 space-y-1 print:space-y-0.5 bg-white text-xs print:text-[8pt]">
+                <span className="font-bold text-emerald-950 block text-[10px] print:text-[7.5pt] uppercase tracking-wider">
                   Class Teacher's General Appraisal:
                 </span>
-                <p className="text-slate-700 italic text-[11px] leading-relaxed">
+                <p className="text-slate-700 italic text-[10.5px] print:text-[7.5pt] leading-tight">
                   "Demonstrates remarkable intellectual dedication, keen curiosity, and exemplary manners. Participates actively in all academic activities. Keep up the brilliant effort!"
                 </p>
-                <div className="pt-3 text-[11px] text-slate-500 border-t border-slate-200 flex justify-between items-center">
+                <div className="pt-1.5 print:pt-1 text-[10px] print:text-[7.5pt] text-slate-500 border-t border-slate-200 flex justify-between items-center">
                   <span>Class Teacher Signature</span>
-                  <span className="font-mono text-slate-700">✓ Signed: _________________</span>
+                  <span className="font-mono text-slate-700 font-semibold">✓ Signed: _________________</span>
                 </div>
               </div>
 
-              <div className="border border-slate-300 rounded-2xl p-4 space-y-2 bg-white">
-                <span className="font-bold text-emerald-950 block text-xs uppercase tracking-wider">
+              <div className="border border-slate-300 rounded-xl p-3 print:p-1.5 space-y-1 print:space-y-0.5 bg-white text-xs print:text-[8pt]">
+                <span className="font-bold text-emerald-950 block text-[10px] print:text-[7.5pt] uppercase tracking-wider">
                   Head of School Official Endorsement:
                 </span>
-                <p className="text-slate-700 italic text-[11px] leading-relaxed">
+                <p className="text-slate-700 italic text-[10.5px] print:text-[7.5pt] leading-tight">
                   "Promoted to next grade level with commendation for excellence. Grace White Dove School Complex continues to nurture values-driven academic distinction."
                 </p>
-                <div className="pt-3 text-[11px] text-slate-500 border-t border-slate-200 flex justify-between items-center">
+                <div className="pt-1.5 print:pt-1 text-[10px] print:text-[7.5pt] text-slate-500 border-t border-slate-200 flex justify-between items-center">
                   <span>Headmistress: <strong>Diana Adu-Boahen (M.Ed)</strong></span>
                   <span className="font-bold text-amber-900">[OFFICIAL SEAL AFFIXED]</span>
                 </div>
@@ -1265,7 +1212,7 @@ export const ExamManagement: React.FC = () => {
             <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-6">
               <div className="border-b border-slate-200 pb-4">
                 <h3 className="text-xl font-black text-emerald-950 font-['Outfit']">
-                  JHS & Upper Primary Grading & Evaluation Scheme
+                  Upper Primary & JHS Official Numerical Grading System
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
                   Applicable to Primary 4, Primary 5, Primary 6, JHS 1, JHS 2, and JHS 3:
@@ -1277,8 +1224,7 @@ export const ExamManagement: React.FC = () => {
                   <thead className="bg-emerald-950 text-white font-bold uppercase text-[11px]">
                     <tr>
                       <th className="py-3 px-4">Raw Score</th>
-                      <th className="py-3 px-4 text-center">Grade</th>
-                      <th className="py-3 px-4 text-center">Grade Point</th>
+                      <th className="py-3 px-4 text-center">Grade (1 – 8)</th>
                       <th className="py-3 px-4">Interpretation</th>
                     </tr>
                   </thead>
@@ -1287,12 +1233,9 @@ export const ExamManagement: React.FC = () => {
                       <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                         <td className="py-3 px-4 font-mono font-bold text-slate-900">{row.scoreRangeLabel}</td>
                         <td className="py-3 px-4 text-center font-black">
-                          <span className={`px-2.5 py-1 rounded text-xs border ${row.badgeClass}`}>
-                            {row.grade}
+                          <span className={`px-3 py-1 rounded text-xs border font-bold ${row.badgeClass}`}>
+                            Grade {row.grade}
                           </span>
-                        </td>
-                        <td className="py-3 px-4 text-center font-mono font-black text-slate-900">
-                          {row.gradePoint.toFixed(1)}
                         </td>
                         <td className="py-3 px-4 font-semibold text-slate-800">{row.interpretation}</td>
                       </tr>
@@ -1302,11 +1245,11 @@ export const ExamManagement: React.FC = () => {
               </div>
 
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3 text-xs">
-                <h4 className="font-bold text-slate-900 font-['Outfit'] text-sm">Other Grades:</h4>
+                <h4 className="font-bold text-slate-900 font-['Outfit'] text-sm">Other Assessment Statuses:</h4>
                 <div className="space-y-2 text-slate-700">
                   <div className="p-3 bg-white rounded-xl border border-slate-200">
                     <span className="font-bold text-emerald-950 block">Audit</span>
-                    <p className="text-slate-600 text-xs">The grade point is zero.</p>
+                    <p className="text-slate-600 text-xs">Audited coursework without numerical grade.</p>
                   </div>
                   <div className="p-3 bg-white rounded-xl border border-slate-200">
                     <span className="font-bold text-emerald-950 block">Incomplete (IC)</span>

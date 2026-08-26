@@ -771,10 +771,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                     {isLowerPrimaryOrPreschool(teacherAssignedClass || displayStudents[0]?.className) ? (
                       <th className="py-3 px-3 text-center">Position</th>
                     ) : (
-                      <>
-                        <th className="py-3 px-3 text-center">Grade</th>
-                        <th className="py-3 px-3 text-center">GP</th>
-                      </>
+                      <th className="py-3 px-3 text-center">Grade</th>
                     )}
                     <th className="py-3 px-3">Interpretation</th>
                     <th className="py-3 px-3 text-right">Remarks</th>
@@ -815,16 +812,11 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                             </span>
                           </td>
                         ) : (
-                          <>
-                            <td className="py-3 px-3 text-center">
-                              <span className={`px-2.5 py-0.5 rounded text-[11px] font-black border ${gradeResult.badgeClass}`}>
-                                {gradeResult.grade}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3 text-center font-mono font-black text-slate-800">
-                              {gradeResult.gradePoint.toFixed(1)}
-                            </td>
-                          </>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`px-2.5 py-0.5 rounded text-[11px] font-black border ${gradeResult.badgeClass}`}>
+                              Grade {gradeResult.grade}
+                            </span>
+                          </td>
                         )}
                         <td className="py-3 px-3 font-semibold text-slate-700">
                           {gradeResult.interpretation}
