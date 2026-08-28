@@ -111,18 +111,7 @@ const MainContent: React.FC = () => {
     if (activeRole === 'Teacher') {
       switch (activeTab) {
         case 'students':
-          return (
-            <StudentManagement
-              onOpenPaystackForStudent={(std) =>
-                handleOpenPaystack(
-                  undefined,
-                  std?.balanceDue || 0,
-                  std ? `${std.firstName} ${std.lastName}` : 'Student',
-                  std?.id
-                )
-              }
-            />
-          );
+          return <StudentManagement />;
         case 'library':
           return <LibraryManagement />;
         case 'classes':
@@ -148,7 +137,12 @@ const MainContent: React.FC = () => {
     // 4. Admin & Management View Routing
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardOverview onOpenPaystack={() => handleOpenPaystack()} onOpenGateScanner={() => {}} />;
+        return (
+          <DashboardOverview
+            onOpenPaystack={(inv, amt, name, id) => handleOpenPaystack(inv, amt, name, id)}
+            onOpenGateScanner={() => {}}
+          />
+        );
       case 'my-child':
         return (
           <ParentMyChild

@@ -55,10 +55,13 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
     generateNextStudentNumber,
     suggestTeacherForClass,
     currentUser,
+    activeRole,
     updateStudentArrears,
     reassignStudentClass,
     bulkReassignStudentsClass
   } = useSchool();
+
+  const isTeacher = activeRole === 'Teacher' || currentUser?.role === 'Teacher';
 
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -235,8 +238,8 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
         guardianEmail: formData.guardianEmail,
         address: formData.address,
         photoUrl: formData.photoUrl,
-        balanceDue: Number(formData.balanceDue),
-        manualArrears: Number(formData.manualArrears) || 0
+        balanceDue: isTeacher ? editingStudent.balanceDue : Number(formData.balanceDue),
+        manualArrears: isTeacher ? (editingStudent.manualArrears || 0) : (Number(formData.manualArrears) || 0)
       });
       setEditingStudent(null);
     } else {
@@ -258,8 +261,8 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
         address: formData.address,
         status: 'Active',
         photoUrl: formData.photoUrl || `https://api.dicebear.com/7.x/micah/svg?seed=${encodeURIComponent(formData.firstName + ' ' + formData.lastName)}`,
-        balanceDue: Number(formData.balanceDue),
-        manualArrears: Number(formData.manualArrears) || 0
+        balanceDue: isTeacher ? 0 : Number(formData.balanceDue),
+        manualArrears: isTeacher ? 0 : (Number(formData.manualArrears) || 0)
       });
       setIsAddModalOpen(false);
     }
@@ -341,21 +344,20 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
   };
 
   const handleExportCSV = () => {
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      ['Admission No,Name,Class,Section,Roll No,Gender,Guardian,Phone,Fee Balance']
-        .concat(
-          filteredStudents.map(
-            (s) =>
-              `"${s.admissionNo}","${s.firstName} ${s.lastName}","${s.className}","${s.section}","${s.rollNo}","${s.gender}","${s.guardianName}","${s.guardianPhone}",${s.balanceDue}`
-          )
-        )
-        .join('\n');
+    const headers = isTeacher
+      ? 'Admission No,Name,Class,Section,Roll No,Gender,Guardian,Phone,Status'
+      : 'Admission No,Name,Class,Section,Roll No,Gender,Guardian,Phone,Fee Balance';
 
+    const rows = filteredStudents.map((s) => {
+      const base = `"${s.admissionNo}","${s.firstName} ${s.lastName}","${s.className}","${s.section}","${s.rollNo}","${s.gender}","${s.guardianName}","${s.guardianPhone}"`;
+      return isTeacher ? `${base},"${s.status || 'Active'}"` : `${base},${s.balanceDue}`;
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers].concat(rows).join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', 'EduCore_Students_Directory.csv');
+    link.setAttribute('download', 'Grace_White_Dove_Students_Directory.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -851,8 +853,8 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                 </div>
               </div>
 
-              {/* Student Financial Profile & Manual Arrears Override */}
-              {(() => {
+              {/* Student Financial Profile & Manual Arrears Override - Hidden for Teachers */}
+              {!isTeacher && (() => {
                 const studentInvoice = invoices.find((i) => i.studentId === activeStudentProfile.id);
                 const termFees = studentInvoice?.termFees || 0;
                 const books = studentInvoice?.books || 0;
@@ -1028,7 +1030,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                   <CreditCard className="w-4 h-4 text-amber-300" />
                   Generate Digital ID Card
                 </button>
-                {onOpenPaystackForStudent && (
+                {onOpenPaystackForStudent && !isTeacher && (
                   <button
                     onClick={() => {
                       const std = activeStudentProfile;
@@ -1313,61 +1315,63 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                 </div>
               </div>
 
-              {/* Financial Particulars & Manual Arrears Override */}
-              <div className="border-t border-slate-200 pt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-bold text-emerald-900 flex items-center gap-1.5">
-                    <Banknote className="w-4 h-4 text-emerald-700" />
-                    Financial & Arrears Configuration
-                  </h4>
-                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                    Admin / Accountant
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block font-semibold text-slate-700">Manual Arrears Override (GHS)</label>
-                      <span className="text-[10px] text-amber-700 font-bold">Independent</span>
-                    </div>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">GHS</span>
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={formData.manualArrears}
-                        onChange={(e) => setFormData({ ...formData, manualArrears: Number(e.target.value) || 0 })}
-                        className="w-full pl-12 pr-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      Prior terms debt carried forward.
-                    </p>
+              {/* Financial Particulars & Manual Arrears Override - Hidden for Teachers */}
+              {!isTeacher && (
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-bold text-emerald-900 flex items-center gap-1.5">
+                      <Banknote className="w-4 h-4 text-emerald-700" />
+                      Financial & Arrears Configuration
+                    </h4>
+                    <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                      Admin / Accountant
+                    </span>
                   </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block font-semibold text-slate-700">Total Fee Balance Due (GHS)</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-semibold text-slate-700">Manual Arrears Override (GHS)</label>
+                        <span className="text-[10px] text-amber-700 font-bold">Independent</span>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">GHS</span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={formData.manualArrears}
+                          onChange={(e) => setFormData({ ...formData, manualArrears: Number(e.target.value) || 0 })}
+                          className="w-full pl-12 pr-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        Prior terms debt carried forward.
+                      </p>
                     </div>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">GHS</span>
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={formData.balanceDue}
-                        onChange={(e) => setFormData({ ...formData, balanceDue: Number(e.target.value) || 0 })}
-                        className="w-full pl-12 pr-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
-                        placeholder="0.00"
-                      />
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-semibold text-slate-700">Total Fee Balance Due (GHS)</label>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">GHS</span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={formData.balanceDue}
+                          onChange={(e) => setFormData({ ...formData, balanceDue: Number(e.target.value) || 0 })}
+                          className="w-full pl-12 pr-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        Total outstanding ledger balance.
+                      </p>
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      Total outstanding ledger balance.
-                    </p>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
                 <button

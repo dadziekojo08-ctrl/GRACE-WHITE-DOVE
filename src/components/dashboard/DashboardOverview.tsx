@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { SchoolFeePaymentModal } from '../fees/SchoolFeePaymentModal';
+import { Invoice } from '../../types';
 import {
   Users,
   Briefcase,
@@ -19,7 +21,8 @@ import {
   GraduationCap,
   Sparkles,
   BadgeCheck,
-  School
+  School,
+  Banknote
 } from 'lucide-react';
 import {
   AreaChart,
@@ -37,9 +40,10 @@ import {
 } from 'recharts';
 
 export const DashboardOverview: React.FC<{
-  onOpenPaystack: () => void;
+  onOpenPaystack: (invoice?: Invoice, customAmount?: number, studentName?: string, studentId?: string) => void;
   onOpenGateScanner: () => void;
 }> = ({ onOpenPaystack, onOpenGateScanner }) => {
+  const [isFeePaymentModalOpen, setIsFeePaymentModalOpen] = useState(false);
   const {
     students,
     staff,
@@ -171,10 +175,19 @@ export const DashboardOverview: React.FC<{
               New Admission
             </button>
             <button
-              onClick={() => setActiveTab('fees')}
-              className="bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              id="admin-fee-payment-btn"
+              onClick={() => setIsFeePaymentModalOpen(true)}
+              className="bg-amber-400 hover:bg-amber-300 text-emerald-950 font-black px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer border border-amber-300 ring-2 ring-amber-400/40 hover:scale-[1.02]"
+              title="Record or process student school fees payment"
             >
-              <CreditCard className="w-4 h-4 text-emerald-950" />
+              <CreditCard className="w-4 h-4 text-emerald-950 stroke-[2.5]" />
+              <span>Fee Payment</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('fees')}
+              className="bg-emerald-800 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm border border-emerald-600 transition-all cursor-pointer"
+            >
+              <CreditCard className="w-4 h-4 text-amber-300" />
               Fee Management
             </button>
             <button
@@ -312,7 +325,20 @@ export const DashboardOverview: React.FC<{
           </div>
           <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
             <span>Bal: GHS {totalOutstandingFees.toLocaleString()}</span>
-            <span className="text-amber-800 font-semibold flex items-center gap-0.5">Manage Fees →</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsFeePaymentModalOpen(true);
+                }}
+                className="bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold px-2 py-0.5 rounded text-[10px] flex items-center gap-1 shadow-2xs cursor-pointer transition-all"
+              >
+                <CreditCard className="w-3 h-3 text-emerald-950" />
+                Fee Payment
+              </button>
+              <span className="text-amber-800 font-semibold flex items-center gap-0.5">Manage Fees →</span>
+            </div>
           </div>
         </div>
       </div>
@@ -494,6 +520,13 @@ export const DashboardOverview: React.FC<{
           </div>
         </div>
       </div>
+
+      {/* School Fee Payment Modal for School Fees Payment */}
+      <SchoolFeePaymentModal
+        isOpen={isFeePaymentModalOpen}
+        onClose={() => setIsFeePaymentModalOpen(false)}
+        onOpenPaystack={onOpenPaystack}
+      />
     </div>
   );
 };

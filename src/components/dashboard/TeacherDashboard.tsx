@@ -574,7 +574,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                     <th className="py-3 px-3">Class Level</th>
                     <th className="py-3 px-3">Parents Info</th>
                     <th className="py-3 px-3">Attendance</th>
-                    <th className="py-3 px-3">Fee Status</th>
+                    <th className="py-3 px-3">Status</th>
                     <th className="py-3 px-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -613,15 +613,9 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                         <span className="text-[10px] text-slate-400 block">Regular</span>
                       </td>
                       <td className="py-3 px-3">
-                        {std.balanceDue === 0 ? (
-                          <span className="text-emerald-700 bg-emerald-50 font-bold px-2 py-0.5 rounded text-[10px]">
-                            Cleared
-                          </span>
-                        ) : (
-                          <span className="text-amber-700 bg-amber-50 font-bold px-2 py-0.5 rounded text-[10px]">
-                            Bal: GHS {std.balanceDue}
-                          </span>
-                        )}
+                        <span className="text-emerald-700 bg-emerald-50 font-bold px-2 py-0.5 rounded text-[10px]">
+                          {std.status || 'Active'}
+                        </span>
                       </td>
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
