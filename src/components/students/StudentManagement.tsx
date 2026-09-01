@@ -38,6 +38,7 @@ import {
   Square
 } from 'lucide-react';
 import { DigitalIdCardGenerator } from './DigitalIdCardGenerator';
+import { AcademicProgressChart } from '../academic/AcademicProgressChart';
 
 export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: Student) => void }> = ({
   onOpenPaystackForStudent
@@ -49,6 +50,8 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
     deleteStudent,
     searchQuery,
     marks,
+    exams,
+    academicYear,
     attendance,
     invoices,
     classes,
@@ -66,6 +69,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [activeStudentProfile, setActiveStudentProfile] = useState<Student | null>(null);
+  const [profileActiveTab, setProfileActiveTab] = useState<'academics' | 'particulars' | 'finance'>('academics');
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
@@ -786,12 +790,12 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       {/* Student Profile Modal */}
       {activeStudentProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             {/* Header banner in Green & Gold */}
-            <div className="bg-gradient-to-r from-emerald-900 to-emerald-800 p-6 text-white relative">
+            <div className="bg-gradient-to-r from-emerald-900 to-emerald-800 p-5 sm:p-6 text-white relative">
               <button
                 onClick={() => setActiveStudentProfile(null)}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center cursor-pointer"
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -817,44 +821,104 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                   </p>
                 </div>
               </div>
+
+              {/* Sub-Navigation Tabs */}
+              <div className="flex items-center gap-2 mt-4 pt-3 border-t border-white/15 text-xs font-semibold overflow-x-auto">
+                <button
+                  type="button"
+                  onClick={() => setProfileActiveTab('academics')}
+                  className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                    profileActiveTab === 'academics'
+                      ? 'bg-amber-400 text-emerald-950 font-bold shadow-xs'
+                      : 'bg-white/10 text-white hover:bg-white/20'
+                  }`}
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  3-Term Academic Progress
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProfileActiveTab('particulars')}
+                  className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                    profileActiveTab === 'particulars'
+                      ? 'bg-amber-400 text-emerald-950 font-bold shadow-xs'
+                      : 'bg-white/10 text-white hover:bg-white/20'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Particulars & Bio
+                </button>
+                {!isTeacher && (
+                  <button
+                    type="button"
+                    onClick={() => setProfileActiveTab('finance')}
+                    className={`px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                      profileActiveTab === 'finance'
+                        ? 'bg-amber-400 text-emerald-950 font-bold shadow-xs'
+                        : 'bg-white/10 text-white hover:bg-white/20'
+                    }`}
+                  >
+                    <Banknote className="w-3.5 h-3.5" />
+                    Fee Profile & Arrears
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Profile Content */}
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                {/* Personal Information */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                  <h4 className="font-bold text-emerald-950 border-b border-slate-200 pb-1.5 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-emerald-700" /> Student Particulars
-                  </h4>
-                  <div className="flex justify-between"><span className="text-slate-500">Gender:</span><span className="font-semibold">{activeStudentProfile.gender}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Date of Birth:</span><span className="font-semibold">{activeStudentProfile.dateOfBirth}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Class Level:</span><span className="font-bold text-emerald-900">{activeStudentProfile.className}</span></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">Class Teacher:</span>
-                    <span className="font-semibold text-emerald-950 bg-emerald-100/70 px-2 py-0.5 rounded text-[11px]">
-                      {activeStudentProfile.classTeacher || 'Unassigned'}
-                    </span>
+            <div className="p-5 sm:p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* TAB 1: ACADEMIC PROGRESS & RECHARTS 3-TERM CHART */}
+              {profileActiveTab === 'academics' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <AcademicProgressChart
+                    student={activeStudentProfile}
+                    marks={marks}
+                    exams={exams}
+                    academicYear={academicYear}
+                    showCardWrapper={false}
+                  />
+                </div>
+              )}
+
+              {/* TAB 2: PARTICULARS & GUARDIAN */}
+              {profileActiveTab === 'particulars' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    {/* Personal Information */}
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                      <h4 className="font-bold text-emerald-950 border-b border-slate-200 pb-1.5 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-emerald-700" /> Student Particulars
+                      </h4>
+                      <div className="flex justify-between"><span className="text-slate-500">Gender:</span><span className="font-semibold">{activeStudentProfile.gender}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Date of Birth:</span><span className="font-semibold">{activeStudentProfile.dateOfBirth}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Class Level:</span><span className="font-bold text-emerald-900">{activeStudentProfile.className}</span></div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">Class Teacher:</span>
+                        <span className="font-semibold text-emerald-950 bg-emerald-100/70 px-2 py-0.5 rounded text-[11px]">
+                          {activeStudentProfile.classTeacher || 'Unassigned'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between"><span className="text-slate-500">Roll Number:</span><span className="font-semibold font-mono">{activeStudentProfile.rollNo}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Joined Date:</span><span className="font-semibold">{activeStudentProfile.joinedDate}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Address:</span><span className="font-semibold text-right max-w-[150px] truncate">{activeStudentProfile.address}</span></div>
+                    </div>
+
+                    {/* Guardian Info */}
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                      <h4 className="font-bold text-emerald-950 border-b border-slate-200 pb-1.5 flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-emerald-700" /> Guardian & Family
+                      </h4>
+                      <div className="flex justify-between"><span className="text-slate-500">Guardian:</span><span className="font-semibold">{activeStudentProfile.guardianName}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Phone:</span><span className="font-semibold font-mono">{activeStudentProfile.guardianPhone}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Email:</span><span className="font-semibold truncate max-w-[150px]">{activeStudentProfile.guardianEmail}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Address:</span><span className="font-semibold text-right max-w-[150px] truncate">{activeStudentProfile.address}</span></div>
+                    </div>
                   </div>
-                  <div className="flex justify-between"><span className="text-slate-500">Roll Number:</span><span className="font-semibold font-mono">{activeStudentProfile.rollNo}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Joined Date:</span><span className="font-semibold">{activeStudentProfile.joinedDate}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Address:</span><span className="font-semibold text-right max-w-[150px] truncate">{activeStudentProfile.address}</span></div>
                 </div>
+              )}
 
-                {/* Guardian Info */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                  <h4 className="font-bold text-emerald-950 border-b border-slate-200 pb-1.5 flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-emerald-700" /> Guardian & Family
-                  </h4>
-                  <div className="flex justify-between"><span className="text-slate-500">Guardian:</span><span className="font-semibold">{activeStudentProfile.guardianName}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Phone:</span><span className="font-semibold font-mono">{activeStudentProfile.guardianPhone}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Email:</span><span className="font-semibold truncate max-w-[150px]">{activeStudentProfile.guardianEmail}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Address:</span><span className="font-semibold text-right max-w-[150px] truncate">{activeStudentProfile.address}</span></div>
-                </div>
-              </div>
-
-              {/* Student Financial Profile & Manual Arrears Override - Hidden for Teachers */}
-              {!isTeacher && (() => {
+              {/* TAB 3: FINANCIAL PROFILE & ARREARS - Hidden for Teachers */}
+              {profileActiveTab === 'finance' && !isTeacher && (() => {
                 const studentInvoice = invoices.find((i) => i.studentId === activeStudentProfile.id);
                 const termFees = studentInvoice?.termFees || 0;
                 const books = studentInvoice?.books || 0;
@@ -865,7 +929,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                 const isAdminOrAccountant = currentUser?.role === 'Admin' || currentUser?.role === 'Accountant' || currentUser?.role === 'System' || !currentUser?.role;
 
                 return (
-                  <div className="bg-gradient-to-br from-slate-50 to-emerald-50/40 p-4 sm:p-5 rounded-2xl border border-emerald-200/80 space-y-4">
+                  <div className="bg-gradient-to-br from-slate-50 to-emerald-50/40 p-4 sm:p-5 rounded-2xl border border-emerald-200/80 space-y-4 animate-in fade-in duration-150">
                     <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2.5 flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-xl bg-emerald-800 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
@@ -996,29 +1060,8 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                 );
               })()}
 
-              {/* Student Exam Marks History */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4">
-                <h4 className="font-bold text-xs text-slate-900 mb-2">Subject Performance Record</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {marks
-                    .filter((m) => m.studentId === activeStudentProfile.id)
-                    .map((m) => (
-                      <div key={m.id} className="p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-100 flex items-center justify-between">
-                        <div>
-                          <span className="text-[11px] font-bold text-slate-800 block">{m.subject}</span>
-                          <span className="text-[10px] text-slate-500">Grade: {m.grade}</span>
-                        </div>
-                        <span className="font-black text-xs text-emerald-800 font-mono">{m.score}%</span>
-                      </div>
-                    ))}
-                  {marks.filter((m) => m.studentId === activeStudentProfile.id).length === 0 && (
-                    <p className="text-xs text-slate-400 col-span-3 py-2">No terminal assessment marks recorded yet for current term.</p>
-                  )}
-                </div>
-              </div>
-
               {/* Footer action buttons */}
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 flex-wrap">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 flex-wrap">
                 <button
                   onClick={() => {
                     const std = activeStudentProfile;

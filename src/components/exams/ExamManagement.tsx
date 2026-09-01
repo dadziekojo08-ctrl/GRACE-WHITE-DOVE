@@ -3,6 +3,7 @@ import { useSchool } from '../../context/SchoolContext';
 import { SchoolLogo } from '../common/SchoolLogo';
 import { printReportSheet } from '../../utils/printUtils';
 import { Exam, ExamSchedule, MarkEntry, Student } from '../../types';
+import { AcademicProgressChart } from '../academic/AcademicProgressChart';
 import {
   Award,
   Calendar,
@@ -17,7 +18,9 @@ import {
   BookOpen,
   HelpCircle,
   Sparkles,
-  Layers
+  Layers,
+  TrendingUp,
+  FileText
 } from 'lucide-react';
 import {
   JHS_GRADING_SCHEME,
@@ -43,6 +46,7 @@ export const ExamManagement: React.FC = () => {
   // Report Card State
   const [reportStudentId, setReportStudentId] = useState<string>(students[0]?.id || '');
   const [reportClassFilter, setReportClassFilter] = useState<string>('All');
+  const [reportCardSubView, setReportCardSubView] = useState<'transcript' | 'progress-chart'>('transcript');
 
   // Check if active selected class is Pre-School / Lower Primary
   const isCurrentClassLowerPrimary = isLowerPrimaryOrPreschool(selectedClass);
@@ -836,18 +840,66 @@ export const ExamManagement: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={() => printReportSheet('official-terminal-report-sheet', `Grace White Dove Report - ${currentReportStudent.firstName} ${currentReportStudent.lastName}`)}
-              className="px-5 py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold rounded-xl shadow-sm flex items-center gap-2 cursor-pointer transition-all"
-            >
-              <Printer className="w-4 h-4 text-amber-300" />
-              Print Official Report Card
-            </button>
+            {/* View Mode Toggle Buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setReportCardSubView('transcript')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    reportCardSubView === 'transcript'
+                      ? 'bg-emerald-950 text-amber-300 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Official Terminal Sheet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReportCardSubView('progress-chart')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    reportCardSubView === 'progress-chart'
+                      ? 'bg-emerald-950 text-amber-300 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  3-Term Academic Progress (Recharts)
+                </button>
+              </div>
+
+              {reportCardSubView === 'transcript' && (
+                <button
+                  onClick={() => printReportSheet('official-terminal-report-sheet', `Grace White Dove Report - ${currentReportStudent.firstName} ${currentReportStudent.lastName}`)}
+                  className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <Printer className="w-4 h-4 text-amber-300" />
+                  Print Official Report Card
+                </button>
+              )}
+            </div>
           </div>
 
           {/* ============================================================= */}
-          {/* PRINTABLE OFFICIAL TERMINAL REPORT CARD SHEET */}
+          {/* VIEW A: 3-TERM ACADEMIC PROGRESS (RECHARTS BAR CHART) */}
           {/* ============================================================= */}
+          {reportCardSubView === 'progress-chart' && (
+            <div className="max-w-4xl mx-auto space-y-4 animate-in fade-in duration-150">
+              <AcademicProgressChart
+                student={currentReportStudent}
+                marks={marks}
+                exams={exams}
+                academicYear={academicYear}
+                showCardWrapper={true}
+              />
+            </div>
+          )}
+
+          {/* ============================================================= */}
+          {/* VIEW B: PRINTABLE OFFICIAL TERMINAL REPORT CARD SHEET */}
+          {/* ============================================================= */}
+          {reportCardSubView === 'transcript' && (
           <div
             id="official-terminal-report-sheet"
             className="print-area printable-sheet report-card-print-sheet bg-white rounded-3xl border-2 border-emerald-950 p-6 sm:p-8 shadow-xl max-w-4xl mx-auto text-xs space-y-3.5 print:space-y-0 print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-full relative"
@@ -1075,6 +1127,7 @@ export const ExamManagement: React.FC = () => {
               </div>
             </div>
           </div>
+          )}
         </div>
       )}
 
