@@ -246,11 +246,12 @@ export interface Payment {
   channel?: string;
   receivedBy?: string;
   remarks?: string;
-  feeCategory?: 'Fees' | 'Books' | 'Accessories' | 'Combined' | 'Other';
+  feeCategory?: 'Fees' | 'Books' | 'Accessories' | 'Arrears' | 'Combined' | 'Other';
   breakdown?: {
     fees?: number;
     books?: number;
     accessories?: number;
+    arrears?: number;
   };
 }
 

@@ -56,7 +56,7 @@ export const SchoolFeePaymentModal: React.FC<SchoolFeePaymentModalProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Mobile Money' | 'Bank Transfer' | 'Cheque' | 'Paystack'>('Cash');
   const [momoProvider, setMomoProvider] = useState<'MTN MoMo' | 'Telecel Cash' | 'AT Money'>('MTN MoMo');
   const [referenceNote, setReferenceNote] = useState('');
-  const [feeCategory, setFeeCategory] = useState<'Fees' | 'Books' | 'Accessories' | 'Combined' | 'Other'>('Fees');
+  const [feeCategory, setFeeCategory] = useState<'Fees' | 'Books' | 'Accessories' | 'Arrears' | 'Combined' | 'Other'>('Fees');
   const [cashierName, setCashierName] = useState(currentUser?.name || 'Administrator');
 
   // Completed Payment / Receipt state
@@ -138,6 +138,17 @@ export const SchoolFeePaymentModal: React.FC<SchoolFeePaymentModalProps> = ({
     const channelDesc = paymentMethod === 'Mobile Money' ? momoProvider : paymentMethod;
     const invId = activeStudentInvoice?.id || `inv-${selectedStudent.id}`;
 
+    let itemizedBreakdown: { fees?: number; books?: number; accessories?: number; arrears?: number } | undefined = undefined;
+    if (feeCategory === 'Arrears') {
+      itemizedBreakdown = { fees: 0, books: 0, accessories: 0, arrears: amountNum };
+    } else if (feeCategory === 'Fees') {
+      itemizedBreakdown = { fees: amountNum, books: 0, accessories: 0, arrears: 0 };
+    } else if (feeCategory === 'Books') {
+      itemizedBreakdown = { fees: 0, books: amountNum, accessories: 0, arrears: 0 };
+    } else if (feeCategory === 'Accessories') {
+      itemizedBreakdown = { fees: 0, books: 0, accessories: amountNum, arrears: 0 };
+    }
+
     const newPayment = recordPayment({
       invoiceId: invId,
       studentId: selectedStudent.id,
@@ -147,8 +158,9 @@ export const SchoolFeePaymentModal: React.FC<SchoolFeePaymentModalProps> = ({
       channel: channelDesc,
       status: 'Success',
       receivedBy: cashierName,
-      remarks: referenceNote.trim() || `School fees payment received via ${channelDesc} for ${academicYear} ${currentTerm}`,
-      feeCategory: feeCategory
+      remarks: referenceNote.trim() || `${feeCategory === 'Arrears' ? 'Arrears payment' : 'School fees payment'} received via ${channelDesc} for ${academicYear} ${currentTerm}`,
+      feeCategory: feeCategory,
+      breakdown: itemizedBreakdown
     });
 
     setIsSubmitting(false);
@@ -410,8 +422,9 @@ export const SchoolFeePaymentModal: React.FC<SchoolFeePaymentModalProps> = ({
                         <option value="Fees">Tuition & Term School Fees</option>
                         <option value="Books">Textbooks & Stationery</option>
                         <option value="Accessories">Uniform, Badge & Accessories</option>
+                        <option value="Arrears">Arrears / Previous Debt Balance</option>
                         <option value="Combined">Combined All-Inclusive Fees</option>
-                        <option value="Other">Arrears / Miscellaneous Levies</option>
+                        <option value="Other">Other Miscellaneous Levies</option>
                       </select>
                     </div>
 

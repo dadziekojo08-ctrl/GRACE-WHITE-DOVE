@@ -1,4 +1,4 @@
-import { Invoice, Student } from '../types';
+import { Invoice, Payment, Student } from '../types';
 
 export interface InvoiceFinancialBreakdown {
   termFees: number;
@@ -9,6 +9,14 @@ export interface InvoiceFinancialBreakdown {
   grandTotal: number;
   paidAmount: number;
   balanceDue: number;
+}
+
+export interface CollectedFeesBreakdown {
+  totalCollected: number;
+  collectedFees: number;
+  collectedBooks: number;
+  collectedAccessories: number;
+  collectedArrears: number;
 }
 
 /**
@@ -169,15 +177,107 @@ export function getInvoiceFinancialBreakdown(inv: Partial<Invoice> | null | unde
 }
 
 /**
- * Computes aggregated financial metrics across all invoices and students.
- * Guaranteed: totalTuitionFees + totalBooksValue + totalAccessoriesValue === totalAmountBilled
+ * Universal calculation engine for Payments Collected breakdown.
+ * Distributes collections across:
+ * 1) Tuition & Term Fees
+ * 2) Books
+ * 3) Accessories
+ * 4) Arrears (deducted from total arrears and recognized in collected breakdown)
  */
-export function calculateAggregatedFinancials(invoices: Invoice[], students: Student[] = []) {
+export function calculatePaymentsCollectedBreakdown(
+  payments: Payment[] = [],
+  invoices: Invoice[] = [],
+  students: Student[] = []
+): CollectedFeesBreakdown {
+  let fSum = 0;
+  let bSum = 0;
+  let aSum = 0;
+  let arrSum = 0;
+
+  payments.forEach((p) => {
+    const pAmt = Number(p.amount) || 0;
+    if (pAmt <= 0) return;
+
+    if (p.breakdown) {
+      fSum += Number(p.breakdown.fees) || 0;
+      bSum += Number(p.breakdown.books) || 0;
+      aSum += Number(p.breakdown.accessories) || 0;
+      arrSum += Number(p.breakdown.arrears) || 0;
+    } else if (p.feeCategory === 'Arrears') {
+      arrSum += pAmt;
+    } else if (p.feeCategory === 'Fees') {
+      fSum += pAmt;
+    } else if (p.feeCategory === 'Books') {
+      bSum += pAmt;
+    } else if (p.feeCategory === 'Accessories') {
+      aSum += pAmt;
+    } else {
+      const remarksLower = (p.remarks || '').toLowerCase();
+      if (
+        remarksLower.includes('arrear') ||
+        remarksLower.includes('debt') ||
+        remarksLower.includes('b/f') ||
+        remarksLower.includes('previous balance') ||
+        remarksLower.includes('prior term')
+      ) {
+        arrSum += pAmt;
+      } else if (remarksLower.includes('book') && !remarksLower.includes('term') && !remarksLower.includes('tuition')) {
+        bSum += pAmt;
+      } else if (remarksLower.includes('accessor') || remarksLower.includes('uniform') || remarksLower.includes('crest')) {
+        aSum += pAmt;
+      } else {
+        // Match student invoice or debt distribution
+        const inv = invoices.find((i) => i.id === p.invoiceId || i.studentId === p.studentId);
+        const std = students.find((s) => s.id === p.studentId);
+
+        if (inv) {
+          const bk = getInvoiceFinancialBreakdown(inv);
+          const totalComponents = bk.termFees + bk.books + bk.accessories + bk.arrears;
+          if (totalComponents > 0) {
+            const fP = Math.round(pAmt * (bk.termFees / totalComponents));
+            const bP = Math.round(pAmt * (bk.books / totalComponents));
+            const aP = Math.round(pAmt * (bk.accessories / totalComponents));
+            const arrP = Math.max(0, pAmt - fP - bP - aP);
+            fSum += fP;
+            bSum += bP;
+            aSum += aP;
+            arrSum += arrP;
+          } else {
+            fSum += pAmt;
+          }
+        } else if (std && (std.manualArrears || 0) > 0 && (std.balanceDue || 0) <= (std.manualArrears || 0)) {
+          arrSum += pAmt;
+        } else {
+          fSum += pAmt;
+        }
+      }
+    }
+  });
+
+  return {
+    totalCollected: fSum + bSum + aSum + arrSum,
+    collectedFees: fSum,
+    collectedBooks: bSum,
+    collectedAccessories: aSum,
+    collectedArrears: arrSum,
+  };
+}
+
+/**
+ * Computes aggregated financial metrics across all invoices, students, and payments.
+ * Guaranteed: totalTuitionFees + totalBooksValue + totalAccessoriesValue === totalAmountBilled
+ * Net Total Arrears = Gross Arrears - Total Arrears Collected
+ */
+export function calculateAggregatedFinancials(
+  invoices: Invoice[],
+  students: Student[] = [],
+  payments: Payment[] = []
+) {
   let totalTuitionFees = 0;
   let totalBooksValue = 0;
   let totalAccessoriesValue = 0;
   let totalAmountBilled = 0;
-  let totalInvoiceArrears = 0;
+  let totalGrossInvoiceArrears = 0;
 
   invoices.forEach((inv) => {
     const bk = getInvoiceFinancialBreakdown(inv);
@@ -185,7 +285,7 @@ export function calculateAggregatedFinancials(invoices: Invoice[], students: Stu
     totalBooksValue += bk.books;
     totalAccessoriesValue += bk.accessories;
     totalAmountBilled += bk.currentTermAmount;
-    totalInvoiceArrears += bk.arrears;
+    totalGrossInvoiceArrears += bk.arrears;
   });
 
   // Calculate student standalone manual arrears (for students without invoice arrears)
@@ -194,7 +294,13 @@ export function calculateAggregatedFinancials(invoices: Invoice[], students: Stu
     return sum + (hasInvArrears ? 0 : (s.manualArrears || 0));
   }, 0);
 
-  const totalArrears = totalInvoiceArrears + standaloneStudentArrears;
+  const grossArrears = totalGrossInvoiceArrears + standaloneStudentArrears;
+  
+  // Calculate collected breakdown (including collected arrears)
+  const collected = calculatePaymentsCollectedBreakdown(payments, invoices, students);
+  
+  // Net Outstanding Arrears after deducting arrears collected
+  const totalArrears = Math.max(0, grossArrears - collected.collectedArrears);
   const cumulativeBillable = totalAmountBilled + totalArrears;
 
   return {
@@ -202,7 +308,11 @@ export function calculateAggregatedFinancials(invoices: Invoice[], students: Stu
     totalBooksValue,
     totalAccessoriesValue,
     totalAmountBilled, // Current Term Sum: Total Fees + Total Books + Total Accessories
-    totalArrears,
+    grossArrears,
+    collectedArrears: collected.collectedArrears,
+    totalArrears, // Net Outstanding Arrears after deducting collected arrears
     cumulativeBillable,
+    collected,
   };
 }
+

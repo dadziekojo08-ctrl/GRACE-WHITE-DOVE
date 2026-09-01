@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { Student, Invoice, Payment } from '../../types';
+import { calculateAggregatedFinancials } from '../../utils/feeBreakdown';
 import {
   CreditCard,
   Banknote,
@@ -77,63 +78,25 @@ export const AccountantDashboard: React.FC<{
   const [studentSearch, setStudentSearch] = useState('');
 
   // Financial Calculations
-  const totalBilled = invoices.reduce((acc, curr) => acc + curr.totalAmount, 0);
+  const {
+    totalTuitionFees,
+    totalBooksValue,
+    totalAccessoriesValue,
+    totalAmountBilled: totalCurrentBilled,
+    grossArrears,
+    collectedArrears,
+    totalArrears,
+    cumulativeBillable,
+    collected: collectedBreakdown
+  } = useMemo(() => {
+    return calculateAggregatedFinancials(invoices, students, payments);
+  }, [invoices, students, payments]);
 
-  // Calculate Total Collected Breakdown (Fees, Books, Accessories - strictly excluding arrears)
-  const { totalCollected, collectedFees, collectedBooks, collectedAccessories } = useMemo(() => {
-    let fSum = 0;
-    let bSum = 0;
-    let aSum = 0;
-
-    payments.forEach(p => {
-      const pAmt = Number(p.amount) || 0;
-      if (pAmt <= 0) return;
-
-      if (p.breakdown) {
-        fSum += Number(p.breakdown.fees) || 0;
-        bSum += Number(p.breakdown.books) || 0;
-        aSum += Number(p.breakdown.accessories) || 0;
-      } else if (p.feeCategory === 'Fees') {
-        fSum += pAmt;
-      } else if (p.feeCategory === 'Books') {
-        bSum += pAmt;
-      } else if (p.feeCategory === 'Accessories') {
-        aSum += pAmt;
-      } else {
-        const remarksLower = (p.remarks || '').toLowerCase();
-        if (remarksLower.includes('book') && !remarksLower.includes('term') && !remarksLower.includes('tuition')) {
-          bSum += pAmt;
-        } else if (remarksLower.includes('accessor') || remarksLower.includes('uniform') || remarksLower.includes('crest')) {
-          aSum += pAmt;
-        } else {
-          const inv = invoices.find(i => i.id === p.invoiceId || i.studentId === p.studentId);
-          if (inv && ((inv.termFees || 0) + (inv.books || 0) + (inv.accessories || 0)) > 0) {
-            const tf = inv.termFees || (inv.currentTermAmount ? Math.max(0, inv.currentTermAmount - (inv.books || 0) - (inv.accessories || 0)) : (inv.totalAmount - (inv.arrears || 0)));
-            const bk = inv.books || 0;
-            const acc = inv.accessories || 0;
-            const tot = (tf + bk + acc) || 1;
-            const fP = Math.round(pAmt * (tf / tot));
-            const bP = Math.round(pAmt * (bk / tot));
-            const aP = Math.max(0, pAmt - fP - bP);
-            fSum += fP;
-            bSum += bP;
-            aSum += aP;
-          } else {
-            fSum += pAmt;
-          }
-        }
-      }
-    });
-
-    return {
-      totalCollected: fSum + bSum + aSum,
-      collectedFees: fSum,
-      collectedBooks: bSum,
-      collectedAccessories: aSum
-    };
-  }, [payments, invoices]);
-
-  const totalArrears = invoices.reduce((acc, curr) => acc + curr.balance, 0);
+  const totalBilled = invoices.reduce((acc, curr) => acc + (curr.currentTermAmount || curr.totalAmount || 0), 0);
+  const totalCollected = collectedBreakdown.totalCollected;
+  const collectedFees = collectedBreakdown.collectedFees;
+  const collectedBooks = collectedBreakdown.collectedBooks;
+  const collectedAccessories = collectedBreakdown.collectedAccessories;
   const collectionRate = totalBilled > 0 ? Math.round((totalCollected / totalBilled) * 100) : 0;
 
   // Chart data computed dynamically from actual payment records
@@ -337,8 +300,8 @@ export const AccountantDashboard: React.FC<{
             <div className="text-2xl font-black text-emerald-800 font-['Outfit']">
               GHS {totalCollected.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
-            {/* 3-Way Granular Breakdown for Accounts */}
-            <div className="grid grid-cols-3 gap-1.5 mt-2.5 pt-2.5 border-t border-slate-100 text-[10px]">
+            {/* 4-Way Granular Breakdown for Accounts */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-2.5 pt-2.5 border-t border-slate-100 text-[10px]">
               <div className="bg-emerald-50/80 p-1.5 rounded-lg text-center border border-emerald-100">
                 <span className="text-emerald-700 font-semibold block">Fees</span>
                 <span className="font-bold text-emerald-950 font-mono">GHS {collectedFees.toLocaleString()}</span>
@@ -351,9 +314,13 @@ export const AccountantDashboard: React.FC<{
                 <span className="text-purple-700 font-semibold block">Accessories</span>
                 <span className="font-bold text-purple-950 font-mono">GHS {collectedAccessories.toLocaleString()}</span>
               </div>
+              <div className="bg-amber-50/80 p-1.5 rounded-lg text-center border border-amber-100">
+                <span className="text-amber-700 font-semibold block">Arrears</span>
+                <span className="font-bold text-amber-950 font-mono">GHS {collectedArrears.toLocaleString()}</span>
+              </div>
             </div>
             <p className="text-[10px] text-slate-400 mt-2 font-medium">
-              {payments.length === 0 ? 'No payments recorded yet' : `${payments.length} Payments Reconciled (Arrears Excluded)`}
+              {payments.length === 0 ? 'No payments recorded yet' : `${payments.length} Payments Reconciled (Fees, Books, Accessories & Arrears)`}
             </p>
           </div>
         </div>

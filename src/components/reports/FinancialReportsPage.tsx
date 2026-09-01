@@ -197,9 +197,12 @@ export const FinancialReportsPage: React.FC<{
     totalBooksValue,
     totalAccessoriesValue,
     totalAmountBilled,
+    grossArrears,
+    collectedArrears,
     totalArrears,
     cumulativeBillable,
-  } = calculateAggregatedFinancials(invoices, students);
+    collected: collectedBreakdown
+  } = calculateAggregatedFinancials(invoices, students, payments);
 
   // 2. Student Fees Desk Metrics
   const totalCompletedPaidFees = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);

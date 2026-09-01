@@ -55,7 +55,7 @@ export const CustomReportsAnalytics: React.FC = () => {
     totalAmountBilled: totalCurrentBilledVal,
     totalArrears: totalArrearsVal,
     cumulativeBillable: totalCumulativeBillable,
-  } = calculateAggregatedFinancials(invoices, students);
+  } = calculateAggregatedFinancials(invoices, students, payments);
 
   const totalCollectedVal = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
   const totalOutstandingVal = Math.max(0, totalCumulativeBillable - totalCollectedVal);

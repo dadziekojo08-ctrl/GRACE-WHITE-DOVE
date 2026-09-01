@@ -2196,25 +2196,55 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ? `PSTK_${new Date().toISOString().slice(0,10).replace(/-/g,'')}_${Math.floor(100000 + Math.random()*900000)}`
       : `REC-2026-${Math.floor(1000 + Math.random()*9000)}`;
     
+    // Determine arrears component of this payment
+    let paidArrears = 0;
+    if (typeof pay.breakdown?.arrears === 'number') {
+      paidArrears = Number(pay.breakdown.arrears) || 0;
+    } else if (pay.feeCategory === 'Arrears' || (pay.remarks || '').toLowerCase().includes('arrear')) {
+      paidArrears = pay.amount;
+    } else {
+      const inv = invoices.find(i => i.id === pay.invoiceId || i.studentId === pay.studentId);
+      const std = students.find(s => s.id === pay.studentId);
+      if (inv && (inv.arrears || 0) > 0) {
+        const bk = getInvoiceFinancialBreakdown(inv);
+        if (bk.grandTotal > 0) {
+          paidArrears = Math.round(pay.amount * (bk.arrears / bk.grandTotal));
+        }
+      } else if (std && (std.manualArrears || 0) > 0 && (std.balanceDue || 0) <= (std.manualArrears || 0)) {
+        paidArrears = Math.min(pay.amount, std.manualArrears || 0);
+      }
+    }
+
+    const calculatedBreakdown = pay.breakdown || (paidArrears > 0 ? {
+      fees: pay.feeCategory === 'Fees' ? pay.amount : 0,
+      books: pay.feeCategory === 'Books' ? pay.amount : 0,
+      accessories: pay.feeCategory === 'Accessories' ? pay.amount : 0,
+      arrears: paidArrears
+    } : (pay.feeCategory === 'Fees' ? { fees: pay.amount, books: 0, accessories: 0, arrears: 0 } :
+         pay.feeCategory === 'Books' ? { fees: 0, books: pay.amount, accessories: 0, arrears: 0 } :
+         pay.feeCategory === 'Accessories' ? { fees: 0, books: 0, accessories: pay.amount, arrears: 0 } : undefined));
+
     const newPayment: Payment = {
       ...pay,
       id: `pay-${Date.now()}`,
       paymentRef,
-      date: new Date().toLocaleString()
+      date: new Date().toLocaleString(),
+      breakdown: calculatedBreakdown
     };
 
     localStorage.removeItem('gwd_payments_cleared_at');
     setPayments(prev => [newPayment, ...prev]);
     saveDocumentToFirestore('payments', newPayment);
 
-    // Update invoice & student balance
+    // Update invoice & student balance + deduct paid arrears from total arrears
     setInvoices(prev => prev.map(inv => {
       if (inv.id === pay.invoiceId || inv.studentId === pay.studentId) {
-        const newPaid = inv.paidAmount + pay.amount;
-        const grandTotal = inv.grandTotal || (inv.currentTermAmount || inv.totalAmount) + (inv.arrears || 0);
+        const newPaid = (inv.paidAmount || 0) + pay.amount;
+        const newInvArrears = Math.max(0, (inv.arrears || 0) - paidArrears);
+        const grandTotal = (inv.currentTermAmount || inv.totalAmount) + newInvArrears;
         const newBalance = Math.max(0, grandTotal - newPaid);
         const status = newBalance === 0 ? 'Paid' : newPaid > 0 ? 'Partial' : 'Unpaid';
-        const updatedInv = { ...inv, paidAmount: newPaid, balance: newBalance, status };
+        const updatedInv = { ...inv, arrears: newInvArrears, grandTotal, paidAmount: newPaid, balance: newBalance, status };
         saveDocumentToFirestore('invoices', updatedInv);
         return updatedInv;
       }
@@ -2223,15 +2253,16 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setStudents(prev => prev.map(s => {
       if (s.id === pay.studentId) {
-        const newBal = Math.max(0, s.balanceDue - pay.amount);
-        const updatedStd = { ...s, balanceDue: newBal };
+        const newArrears = Math.max(0, (s.manualArrears || 0) - paidArrears);
+        const newBal = Math.max(0, (s.balanceDue || 0) - pay.amount);
+        const updatedStd = { ...s, manualArrears: newArrears, balanceDue: newBal };
         saveDocumentToFirestore('students', updatedStd);
         return updatedStd;
       }
       return s;
     }));
 
-    logAuditAction('PAYMENT_RECORDED', 'Fee Management', `Recorded ${pay.paymentMethod} payment ${paymentRef} of GHS ${pay.amount} for ${pay.studentName}`);
+    logAuditAction('PAYMENT_RECORDED', 'Fee Management', `Recorded ${pay.paymentMethod} payment ${paymentRef} of GHS ${pay.amount} for ${pay.studentName}${paidArrears > 0 ? ` (Arrears portion: GHS ${paidArrears} deducted from arrears)` : ''}`);
     return newPayment;
   };
 
