@@ -1,6 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { TimetableEntry, ClassRoom } from '../../types';
+import {
+  parseTimeSlot,
+  formatTimeSlot,
+  calculateDurationMinutes,
+  addMinutesToTime,
+  sortTimeSlotsChronologically,
+  STANDARD_TIME_SLOTS,
+  STANDARD_PERIOD_PRESETS,
+  POPULAR_GHANA_SUBJECTS,
+  getSubjectBadgeColor
+} from '../../utils/timetableUtils';
 import {
   CalendarDays,
   Clock,
@@ -21,10 +32,23 @@ import {
   School,
   Building,
   RotateCcw,
-  Users
+  Users,
+  Check,
+  Calendar,
+  Sliders,
+  Filter,
+  ArrowRight
 } from 'lucide-react';
 
-export const TimetableManagement: React.FC = () => {
+interface TimetableManagementProps {
+  isTeacherPortalView?: boolean;
+  preselectedClass?: string;
+}
+
+export const TimetableManagement: React.FC<TimetableManagementProps> = ({
+  isTeacherPortalView = false,
+  preselectedClass
+}) => {
   const {
     timetable,
     addTimetableEntry,
@@ -34,20 +58,38 @@ export const TimetableManagement: React.FC = () => {
     copyClassTimetable,
     setFullClassTimetable,
     classes,
+    subjects: registeredSubjects,
     staff,
     selectedTimetableClass,
     setSelectedTimetableClass,
     academicYear,
-    currentUser
+    currentUser,
+    activeRole
   } = useSchool();
 
-  // Active selected class name
-  const currentClassName = selectedTimetableClass || (classes.length > 0 ? classes[0].name : 'Creche');
+  const isTeacherRole = activeRole === 'Teacher' || currentUser?.role === 'Teacher' || isTeacherPortalView;
+  const teacherName = currentUser?.name || '';
+  const teacherAssignedClass = currentUser?.assignedClass || classes.find((c) => c.classTeacher?.toLowerCase() === teacherName.toLowerCase())?.name;
+
+  // Active selected class name - if teacher role and not set, default to teacher's class
+  const currentClassName =
+    preselectedClass ||
+    selectedTimetableClass ||
+    (isTeacherRole && teacherAssignedClass ? teacherAssignedClass : (classes.length > 0 ? classes[0].name : 'Creche'));
+
+  // Ensure selectedTimetableClass is in sync with teacher's assigned class on initial mount if teacher
+  useEffect(() => {
+    if (isTeacherRole && teacherAssignedClass && !selectedTimetableClass) {
+      setSelectedTimetableClass(teacherAssignedClass);
+    }
+  }, [isTeacherRole, teacherAssignedClass, selectedTimetableClass, setSelectedTimetableClass]);
+
   const currentClassObj = classes.find((c) => c.name === currentClassName) || classes[0];
 
-  // View modes
+  // View modes & filters
   const [viewMode, setViewMode] = useState<'weekly' | 'daily'>('weekly');
   const [activeDayTab, setActiveDayTab] = useState<TimetableEntry['day']>('Monday');
+  const [filterMyLessonsOnly, setFilterMyLessonsOnly] = useState(false);
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -65,36 +107,48 @@ export const TimetableManagement: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Form State for Slot Add / Edit
+  // Form State for Slot Add / Edit with granular Lesson Start Time & End Time
   const [form, setForm] = useState({
     day: 'Monday' as TimetableEntry['day'],
-    timeSlot: '08:00 - 08:50',
+    startTime: '08:00',
+    endTime: '08:50',
     subject: 'Mathematics',
-    teacherName: '',
+    teacherName: isTeacherRole && teacherName ? teacherName : '',
     room: ''
   });
 
   const days: TimetableEntry['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-  // Standard Ghanaian School Time Slots (Creche to JHS)
-  const timeSlots = [
-    '08:00 - 08:50', // Period 1
-    '08:50 - 09:40', // Period 2
-    '09:40 - 10:30', // Period 3
-    '10:30 - 11:00', // Snack / Recess Break
-    '11:00 - 11:50', // Period 4
-    '11:50 - 12:40', // Period 5
-    '12:40 - 13:30', // Midday Lunch Break
-    '13:30 - 14:20', // Period 6
-    '14:20 - 15:10'  // Period 7 / Closing Assembly
-  ];
-
-  const teachingTimeSlots = timeSlots.filter(
-    (slot) => !slot.includes('10:30 - 11:00') && !slot.includes('12:40 - 13:30')
-  );
+  // Base Ghana GES time slots
+  const baseTimeSlots = STANDARD_TIME_SLOTS;
 
   // Filter timetable for currently selected class
-  const classTimetable = timetable.filter((t) => t.className === currentClassName);
+  const rawClassTimetable = timetable.filter((t) => t.className === currentClassName);
+
+  // Apply "My Lessons Only" filter if toggled
+  const classTimetable = useMemo(() => {
+    if (!filterMyLessonsOnly || !teacherName) return rawClassTimetable;
+    const lower = teacherName.toLowerCase();
+    return rawClassTimetable.filter((t) => (t.teacherName || '').toLowerCase().includes(lower));
+  }, [rawClassTimetable, filterMyLessonsOnly, teacherName]);
+
+  // Chronologically sorted dynamic time slots for this class
+  const computedTimeSlots = useMemo(() => {
+    const slots = new Set<string>();
+    baseTimeSlots.forEach((s) => slots.add(s));
+    rawClassTimetable.forEach((t) => {
+      if (t.timeSlot) slots.add(t.timeSlot);
+    });
+    return sortTimeSlotsChronologically(Array.from(slots));
+  }, [baseTimeSlots, rawClassTimetable]);
+
+  // Available subjects for easy chip selection
+  const classSubjects = currentClassObj?.subjects || [];
+  const schoolCatalogSubjects = (registeredSubjects || []).map((s) => s.name);
+  const allAvailableSubjects = useMemo(() => {
+    const combined = Array.from(new Set([...classSubjects, ...schoolCatalogSubjects, ...POPULAR_GHANA_SUBJECTS]));
+    return combined;
+  }, [classSubjects, schoolCatalogSubjects]);
 
   // Group classes by school section
   const preschoolClasses = classes.filter((c) =>
@@ -116,7 +170,6 @@ export const TimetableManagement: React.FC = () => {
   // Detect Teacher Scheduling Conflicts across the whole school
   const conflicts = classTimetable.filter((entry) => {
     if (!entry.teacherName || entry.teacherName === 'Unassigned') return false;
-    // Find if same teacher is scheduled in another class at same day + timeSlot
     const duplicate = timetable.find(
       (other) =>
         other.id !== entry.id &&
@@ -127,19 +180,37 @@ export const TimetableManagement: React.FC = () => {
     return !!duplicate;
   });
 
-  // Open modal with prefilled day & timeSlot
-  const handleOpenAddForSlot = (day: TimetableEntry['day'], timeSlot: string) => {
-    const defaultSubject =
-      currentClassObj?.subjects && currentClassObj.subjects.length > 0
-        ? currentClassObj.subjects[0]
-        : 'Mathematics';
+  // Calculate duration of current form
+  const formDurationMinutes = useMemo(() => {
+    return calculateDurationMinutes(form.startTime, form.endTime);
+  }, [form.startTime, form.endTime]);
 
-    const defaultTeacher = currentClassObj?.classTeacher || (staff[0] ? staff[0].name : '');
+  // Duration quick setter
+  const handleSetDuration = (durationMin: number) => {
+    const newEnd = addMinutesToTime(form.startTime || '08:00', durationMin);
+    setForm((prev) => ({ ...prev, endTime: newEnd }));
+  };
+
+  // Preset quick setter
+  const handleApplyPreset = (preset: typeof STANDARD_PERIOD_PRESETS[0]) => {
+    setForm((prev) => ({
+      ...prev,
+      startTime: preset.startTime,
+      endTime: preset.endTime
+    }));
+  };
+
+  // Open modal with prefilled day & timeSlot
+  const handleOpenAddForSlot = (day: TimetableEntry['day'], slotString?: string) => {
+    const parsed = slotString ? parseTimeSlot(slotString) : { startTime: '08:00', endTime: '08:50', durationMinutes: 50 };
+    const defaultSubject = classSubjects.length > 0 ? classSubjects[0] : 'Mathematics';
+    const defaultTeacher = isTeacherRole && teacherName ? teacherName : (currentClassObj?.classTeacher || (staff[0] ? staff[0].name : 'Class Teacher'));
     const defaultRoom = currentClassObj?.roomNumber || 'Room 101';
 
     setForm({
       day,
-      timeSlot,
+      startTime: parsed.startTime,
+      endTime: parsed.endTime,
       subject: defaultSubject,
       teacherName: defaultTeacher,
       room: defaultRoom
@@ -149,26 +220,32 @@ export const TimetableManagement: React.FC = () => {
 
   const handleAddEntry = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanStartTime = form.startTime || '08:00';
+    const cleanEndTime = form.endTime || addMinutesToTime(cleanStartTime, 50);
+    const timeSlot = formatTimeSlot(cleanStartTime, cleanEndTime);
+
     addTimetableEntry({
       className: currentClassName,
       day: form.day,
-      timeSlot: form.timeSlot,
-      subject: form.subject.trim(),
-      teacherName: form.teacherName.trim() || 'Class Teacher',
+      timeSlot,
+      subject: form.subject.trim() || 'General Studies',
+      teacherName: form.teacherName.trim() || (isTeacherRole && teacherName ? teacherName : 'Class Teacher'),
       room: form.room.trim() || currentClassObj?.roomNumber || 'Classroom'
     });
     setIsAddModalOpen(false);
-    showToast(`Added ${form.subject} on ${form.day} (${form.timeSlot}) for ${currentClassName}`);
+    showToast(`Added lesson: ${form.subject} on ${form.day} (${timeSlot}) for ${currentClassName}`);
   };
 
   const handleOpenEdit = (entry: TimetableEntry) => {
     setEditingEntry(entry);
+    const parsed = parseTimeSlot(entry.timeSlot);
     setForm({
       day: entry.day,
-      timeSlot: entry.timeSlot,
+      startTime: parsed.startTime,
+      endTime: parsed.endTime,
       subject: entry.subject,
-      teacherName: entry.teacherName,
-      room: entry.room
+      teacherName: entry.teacherName || (isTeacherRole && teacherName ? teacherName : 'Class Teacher'),
+      room: entry.room || currentClassObj?.roomNumber || 'Classroom'
     });
     setIsEditModalOpen(true);
   };
@@ -177,39 +254,45 @@ export const TimetableManagement: React.FC = () => {
     e.preventDefault();
     if (!editingEntry) return;
 
+    const cleanStartTime = form.startTime || '08:00';
+    const cleanEndTime = form.endTime || addMinutesToTime(cleanStartTime, 50);
+    const timeSlot = formatTimeSlot(cleanStartTime, cleanEndTime);
+
     updateTimetableEntry(editingEntry.id, {
       day: form.day,
-      timeSlot: form.timeSlot,
-      subject: form.subject.trim(),
-      teacherName: form.teacherName.trim(),
-      room: form.room.trim()
+      timeSlot,
+      subject: form.subject.trim() || 'General Studies',
+      teacherName: form.teacherName.trim() || (isTeacherRole && teacherName ? teacherName : 'Class Teacher'),
+      room: form.room.trim() || currentClassObj?.roomNumber || 'Classroom'
     });
     setIsEditModalOpen(false);
     setEditingEntry(null);
-    showToast(`Updated timetable period for ${currentClassName}`);
+    showToast(`Updated lesson: ${form.subject} on ${form.day} (${timeSlot})`);
   };
 
   // Auto-generate template based on level (Ghana GES curriculum)
   const handleApplyTemplate = () => {
     const levelLower = currentClassObj?.level?.toLowerCase() || '';
     const nameLower = currentClassName.toLowerCase();
-    const classTeacher = currentClassObj?.classTeacher || 'Class Teacher';
+    const classTeacher = (isTeacherRole && teacherName) || currentClassObj?.classTeacher || 'Class Teacher';
     const room = currentClassObj?.roomNumber || 'Classroom';
 
     let scheduleTemplate: Omit<TimetableEntry, 'id'>[] = [];
+    const teachingBaseSlots = baseTimeSlots.filter(
+      (slot) => !slot.includes('10:30 - 11:00') && !slot.includes('12:40 - 13:30')
+    );
 
     if (levelLower.includes('creche') || nameLower.includes('creche')) {
-      // Creche schedule: Play-based, sensory, rhymes, motor skills, rest
       const crecheSubjects = [
-        ['Circle Time & Rhymes', 'Sensory Play', 'Early Phonics', 'Creative Drawing', 'Outdoor Play'], // Mon
-        ['Story & Language', 'Motor Skills', 'Rhymes & Music', 'Play Dough & Art', 'Nap & Free Play'], // Tue
-        ['Counting & Shapes', 'Sensory Exploration', 'Phonics Songs', 'Water Play', 'Picture Books'], // Wed
-        ['Early Phonics', 'Creative Movements', 'Rhymes & Poems', 'Block Building', 'Outdoor Play'], // Thu
-        ['Show & Tell', 'Sensory Activities', 'Rhymes & Singing', 'Free Play & Games', 'Storytime']  // Fri
+        ['Circle Time & Rhymes', 'Sensory Play', 'Early Phonics', 'Creative Drawing', 'Outdoor Play'],
+        ['Story & Language', 'Motor Skills', 'Rhymes & Music', 'Play Dough & Art', 'Nap & Free Play'],
+        ['Counting & Shapes', 'Sensory Exploration', 'Phonics Songs', 'Water Play', 'Picture Books'],
+        ['Early Phonics', 'Creative Movements', 'Rhymes & Poems', 'Block Building', 'Outdoor Play'],
+        ['Show & Tell', 'Sensory Activities', 'Rhymes & Singing', 'Free Play & Games', 'Storytime']
       ];
 
       days.forEach((day, dIdx) => {
-        teachingTimeSlots.slice(0, 5).forEach((slot, sIdx) => {
+        teachingBaseSlots.slice(0, 5).forEach((slot, sIdx) => {
           scheduleTemplate.push({
             className: currentClassName,
             day,
@@ -221,7 +304,6 @@ export const TimetableManagement: React.FC = () => {
         });
       });
     } else if (levelLower.includes('nursery') || levelLower.includes('kg') || nameLower.includes('kg') || nameLower.includes('nursery')) {
-      // Nursery / KG schedule
       const kgSubjects = [
         ['Phonics & Sounds', 'Numeracy & Counting', 'Our World Our People', 'Rhymes & Poetry', 'Creative Arts', 'Indoor Games', 'Storytelling'],
         ['Writing Readiness', 'Number Work', 'Phonics & Reading', 'Science Discovery', 'Music & Movement', 'Coloring & Art', 'Free Play'],
@@ -231,7 +313,7 @@ export const TimetableManagement: React.FC = () => {
       ];
 
       days.forEach((day, dIdx) => {
-        teachingTimeSlots.forEach((slot, sIdx) => {
+        teachingBaseSlots.slice(0, 7).forEach((slot, sIdx) => {
           scheduleTemplate.push({
             className: currentClassName,
             day,
@@ -243,7 +325,6 @@ export const TimetableManagement: React.FC = () => {
         });
       });
     } else if (levelLower.includes('jhs') || nameLower.includes('jhs')) {
-      // JHS schedule: Core Maths, Integrated Science, English, Social Studies, ICT, RME, French, Career Tech, Creative Arts
       const jhsWeeklyPlan = [
         ['Mathematics', 'English Language', 'Integrated Science', 'Social Studies', 'ICT (Computing)', 'Career Technology', 'French'],
         ['Integrated Science', 'Mathematics', 'English Language', 'RME', 'Creative Arts & Design', 'Ghanaian Language', 'Social Studies'],
@@ -253,7 +334,7 @@ export const TimetableManagement: React.FC = () => {
       ];
 
       days.forEach((day, dIdx) => {
-        teachingTimeSlots.forEach((slot, sIdx) => {
+        teachingBaseSlots.slice(0, 7).forEach((slot, sIdx) => {
           scheduleTemplate.push({
             className: currentClassName,
             day,
@@ -265,7 +346,6 @@ export const TimetableManagement: React.FC = () => {
         });
       });
     } else {
-      // Primary 1 to 6 schedule
       const primaryWeeklyPlan = [
         ['Mathematics', 'English Language', 'Natural Science', 'Our World Our People', 'Computing (ICT)', 'RME', 'Creative Arts'],
         ['English Language', 'Mathematics', 'Natural Science', 'Ghanaian Language', 'Our World Our People', 'History of Ghana', 'Physical Education'],
@@ -275,7 +355,7 @@ export const TimetableManagement: React.FC = () => {
       ];
 
       days.forEach((day, dIdx) => {
-        teachingTimeSlots.forEach((slot, sIdx) => {
+        teachingBaseSlots.slice(0, 7).forEach((slot, sIdx) => {
           scheduleTemplate.push({
             className: currentClassName,
             day,
@@ -303,20 +383,6 @@ export const TimetableManagement: React.FC = () => {
     showToast(`Copied timetable from ${sourceClassToCopy} to ${currentClassName}`);
   };
 
-  // Subject Badge Color Palette
-  const getSubjectBadgeColor = (subject: string) => {
-    const s = subject.toLowerCase();
-    if (s.includes('math')) return 'bg-blue-50 text-blue-900 border-blue-200';
-    if (s.includes('science')) return 'bg-emerald-50 text-emerald-900 border-emerald-200';
-    if (s.includes('english') || s.includes('phonics') || s.includes('reading')) return 'bg-amber-50 text-amber-950 border-amber-200';
-    if (s.includes('social') || s.includes('world') || s.includes('people') || s.includes('history')) return 'bg-purple-50 text-purple-900 border-purple-200';
-    if (s.includes('ict') || s.includes('computing')) return 'bg-cyan-50 text-cyan-900 border-cyan-200';
-    if (s.includes('rme') || s.includes('religious')) return 'bg-indigo-50 text-indigo-900 border-indigo-200';
-    if (s.includes('art') || s.includes('creative') || s.includes('rhymes') || s.includes('music')) return 'bg-rose-50 text-rose-900 border-rose-200';
-    if (s.includes('french') || s.includes('ghanaian')) return 'bg-teal-50 text-teal-900 border-teal-200';
-    return 'bg-slate-50 text-slate-800 border-slate-200';
-  };
-
   return (
     <div className="space-y-6 pb-12">
       {/* Toast Notification */}
@@ -327,22 +393,69 @@ export const TimetableManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Header Banner */}
+      {/* Teacher Workspace Banner if Teacher Mode */}
+      {isTeacherRole && (
+        <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white p-5 rounded-2xl shadow-sm border border-emerald-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-black text-lg shadow-sm shrink-0">
+              <CalendarDays className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black font-['Outfit']">
+                  Teacher Timetable & Lesson Scheduler
+                </h2>
+                <span className="bg-amber-400 text-emerald-950 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Self-Service Mode
+                </span>
+              </div>
+              <p className="text-xs text-emerald-100 mt-1">
+                Welcome, <strong>{teacherName || 'Teacher'}</strong>! You can customize lesson start and end times, change lessons, and enter subjects directly for your classroom.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {teacherAssignedClass && (
+              <button
+                onClick={() => setSelectedTimetableClass(teacherAssignedClass)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  currentClassName === teacherAssignedClass
+                    ? 'bg-amber-400 text-emerald-950 shadow-xs'
+                    : 'bg-emerald-800/80 hover:bg-emerald-700 text-white border border-emerald-600'
+                }`}
+              >
+                <School className="w-3.5 h-3.5" />
+                My Class: {teacherAssignedClass}
+              </button>
+            )}
+            <button
+              onClick={() => handleOpenAddForSlot('Monday', '08:00 - 08:50')}
+              className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Add New Lesson
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Timetable Controls Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <div className="w-9 h-9 rounded-xl bg-emerald-800 text-amber-300 flex items-center justify-center font-bold">
-              <CalendarDays className="w-5 h-5" />
+              <Clock className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900 font-['Outfit'] flex items-center gap-2">
-                Class Timetable Administration
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 font-['Outfit'] flex items-center gap-2">
+                Class Timetable Schedule
                 <span className="bg-emerald-100 text-emerald-900 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  Creche to JHS
+                  {currentClassName}
                 </span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Each classroom manages its own weekly period grid, subject schedules, and teacher allocations.
+                Set lesson start times, adjust period durations, change lessons, and enter subjects.
               </p>
             </div>
           </div>
@@ -350,6 +463,22 @@ export const TimetableManagement: React.FC = () => {
 
         {/* Global Controls */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* My Lessons Filter Toggle */}
+          {teacherName && (
+            <button
+              onClick={() => setFilterMyLessonsOnly(!filterMyLessonsOnly)}
+              className={`px-3 py-2 text-xs font-bold rounded-xl border flex items-center gap-1.5 cursor-pointer transition-all ${
+                filterMyLessonsOnly
+                  ? 'bg-emerald-900 text-white border-emerald-900 shadow-xs'
+                  : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
+              }`}
+              title="Show only periods taught by me"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              {filterMyLessonsOnly ? 'Showing My Lessons' : 'Filter My Lessons'}
+            </button>
+          )}
+
           <button
             onClick={() => window.print()}
             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
@@ -382,17 +511,19 @@ export const TimetableManagement: React.FC = () => {
             className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-colors"
           >
             <Plus className="w-4 h-4 text-amber-300" />
-            Add Period Slot
+            Add Lesson Slot
           </button>
         </div>
       </div>
 
-      {/* Class Switcher & Department Filter */}
+      {/* Class Switcher & View Mode Toolbar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <School className="w-4 h-4 text-emerald-800" />
-            <label htmlFor="class-select-dropdown" className="font-bold text-slate-800 text-xs">Administering Timetable For:</label>
+            <label htmlFor="class-select-dropdown" className="font-bold text-slate-800 text-xs">
+              Active Classroom:
+            </label>
             <select
               id="class-select-dropdown"
               value={currentClassName}
@@ -403,7 +534,7 @@ export const TimetableManagement: React.FC = () => {
                 <optgroup label="Early Childhood (Creche, Nursery, KG)">
                   {preschoolClasses.map((c) => (
                     <option key={c.id} value={c.name}>
-                      {c.name}
+                      {c.name} {teacherAssignedClass === c.name ? '★ (My Class)' : ''}
                     </option>
                   ))}
                 </optgroup>
@@ -413,7 +544,7 @@ export const TimetableManagement: React.FC = () => {
                 <optgroup label="Primary Department (Class 1 to 6)">
                   {primaryClasses.map((c) => (
                     <option key={c.id} value={c.name}>
-                      {c.name}
+                      {c.name} {teacherAssignedClass === c.name ? '★ (My Class)' : ''}
                     </option>
                   ))}
                 </optgroup>
@@ -423,7 +554,7 @@ export const TimetableManagement: React.FC = () => {
                 <optgroup label="Junior High School (JHS 1 to 3)">
                   {jhsClasses.map((c) => (
                     <option key={c.id} value={c.name}>
-                      {c.name}
+                      {c.name} {teacherAssignedClass === c.name ? '★ (My Class)' : ''}
                     </option>
                   ))}
                 </optgroup>
@@ -432,32 +563,42 @@ export const TimetableManagement: React.FC = () => {
           </div>
 
           {/* View Mode Toggle: Weekly Master vs Daily Tabs */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-            <button
-              onClick={() => setViewMode('weekly')}
-              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                viewMode === 'weekly' ? 'bg-white text-emerald-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              5-Day Grid
-            </button>
-            <button
-              onClick={() => setViewMode('daily')}
-              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                viewMode === 'daily' ? 'bg-white text-emerald-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Day-by-Day
-            </button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              <button
+                onClick={() => setViewMode('weekly')}
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  viewMode === 'weekly' ? 'bg-white text-emerald-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                5-Day Grid
+              </button>
+              <button
+                onClick={() => setViewMode('daily')}
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  viewMode === 'daily' ? 'bg-white text-emerald-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Day-by-Day
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Selected Class Snapshot Banner */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100 text-xs">
+        {/* Quick Summary Pill Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-xs">
+          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2.5">
+            <BookOpen className="w-4 h-4 text-emerald-700 shrink-0" />
+            <div className="truncate">
+              <span className="text-[10px] text-slate-400 block uppercase font-bold">Total Lessons</span>
+              <span className="font-bold text-slate-800">{classTimetable.length} Periods Scheduled</span>
+            </div>
+          </div>
+
           <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2.5">
             <User className="w-4 h-4 text-emerald-700 shrink-0" />
             <div className="truncate">
-              <span className="text-[10px] text-slate-400 block uppercase font-bold">Class Teacher</span>
+              <span className="text-[10px] text-slate-400 block uppercase font-bold">Class Master</span>
               <span className="font-bold text-slate-800 truncate block">
                 {currentClassObj?.classTeacher || 'Unassigned'}
               </span>
@@ -465,34 +606,21 @@ export const TimetableManagement: React.FC = () => {
           </div>
 
           <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2.5">
-            <MapPin className="w-4 h-4 text-amber-600 shrink-0" />
+            <MapPin className="w-4 h-4 text-emerald-700 shrink-0" />
             <div className="truncate">
-              <span className="text-[10px] text-slate-400 block uppercase font-bold">Assigned Room</span>
+              <span className="text-[10px] text-slate-400 block uppercase font-bold">Default Room</span>
               <span className="font-bold text-slate-800 truncate block">
-                {currentClassObj?.roomNumber || 'Block A'}
+                {currentClassObj?.roomNumber || 'Room 101'}
               </span>
             </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2.5">
-            <Building className="w-4 h-4 text-slate-600 shrink-0" />
-            <div>
-              <span className="text-[10px] text-slate-400 block uppercase font-bold">Desk Capacity</span>
-              <span className="font-bold text-slate-900 font-mono">
-                {currentClassObj?.capacity || 35} Desks
+          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+            <div className="truncate">
+              <span className="text-[10px] text-slate-400 block uppercase font-bold">Timetable State</span>
+              <span className="font-bold text-emerald-800 truncate block">
+                {classTimetable.length > 0 ? 'Active & Editable' : 'Empty Schedule'}
               </span>
-            </div>
-          </div>
-
-          <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-emerald-800 shrink-0" />
-              <div>
-                <span className="text-[10px] text-emerald-700 block uppercase font-bold">Periods Scheduled</span>
-                <span className="font-bold text-emerald-950 font-mono text-xs">
-                  {classTimetable.length} Slots
-                </span>
-              </div>
             </div>
             {classTimetable.length > 0 && (
               <button
@@ -564,7 +692,7 @@ export const TimetableManagement: React.FC = () => {
             <table className="w-full text-left border-collapse text-xs min-w-[760px]">
               <thead>
                 <tr className="bg-emerald-900 text-white uppercase text-[10px] tracking-wider font-bold">
-                  <th className="py-3.5 px-4 w-36 border-r border-emerald-800">Time Period</th>
+                  <th className="py-3.5 px-4 w-40 border-r border-emerald-800">Time & Duration</th>
                   {days.map((d) => (
                     <th key={d} className="py-3.5 px-4 border-r border-emerald-800 last:border-0 text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -578,15 +706,22 @@ export const TimetableManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {timeSlots.map((slot) => {
+                {computedTimeSlots.map((slot) => {
                   const isBreak = slot.includes('10:30 - 11:00');
                   const isLunch = slot.includes('12:40 - 13:30');
+                  const parsed = parseTimeSlot(slot);
 
                   if (isBreak || isLunch) {
                     return (
                       <tr key={slot} className="bg-amber-50/80 text-amber-950 font-bold border-y border-amber-200">
                         <td className="py-2.5 px-4 font-mono text-[11px] border-r border-amber-200 text-amber-900 bg-amber-100/50">
-                          {slot}
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-amber-700" />
+                            <span>{slot}</span>
+                          </div>
+                          <span className="text-[9px] text-amber-700 font-normal block mt-0.5">
+                            {parsed.durationMinutes} mins
+                          </span>
                         </td>
                         <td colSpan={5} className="py-2.5 px-4 text-center tracking-wider uppercase text-[11px]">
                           {isBreak ? '☕ Morning Snack & Health Break (30 Mins)' : '🥗 Lunch & Midday Rest Break (50 Mins)'}
@@ -602,6 +737,9 @@ export const TimetableManagement: React.FC = () => {
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
                           <span>{slot}</span>
                         </div>
+                        <span className="text-[10px] text-emerald-800 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 inline-block mt-1">
+                          {parsed.durationMinutes} mins
+                        </span>
                       </td>
 
                       {days.map((day) => {
@@ -611,9 +749,11 @@ export const TimetableManagement: React.FC = () => {
                           <td key={day} className="py-2 px-2.5 border-r border-slate-200 last:border-0 align-top min-w-[130px]">
                             {entry ? (
                               <div
-                                className={`p-2.5 rounded-xl border relative group transition-all hover:shadow-xs ${getSubjectBadgeColor(
+                                onClick={() => handleOpenEdit(entry)}
+                                className={`p-2.5 rounded-xl border relative group transition-all hover:shadow-md cursor-pointer ${getSubjectBadgeColor(
                                   entry.subject
                                 )}`}
+                                title="Click to edit lesson, change time or subject"
                               >
                                 <div className="flex items-start justify-between gap-1">
                                   <span className="font-bold block text-xs leading-tight line-clamp-2">
@@ -621,16 +761,25 @@ export const TimetableManagement: React.FC = () => {
                                   </span>
                                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button
-                                      onClick={() => handleOpenEdit(entry)}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenEdit(entry);
+                                      }}
                                       className="p-1 text-slate-600 hover:text-emerald-900 hover:bg-white rounded cursor-pointer"
-                                      title="Edit Period Slot"
+                                      title="Edit lesson & change subject / time"
                                     >
                                       <Edit2 className="w-3 h-3" />
                                     </button>
                                     <button
-                                      onClick={() => deleteTimetableEntry(entry.id)}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteTimetableEntry(entry.id);
+                                        showToast(`Deleted ${entry.subject} on ${entry.day}`);
+                                      }}
                                       className="p-1 text-rose-600 hover:text-rose-900 hover:bg-white rounded cursor-pointer"
-                                      title="Remove Period Slot"
+                                      title="Remove lesson slot"
                                     >
                                       <Trash2 className="w-3 h-3" />
                                     </button>
@@ -645,16 +794,19 @@ export const TimetableManagement: React.FC = () => {
                                   <span className="text-[10px] font-mono text-slate-500 bg-white/80 px-1.5 py-0.2 rounded border border-black/5">
                                     {entry.room || currentClassObj?.roomNumber || 'Room'}
                                   </span>
+                                  <span className="text-[9px] text-slate-400 group-hover:text-emerald-800 font-semibold transition-colors">
+                                    Edit ✎
+                                  </span>
                                 </div>
                               </div>
                             ) : (
                               <button
                                 onClick={() => handleOpenAddForSlot(day, slot)}
                                 className="w-full h-16 border border-dashed border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/40 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:text-emerald-800 transition-all text-[11px] font-medium group cursor-pointer"
-                                title={`Add ${day} period`}
+                                title={`Add ${day} lesson at ${slot}`}
                               >
                                 <Plus className="w-4 h-4 text-slate-300 group-hover:text-emerald-700 transition-colors" />
-                                <span className="text-[10px] text-slate-400 group-hover:text-emerald-700">Add Slot</span>
+                                <span className="text-[10px] text-slate-400 group-hover:text-emerald-700">Add Lesson</span>
                               </button>
                             )}
                           </td>
@@ -682,14 +834,15 @@ export const TimetableManagement: React.FC = () => {
               className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5 text-amber-300" />
-              Add {activeDayTab} Slot
+              Add {activeDayTab} Lesson
             </button>
           </div>
 
           <div className="space-y-2.5">
-            {timeSlots.map((slot) => {
+            {computedTimeSlots.map((slot) => {
               const isBreak = slot.includes('10:30 - 11:00');
               const isLunch = slot.includes('12:40 - 13:30');
+              const parsed = parseTimeSlot(slot);
 
               if (isBreak || isLunch) {
                 return (
@@ -697,7 +850,12 @@ export const TimetableManagement: React.FC = () => {
                     key={slot}
                     className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-between text-xs text-amber-950 font-bold"
                   >
-                    <span className="font-mono text-amber-800">{slot}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-amber-800">{slot}</span>
+                      <span className="text-[10px] bg-amber-200/60 text-amber-900 px-1.5 py-0.5 rounded font-normal">
+                        {parsed.durationMinutes}m
+                      </span>
+                    </div>
                     <span>{isBreak ? '☕ Morning Snack & Recess Break' : '🥗 Midday Lunch Break & Rest'}</span>
                     <span className="text-[10px] uppercase tracking-wider text-amber-700">All Pupils</span>
                   </div>
@@ -714,8 +872,9 @@ export const TimetableManagement: React.FC = () => {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-28 font-mono text-xs font-bold text-slate-700 bg-white border border-slate-200 px-2.5 py-1 rounded-lg text-center shrink-0">
-                      {slot}
+                    <div className="w-32 font-mono text-xs font-bold text-slate-700 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg text-center shrink-0">
+                      <div>{slot}</div>
+                      <div className="text-[10px] text-emerald-800 font-semibold">{parsed.durationMinutes} mins</div>
                     </div>
 
                     {entry ? (
@@ -743,10 +902,13 @@ export const TimetableManagement: React.FC = () => {
                           className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-1 cursor-pointer"
                         >
                           <Edit2 className="w-3 h-3 text-slate-500" />
-                          Edit
+                          Change Lesson
                         </button>
                         <button
-                          onClick={() => deleteTimetableEntry(entry.id)}
+                          onClick={() => {
+                            deleteTimetableEntry(entry.id);
+                            showToast(`Removed ${entry.subject} slot`);
+                          }}
                           className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs flex items-center gap-1 cursor-pointer"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -758,8 +920,8 @@ export const TimetableManagement: React.FC = () => {
                         onClick={() => handleOpenAddForSlot(activeDayTab, slot)}
                         className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold text-xs flex items-center gap-1 cursor-pointer"
                       >
-                        <Plus className="w-3 h-3 text-emerald-700" />
-                        Assign Subject
+                        <Plus className="w-3 h-3" />
+                        Add Lesson
                       </button>
                     )}
                   </div>
@@ -771,15 +933,21 @@ export const TimetableManagement: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 1: ADD PERIOD SLOT                                                 */}
+      {/* MODAL 1: ADD LESSON SLOT (START TIME, END TIME, DURATION & SUBJECTS)       */}
       {/* ========================================================================= */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95">
-            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between shrink-0">
               <div>
-                <h3 className="font-bold text-base font-['Outfit']">Add Timetable Period</h3>
-                <p className="text-xs text-emerald-200">Class: {currentClassName}</p>
+                <h3 className="font-bold text-base font-['Outfit'] flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-amber-300" />
+                  Add Lesson to Timetable
+                </h3>
+                <p className="text-xs text-emerald-200">
+                  Class: <strong>{currentClassName}</strong>
+                  {isTeacherRole && teacherName ? ` • Teacher: ${teacherName}` : ''}
+                </p>
               </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}
@@ -788,100 +956,192 @@ export const TimetableManagement: React.FC = () => {
                 ✕
               </button>
             </div>
-            <form onSubmit={handleAddEntry} className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Day of Week</label>
-                  <select
-                    value={form.day}
-                    onChange={(e) => setForm({ ...form, day: e.target.value as TimetableEntry['day'] })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 font-medium"
-                  >
-                    {days.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
+
+            <form onSubmit={handleAddEntry} className="p-6 space-y-4 text-xs overflow-y-auto">
+              {/* Day of Week */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Day of Week</label>
+                <div className="grid grid-cols-5 gap-1">
+                  {days.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setForm({ ...form, day: d })}
+                      className={`py-2 text-center rounded-xl font-bold transition-all text-xs cursor-pointer ${
+                        form.day === d
+                          ? 'bg-emerald-800 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {d.slice(0, 3)}
+                    </button>
+                  ))}
                 </div>
+              </div>
+
+              {/* Lesson Timing: Start Time & End Time */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-emerald-700" />
+                    Lesson Timing (Start & End Time)
+                  </span>
+                  <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    Duration: {formDurationMinutes} mins
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-600 text-[11px] mb-1">Time to Start Lesson</label>
+                    <input
+                      type="time"
+                      required
+                      value={form.startTime}
+                      onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 bg-white font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-600 text-[11px] mb-1">Time to End Lesson</label>
+                    <input
+                      type="time"
+                      required
+                      value={form.endTime}
+                      onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 bg-white font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Duration Setters */}
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Time Period Slot</label>
+                  <span className="text-[10px] text-slate-500 font-semibold block mb-1">Quick Duration Presets:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[30, 40, 45, 50, 60, 90].map((dur) => (
+                      <button
+                        key={dur}
+                        type="button"
+                        onClick={() => handleSetDuration(dur)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                          formDurationMinutes === dur
+                            ? 'bg-emerald-800 text-white shadow-xs'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:text-emerald-900'
+                        }`}
+                      >
+                        +{dur} mins {dur === 90 ? '(Double)' : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Standard Period Presets Dropdown */}
+                <div className="pt-1">
+                  <label className="block text-[10px] text-slate-500 font-semibold mb-1">Or choose Standard Ghana School Period:</label>
                   <select
-                    value={form.timeSlot}
-                    onChange={(e) => setForm({ ...form, timeSlot: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 font-mono font-bold"
+                    onChange={(e) => {
+                      const found = STANDARD_PERIOD_PRESETS.find((p) => p.label === e.target.value);
+                      if (found) handleApplyPreset(found);
+                    }}
+                    defaultValue=""
+                    className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 font-medium"
                   >
-                    {teachingTimeSlots.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
+                    <option value="" disabled>-- Select standard period preset --</option>
+                    {STANDARD_PERIOD_PRESETS.map((p) => (
+                      <option key={p.label} value={p.label}>
+                        {p.label}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
 
+              {/* Subject Input & Quick Suggestions */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Subject Name</label>
-                <div className="space-y-1.5">
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Subject Name
+                </label>
+                <div className="space-y-2">
                   <input
                     type="text"
                     required
                     value={form.subject}
                     onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 font-bold"
-                    placeholder="e.g. Mathematics, Integrated Science"
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 font-bold text-sm"
+                    placeholder="e.g. Mathematics, Integrated Science, Computing"
                   />
-                  {currentClassObj?.subjects && currentClassObj.subjects.length > 0 && (
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      <span className="text-[10px] text-slate-400 mr-1">Quick fill:</span>
-                      {currentClassObj.subjects.slice(0, 6).map((sub) => (
+
+                  {/* Quick Subject Chips */}
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-semibold block mb-1">
+                      Quick select subject:
+                    </span>
+                    <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-100">
+                      {allAvailableSubjects.map((sub) => (
                         <button
                           key={sub}
                           type="button"
                           onClick={() => setForm({ ...form, subject: sub })}
-                          className="px-2 py-0.5 bg-slate-100 hover:bg-emerald-100 hover:text-emerald-900 rounded-md text-[10px] text-slate-700 transition-colors"
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                            form.subject.toLowerCase() === sub.toLowerCase()
+                              ? 'bg-emerald-800 text-white font-bold'
+                              : 'bg-white text-slate-700 hover:bg-emerald-100 hover:text-emerald-950 border border-slate-200'
+                          }`}
                         >
                           {sub}
                         </button>
                       ))}
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
 
+              {/* Teacher and Room Fields */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Assigned Teacher</label>
-                  <select
+                  <label className="block font-semibold text-slate-700 mb-1">Teacher</label>
+                  <input
+                    type="text"
                     value={form.teacherName}
                     onChange={(e) => setForm({ ...form, teacherName: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800"
-                  >
-                    <option value={currentClassObj?.classTeacher || 'Class Teacher'}>
-                      {currentClassObj?.classTeacher || 'Class Teacher'} (Class Master)
-                    </option>
-                    {staff
-                      .filter((s) => s.name !== currentClassObj?.classTeacher)
-                      .map((s) => (
-                        <option key={s.id} value={s.name}>
-                          {s.name} ({s.department || s.role})
-                        </option>
-                      ))}
-                  </select>
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 font-medium"
+                    placeholder="e.g. Teacher Name"
+                  />
+                  {staff.length > 0 && (
+                    <div className="mt-1">
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) setForm({ ...form, teacherName: e.target.value });
+                        }}
+                        defaultValue=""
+                        className="w-full text-[10px] border border-slate-200 rounded-lg p-1 bg-slate-50 text-slate-600"
+                      >
+                        <option value="" disabled>Or pick from staff list...</option>
+                        {staff.map((s) => (
+                          <option key={s.id} value={s.name}>
+                            {s.name} ({s.role})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
+
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Room / Location</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Room / Venue</label>
                   <input
                     type="text"
                     value={form.room}
                     onChange={(e) => setForm({ ...form, room: e.target.value })}
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800"
-                    placeholder="e.g. Block B - Room 101"
+                    placeholder="e.g. Room 101, Science Lab"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
@@ -891,9 +1151,10 @@ export const TimetableManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl cursor-pointer shadow-sm"
+                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl cursor-pointer shadow-sm flex items-center gap-1.5"
                 >
-                  Save Period Slot
+                  <Check className="w-4 h-4 text-amber-300" />
+                  Save Lesson
                 </button>
               </div>
             </form>
@@ -902,15 +1163,20 @@ export const TimetableManagement: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: EDIT PERIOD SLOT                                                 */}
+      {/* MODAL 2: EDIT / CHANGE LESSON (CHANGE TIME, SUBJECT, TEACHER, ROOM)        */}
       {/* ========================================================================= */}
       {isEditModalOpen && editingEntry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95">
-            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <div className="bg-emerald-900 text-white p-5 flex items-center justify-between shrink-0">
               <div>
-                <h3 className="font-bold text-base font-['Outfit']">Edit Timetable Period</h3>
-                <p className="text-xs text-emerald-200">{currentClassName}</p>
+                <h3 className="font-bold text-base font-['Outfit'] flex items-center gap-2">
+                  <Edit2 className="w-4 h-4 text-amber-300" />
+                  Change Lesson Details
+                </h3>
+                <p className="text-xs text-emerald-200">
+                  {currentClassName} • {editingEntry.subject} ({editingEntry.day})
+                </p>
               </div>
               <button
                 onClick={() => {
@@ -922,82 +1188,204 @@ export const TimetableManagement: React.FC = () => {
                 ✕
               </button>
             </div>
-            <form onSubmit={handleUpdateEntry} className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Day of Week</label>
-                  <select
-                    value={form.day}
-                    onChange={(e) => setForm({ ...form, day: e.target.value as TimetableEntry['day'] })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 font-medium"
-                  >
-                    {days.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Time Period Slot</label>
-                  <select
-                    value={form.timeSlot}
-                    onChange={(e) => setForm({ ...form, timeSlot: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 font-mono font-bold"
-                  >
-                    {teachingTimeSlots.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
 
+            <form onSubmit={handleUpdateEntry} className="p-6 space-y-4 text-xs overflow-y-auto">
+              {/* Day of Week */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Subject</label>
-                <input
-                  type="text"
-                  required
-                  value={form.subject}
-                  onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 font-bold"
-                />
+                <label className="block font-semibold text-slate-700 mb-1">Day of Week</label>
+                <div className="grid grid-cols-5 gap-1">
+                  {days.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setForm({ ...form, day: d })}
+                      className={`py-2 text-center rounded-xl font-bold transition-all text-xs cursor-pointer ${
+                        form.day === d
+                          ? 'bg-emerald-800 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {d.slice(0, 3)}
+                    </button>
+                  ))}
+                </div>
               </div>
 
+              {/* Lesson Timing: Start Time & End Time */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-emerald-700" />
+                    Change Lesson Start & End Time
+                  </span>
+                  <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    Duration: {formDurationMinutes} mins
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-600 text-[11px] mb-1">Start Time</label>
+                    <input
+                      type="time"
+                      required
+                      value={form.startTime}
+                      onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 bg-white font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-600 text-[11px] mb-1">End Time</label>
+                    <input
+                      type="time"
+                      required
+                      value={form.endTime}
+                      onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 bg-white font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Duration Setters */}
+                <div>
+                  <span className="text-[10px] text-slate-500 font-semibold block mb-1">Set Duration:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[30, 40, 45, 50, 60, 90].map((dur) => (
+                      <button
+                        key={dur}
+                        type="button"
+                        onClick={() => handleSetDuration(dur)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                          formDurationMinutes === dur
+                            ? 'bg-emerald-800 text-white shadow-xs'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-emerald-50 hover:text-emerald-900'
+                        }`}
+                      >
+                        +{dur} mins
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Standard Ghana School Period Presets */}
+                <div className="pt-1">
+                  <label className="block text-[10px] text-slate-500 font-semibold mb-1">Or apply standard period preset:</label>
+                  <select
+                    onChange={(e) => {
+                      const found = STANDARD_PERIOD_PRESETS.find((p) => p.label === e.target.value);
+                      if (found) handleApplyPreset(found);
+                    }}
+                    defaultValue=""
+                    className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 font-medium"
+                  >
+                    <option value="" disabled>-- Select standard period preset --</option>
+                    {STANDARD_PERIOD_PRESETS.map((p) => (
+                      <option key={p.label} value={p.label}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Subject Input & Quick Suggestions */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Change Subject
+                </label>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    required
+                    value={form.subject}
+                    onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 font-bold text-sm"
+                    placeholder="Enter or select subject..."
+                  />
+
+                  {/* Quick Subject Chips */}
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-semibold block mb-1">
+                      Pick another subject:
+                    </span>
+                    <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-100">
+                      {allAvailableSubjects.map((sub) => (
+                        <button
+                          key={sub}
+                          type="button"
+                          onClick={() => setForm({ ...form, subject: sub })}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                            form.subject.toLowerCase() === sub.toLowerCase()
+                              ? 'bg-emerald-800 text-white font-bold'
+                              : 'bg-white text-slate-700 hover:bg-emerald-100 hover:text-emerald-950 border border-slate-200'
+                          }`}
+                        >
+                          {sub}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Teacher and Room Fields */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Teacher</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Assigned Teacher</label>
                   <input
                     type="text"
                     value={form.teacherName}
                     onChange={(e) => setForm({ ...form, teacherName: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 font-medium"
+                    placeholder="Teacher name"
                   />
+                  {staff.length > 0 && (
+                    <div className="mt-1">
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) setForm({ ...form, teacherName: e.target.value });
+                        }}
+                        defaultValue=""
+                        className="w-full text-[10px] border border-slate-200 rounded-lg p-1 bg-slate-50 text-slate-600"
+                      >
+                        <option value="" disabled>Pick from staff list...</option>
+                        {staff.map((s) => (
+                          <option key={s.id} value={s.name}>
+                            {s.name} ({s.role})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
+
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Room / Location</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Room / Venue</label>
                   <input
                     type="text"
                     value={form.room}
                     onChange={(e) => setForm({ ...form, room: e.target.value })}
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                    placeholder="e.g. Room 101, Science Lab"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+              {/* Action Buttons */}
+              <div className="flex justify-between items-center pt-3 border-t border-slate-100 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
                     deleteTimetableEntry(editingEntry.id);
                     setIsEditModalOpen(false);
                     setEditingEntry(null);
+                    showToast(`Deleted lesson from ${editingEntry.day}`);
                   }}
                   className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold rounded-xl flex items-center gap-1 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  Delete Slot
+                  Delete Lesson
                 </button>
                 <div className="flex gap-2">
                   <button
@@ -1012,8 +1400,9 @@ export const TimetableManagement: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl cursor-pointer"
+                    className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl cursor-pointer shadow-sm flex items-center gap-1.5"
                   >
+                    <Check className="w-4 h-4 text-amber-300" />
                     Save Changes
                   </button>
                 </div>
