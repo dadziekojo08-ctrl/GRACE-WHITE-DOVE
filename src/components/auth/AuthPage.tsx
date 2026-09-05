@@ -278,8 +278,8 @@ export const AuthPage: React.FC = () => {
             </div>
 
             <div className="pt-2">
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-300 bg-emerald-900/80 px-3 py-1 rounded-full border border-emerald-700/60">
-                <Sparkles className="w-3.5 h-3.5" /> Grace White Dove School Complex
+              <span className="inline-flex items-center text-[11px] font-bold text-amber-300 bg-emerald-900/80 px-3 py-1 rounded-full border border-emerald-700/60">
+                Grace White Dove School Complex
               </span>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-3 font-['Outfit'] leading-snug">
                 Unified Institutional Intelligence Platform

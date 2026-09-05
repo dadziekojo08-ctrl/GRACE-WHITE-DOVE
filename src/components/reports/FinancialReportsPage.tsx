@@ -31,7 +31,8 @@ import {
   Bell,
   MessageSquare,
   Smartphone,
-  Mail
+  Mail,
+  RotateCcw
 } from 'lucide-react';
 import {
   AreaChart,
@@ -57,6 +58,8 @@ export const FinancialReportsPage: React.FC<{
     invoices,
     payments,
     payrolls,
+    reimbursements,
+    resetAllReimbursements,
     staff,
     feeStructures,
     createInvoice,
@@ -911,15 +914,30 @@ export const FinancialReportsPage: React.FC<{
                 <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">Faculty & Staff Payroll Roster</h3>
                 <p className="text-xs text-slate-500">Gross compensation, SSNIT Tier 1/2 & GRA PAYE Deductions</p>
               </div>
-              <button
-                onClick={() => {
-                  generateMonthlyPayroll('August', 2026);
-                  alert('Automated payroll batch generated for current month!');
-                }}
-                className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
-              >
-                + Run Monthly Batch
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={async () => {
+                    if (window.confirm(`Are you sure you want to clear and reset all ${reimbursements.length} expense & supply reimbursement claims?`)) {
+                      await resetAllReimbursements('clear-all');
+                      alert('All Expense & Supply Reimbursements have been cleared and reset to GHS 0.00.');
+                    }
+                  }}
+                  className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 hover:border-rose-300 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                  title="Clear and reset expense & supply reimbursement records"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-rose-700" />
+                  Clear & Reset Reimbursements ({reimbursements.length})
+                </button>
+                <button
+                  onClick={() => {
+                    generateMonthlyPayroll('August', 2026);
+                    alert('Automated payroll batch generated for current month!');
+                  }}
+                  className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
+                >
+                  + Run Monthly Batch
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">

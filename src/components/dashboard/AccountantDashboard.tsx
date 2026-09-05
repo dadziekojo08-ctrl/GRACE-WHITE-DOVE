@@ -272,10 +272,23 @@ export const AccountantDashboard: React.FC<{
             <button
               onClick={() => setActiveTab('payroll')}
               className="bg-emerald-800/90 hover:bg-emerald-700 text-emerald-100 font-semibold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 border border-emerald-600 transition-all cursor-pointer"
-              title="Manage and reset staff expense & supply reimbursements"
+              title="Manage and view staff expense & supply reimbursements"
             >
               <Receipt className="w-4 h-4 text-amber-300" />
               Reimbursements ({reimbursements.length})
+            </button>
+
+            {/* Clear & Reset Reimbursements */}
+            <button
+              onClick={() => {
+                setClearReportMode('reimbursements-only');
+                setIsClearReportModalOpen(true);
+              }}
+              className="bg-rose-900/90 hover:bg-rose-800 text-rose-100 font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 border border-rose-700 shadow-sm transition-all cursor-pointer hover:scale-[1.02]"
+              title="Clear and reset Expense & Supply Reimbursements"
+            >
+              <RotateCcw className="w-4 h-4 text-amber-300" />
+              Clear & Reset Reimbursements
             </button>
 
             {/* 4. Clear Financial Reports */}
@@ -817,7 +830,7 @@ export const AccountantDashboard: React.FC<{
                     : clearReportMode === 'payments-only'
                     ? 'Clear Total Collected'
                     : clearReportMode === 'reimbursements-only'
-                    ? 'Reset Reimbursements'
+                    ? 'Clear & Reset Reimbursements'
                     : 'Clear All Records'}
                 </button>
               </div>

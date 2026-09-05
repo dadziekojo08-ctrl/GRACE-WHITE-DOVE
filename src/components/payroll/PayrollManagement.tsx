@@ -202,7 +202,22 @@ export const PayrollManagement: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdminOrAccountant && (
+            <button
+              onClick={() => {
+                setActiveTab('reimbursements');
+                setResetMode('reset-to-pending');
+                setConfirmText('');
+                setIsResetModalOpen(true);
+              }}
+              className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 hover:border-rose-400 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+              title="Clear or reset expense & supply reimbursement claims"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-rose-700" />
+              Clear & Reset Reimbursements
+            </button>
+          )}
           <button
             onClick={() => setIsReimbModalOpen(true)}
             className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
@@ -419,7 +434,7 @@ export const PayrollManagement: React.FC = () => {
                 </select>
               )}
 
-              {/* Reset Reimbursements Button (Admin and Accountant only) */}
+              {/* Clear & Reset Reimbursements Button (Admin and Accountant only) */}
               {isAdminOrAccountant ? (
                 <button
                   onClick={() => {
@@ -427,13 +442,13 @@ export const PayrollManagement: React.FC = () => {
                     setConfirmText('');
                     setIsResetModalOpen(true);
                   }}
-                  className="bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer hover:border-rose-300"
-                  title="Reset or clear expense & supply reimbursement claims"
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                  title="Clear or reset expense & supply reimbursement claims"
                 >
-                  <RotateCcw className="w-3.5 h-3.5 text-rose-700" />
-                  <span>Reset Reimbursements</span>
-                  <span className="bg-rose-200/80 text-rose-900 text-[10px] px-1.5 py-0.2 rounded font-extrabold ml-0.5">
-                    Admin/Accountant
+                  <RotateCcw className="w-3.5 h-3.5 text-rose-100" />
+                  <span>Clear & Reset Reimbursements</span>
+                  <span className="bg-rose-800/80 text-rose-100 text-[10px] px-1.5 py-0.2 rounded font-extrabold ml-0.5">
+                    {reimbursements.length}
                   </span>
                 </button>
               ) : (
