@@ -86,6 +86,7 @@ const accountantNavItems: NavItem[] = [
       { id: 'reports', label: 'Report & Analytics', icon: TrendingUp, subText: 'Ledger, Arrears, Statement' }
     ]
   },
+  { id: 'payroll', label: 'Staff Payroll & Claims', icon: DollarSign, subText: 'Salaries & Reimbursements' },
   { id: 'announcements', label: 'Announcement', icon: Megaphone, subText: 'Head of School Notices' }
 ];
 

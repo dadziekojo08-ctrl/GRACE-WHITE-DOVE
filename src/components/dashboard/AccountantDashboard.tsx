@@ -53,6 +53,8 @@ export const AccountantDashboard: React.FC<{
     clearFinancialRecords,
     clearAllArrears,
     clearTotalCollected,
+    reimbursements,
+    resetAllReimbursements,
     currentTerm,
     academicYear,
     setActiveTab,
@@ -62,7 +64,7 @@ export const AccountantDashboard: React.FC<{
   // Modals state
   const [isBillClassModalOpen, setIsBillClassModalOpen] = useState(false);
   const [isClearReportModalOpen, setIsClearReportModalOpen] = useState(false);
-  const [clearReportMode, setClearReportMode] = useState<'arrears-only' | 'payments-only' | 'all'>('arrears-only');
+  const [clearReportMode, setClearReportMode] = useState<'arrears-only' | 'payments-only' | 'reimbursements-only' | 'all'>('arrears-only');
 
   // Bill Class Form State
   const [billClassForm, setBillClassForm] = useState({
@@ -206,7 +208,10 @@ export const AccountantDashboard: React.FC<{
 
   // Clear Financial Reports execution
   const handleClearFinancialReports = async () => {
-    if (clearReportMode === 'arrears-only') {
+    if (clearReportMode === 'reimbursements-only') {
+      await resetAllReimbursements('clear-all');
+      alert('All Expense & Supply Reimbursements have been cleared and reset to 0.00.');
+    } else if (clearReportMode === 'arrears-only') {
       await clearAllArrears();
       alert('All student arrears have been successfully cleared to GHS 0.00.');
     } else if (clearReportMode === 'payments-only') {
@@ -263,17 +268,27 @@ export const AccountantDashboard: React.FC<{
               Fee Management
             </button>
 
-            {/* 3. Clear Financial Reports */}
+            {/* 3. Expense Reimbursements */}
+            <button
+              onClick={() => setActiveTab('payroll')}
+              className="bg-emerald-800/90 hover:bg-emerald-700 text-emerald-100 font-semibold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 border border-emerald-600 transition-all cursor-pointer"
+              title="Manage and reset staff expense & supply reimbursements"
+            >
+              <Receipt className="w-4 h-4 text-amber-300" />
+              Reimbursements ({reimbursements.length})
+            </button>
+
+            {/* 4. Clear Financial Reports */}
             <button
               onClick={() => setIsClearReportModalOpen(true)}
               className="bg-emerald-800/90 hover:bg-emerald-700 text-emerald-100 font-semibold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 border border-emerald-600 transition-all cursor-pointer"
-              title="Clear report filters & refresh financial ledger cache"
+              title="Clear report filters, reset reimbursements, & refresh financial ledger cache"
             >
               <RotateCcw className="w-4 h-4 text-amber-300" />
-              Clear Financial Reports
+              Clear / Reset
             </button>
 
-            {/* 4. Export Statement */}
+            {/* 5. Export Statement */}
             <button
               onClick={handleExportStatement}
               className="bg-emerald-950/80 hover:bg-emerald-900 text-white font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 border border-emerald-600/70 shadow-sm transition-all cursor-pointer"
@@ -761,6 +776,29 @@ export const AccountantDashboard: React.FC<{
                     </span>
                   </div>
                 </label>
+
+                <label
+                  onClick={() => setClearReportMode('reimbursements-only')}
+                  className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                    clearReportMode === 'reimbursements-only'
+                      ? 'border-rose-600 bg-rose-50/70 shadow-xs'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="clearReportMode"
+                    checked={clearReportMode === 'reimbursements-only'}
+                    onChange={() => setClearReportMode('reimbursements-only')}
+                    className="mt-0.5 accent-rose-700"
+                  />
+                  <div>
+                    <strong className="text-slate-900 block font-bold">4. Reset Expense & Supply Reimbursements ({reimbursements.length} records)</strong>
+                    <span className="text-[11px] text-slate-500 block mt-0.5">
+                      Clears and wipes all staff expense claims and classroom supply reimbursement records.
+                    </span>
+                  </div>
+                </label>
               </div>
 
               <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
@@ -778,6 +816,8 @@ export const AccountantDashboard: React.FC<{
                     ? 'Clear Arrears'
                     : clearReportMode === 'payments-only'
                     ? 'Clear Total Collected'
+                    : clearReportMode === 'reimbursements-only'
+                    ? 'Reset Reimbursements'
                     : 'Clear All Records'}
                 </button>
               </div>

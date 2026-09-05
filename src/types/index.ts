@@ -209,12 +209,13 @@ export interface Reimbursement {
   id: string;
   staffId: string;
   staffName: string;
-  title: string;
+  title?: string;
   amount: number;
-  category: 'Class Supplies' | 'Travel' | 'Event' | 'Maintenance' | 'Other';
+  category: string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'Disbursed';
   dateSubmitted: string;
   receiptUrl?: string;
+  description?: string;
 }
 
 export interface Book {

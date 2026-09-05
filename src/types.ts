@@ -367,6 +367,7 @@ export interface Reimbursement {
   description?: string;
   dateSubmitted: string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'Disbursed';
+  receiptUrl?: string;
 }
 
 export interface Book {

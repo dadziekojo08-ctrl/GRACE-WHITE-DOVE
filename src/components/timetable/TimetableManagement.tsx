@@ -71,18 +71,22 @@ export const TimetableManagement: React.FC<TimetableManagementProps> = ({
   const teacherName = currentUser?.name || '';
   const teacherAssignedClass = currentUser?.assignedClass || classes.find((c) => c.classTeacher?.toLowerCase() === teacherName.toLowerCase())?.name;
 
-  // Active selected class name - if teacher role and not set, default to teacher's class
+  // Active selected class name - respects user selection first, then preselectedClass or teacher assigned class
   const currentClassName =
-    preselectedClass ||
     selectedTimetableClass ||
+    preselectedClass ||
     (isTeacherRole && teacherAssignedClass ? teacherAssignedClass : (classes.length > 0 ? classes[0].name : 'Creche'));
 
   // Ensure selectedTimetableClass is in sync with teacher's assigned class on initial mount if teacher
   useEffect(() => {
-    if (isTeacherRole && teacherAssignedClass && !selectedTimetableClass) {
-      setSelectedTimetableClass(teacherAssignedClass);
+    if (!selectedTimetableClass) {
+      if (preselectedClass) {
+        setSelectedTimetableClass(preselectedClass);
+      } else if (isTeacherRole && teacherAssignedClass) {
+        setSelectedTimetableClass(teacherAssignedClass);
+      }
     }
-  }, [isTeacherRole, teacherAssignedClass, selectedTimetableClass, setSelectedTimetableClass]);
+  }, [preselectedClass, isTeacherRole, teacherAssignedClass, selectedTimetableClass, setSelectedTimetableClass]);
 
   const currentClassObj = classes.find((c) => c.name === currentClassName) || classes[0];
 

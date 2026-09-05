@@ -199,6 +199,9 @@ interface SchoolContextType {
   reimbursements: Reimbursement[];
   addReimbursement: (reimb: Omit<Reimbursement, 'id' | 'dateSubmitted' | 'status'>) => void;
   updateReimbursementStatus: (id: string, status: Reimbursement['status']) => void;
+  deleteReimbursement: (id: string) => void;
+  resetReimbursementStatus: (id: string, status?: Reimbursement['status']) => void;
+  resetAllReimbursements: (mode?: 'clear-all' | 'reset-to-pending') => Promise<void>;
 
   // Library
   books: Book[];
@@ -2461,12 +2464,52 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       status: 'Pending'
     };
     setReimbursements(prev => [newR, ...prev]);
+    saveDocumentToFirestore('reimbursements', newR);
     logAuditAction('REIMBURSEMENT_CLAIMED', 'Payroll', `Reimbursement claim submitted by ${reimb.staffName} for GHS ${reimb.amount}`);
   };
 
   const updateReimbursementStatus = (id: string, status: Reimbursement['status']) => {
     setReimbursements(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    const target = reimbursements.find(r => r.id === id);
+    if (target) {
+      saveDocumentToFirestore('reimbursements', { ...target, status });
+    }
     logAuditAction('REIMBURSEMENT_UPDATED', 'Payroll', `Claim ID ${id} marked as ${status}`);
+  };
+
+  const deleteReimbursement = (id: string) => {
+    const target = reimbursements.find(r => r.id === id);
+    setReimbursements(prev => prev.filter(r => r.id !== id));
+    deleteDocumentFromFirestore('reimbursements', id);
+    logAuditAction('REIMBURSEMENT_DELETED', 'Payroll', `Reimbursement claim ID ${id} (${target?.staffName || 'Staff'}) deleted`);
+  };
+
+  const resetReimbursementStatus = (id: string, status: Reimbursement['status'] = 'Pending') => {
+    setReimbursements(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    const target = reimbursements.find(r => r.id === id);
+    if (target) {
+      saveDocumentToFirestore('reimbursements', { ...target, status });
+    }
+    logAuditAction('REIMBURSEMENT_RESET', 'Payroll', `Reimbursement claim ID ${id} reset to ${status}`);
+  };
+
+  const resetAllReimbursements = async (mode: 'clear-all' | 'reset-to-pending' = 'clear-all') => {
+    if (mode === 'reset-to-pending') {
+      const updated = reimbursements.map(r => ({ ...r, status: 'Pending' as const }));
+      setReimbursements(updated);
+      saveStorage('reimbursements', updated);
+      await batchSaveCollectionToFirestore('reimbursements', updated);
+      logAuditAction('REIMBURSEMENT_RESET_ALL', 'Payroll', 'All expense & supply reimbursement claims reset to Pending status');
+    } else {
+      setReimbursements([]);
+      saveStorage('reimbursements', []);
+      try {
+        await clearCollectionFromFirestore('reimbursements');
+      } catch (e) {
+        console.warn('Error clearing reimbursements from cloud', e);
+      }
+      logAuditAction('REIMBURSEMENTS_CLEARED_ALL', 'Payroll', 'All expense & supply reimbursement records reset and cleared from system');
+    }
   };
 
   // Library
@@ -2829,6 +2872,9 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         reimbursements,
         addReimbursement,
         updateReimbursementStatus,
+        deleteReimbursement,
+        resetReimbursementStatus,
+        resetAllReimbursements,
         books,
         addBook,
         updateBook,
