@@ -32,7 +32,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Invoice } from './types';
 
 const MainContent: React.FC = () => {
-  const { activeTab, activeRole, isAuthenticated } = useSchool();
+  const { activeTab, activeRole, isAuthenticated, currentUser } = useSchool();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Paystack modal state
@@ -110,6 +110,11 @@ const MainContent: React.FC = () => {
     // 3. Teacher Portal View Routing (Strict Role-Based Isolation: Teachers only have access to their teacher portal)
     if (activeRole === 'Teacher') {
       switch (activeTab) {
+        case 'my-payroll':
+        case 'payroll':
+          return <TeacherDashboard initialTab="my-salary" />;
+        case 'timetable':
+          return <TimetableManagement isTeacherPortalView={true} preselectedClass={currentUser?.assignedClass} />;
         case 'students':
           return <StudentManagement />;
         case 'library':
@@ -118,8 +123,6 @@ const MainContent: React.FC = () => {
           return <ClassManagement />;
         case 'subjects':
           return <SubjectManagement />;
-        case 'timetable':
-          return <TimetableManagement />;
         case 'attendance':
           return <AttendanceManagement />;
         case 'exams':

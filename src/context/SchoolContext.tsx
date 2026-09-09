@@ -366,7 +366,18 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => loadStorage('isAuthenticated', false));
 
-  const [classes, setClasses] = useState<ClassRoom[]>(() => loadStorage('classes', initialClasses));
+  const [classes, setClasses] = useState<ClassRoom[]>(() => {
+    const saved = loadStorage<ClassRoom[]>('classes', initialClasses);
+    return saved.map((cls: ClassRoom) => {
+      if (!cls.classTeacher) {
+        const initMatch = initialClasses.find((ic) => ic.id === cls.id || ic.name === cls.name);
+        if (initMatch?.classTeacher) {
+          return { ...cls, classTeacher: initMatch.classTeacher };
+        }
+      }
+      return cls;
+    });
+  });
   const [subjects, setSubjects] = useState<Subject[]>(() => loadStorage('subjects', initialSubjects));
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => loadStorage('calendarEvents', initialCalendarEvents));
   const [students, setStudents] = useState<Student[]>(() => loadStorage('students', initialStudents));
@@ -411,12 +422,14 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [timetable, setTimetable] = useState<TimetableEntry[]>(() => loadStorage('timetable', initialTimetable));
   const [selectedTimetableClass, setSelectedTimetableClass] = useState<string>('Creche');
   const [staff, setStaff] = useState<StaffMember[]>(() => {
-    const isPurged = loadStorage<boolean>('staff_teachers_purged_for_class_v1', false);
     let saved = loadStorage<StaffMember[]>('staff', initialStaff);
-    if (!isPurged && Array.isArray(saved)) {
-      saved = saved.filter(s => s.role !== 'Teacher');
-      saveStorage('staff_teachers_purged_for_class_v1', true);
-      saveStorage('staff', saved);
+    if (Array.isArray(saved)) {
+      const hasTeachers = saved.some((s) => s.role === 'Teacher');
+      if (!hasTeachers) {
+        const teachersToAdd = initialStaff.filter((s) => s.role === 'Teacher');
+        saved = [...saved, ...teachersToAdd];
+        saveStorage('staff', saved);
+      }
     }
     return saved;
   });

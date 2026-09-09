@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { SchoolLogo } from '../common/SchoolLogo';
 import {
@@ -28,7 +28,13 @@ import {
   Layers,
   GraduationCap,
   CalendarDays,
-  Edit2
+  Edit2,
+  ShieldCheck,
+  Eye,
+  Briefcase,
+  Check,
+  Lock,
+  Shield
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -45,8 +51,22 @@ import {
 import { calculateGradeForClass, isLowerPrimaryOrPreschool } from '../../utils/jhsGrading';
 import { TimetableManagement } from '../timetable/TimetableManagement';
 import { getSubjectBadgeColor } from '../../utils/timetableUtils';
+import {
+  getAllowedClassesForTeacher,
+  isJHSTeacher,
+  isJHSClass,
+  normalizeClassKey,
+  canTeacherAccessClass
+} from '../../utils/classAccess';
 
-export type TeacherDashboardTab = 'overview' | 'my-students' | 'attendance' | 'student-grade' | 'timetable' | 'my-salary';
+export type TeacherDashboardTab =
+  | 'overview'
+  | 'my-students'
+  | 'attendance'
+  | 'student-grade'
+  | 'timetable'
+  | 'my-salary'
+  | 'teachers-oversight';
 
 export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = ({ initialTab = 'overview' }) => {
   const {
@@ -63,13 +83,17 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     classes,
     subjects,
     timetable,
+    staff,
+    addStaff,
     payrolls,
+    generateMonthlyPayroll,
     reimbursements,
     addReimbursement,
     announcements,
     setActiveTab,
     currentTerm,
-    academicYear
+    academicYear,
+    authUsers
   } = useSchool();
 
   const [currentTab, setCurrentTab] = useState<TeacherDashboardTab>(initialTab);
@@ -84,9 +108,122 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     amount: ''
   });
 
-  const teacherName = currentUser?.name || 'Teacher / Staff';
-  const teacherEmail = currentUser?.email || '';
-  const teacherAssignedClass = currentUser?.assignedClass;
+  // Access Control: Admin oversight vs Strict Teacher Private Portal
+  const isAdminRole = activeRole === 'Admin' || currentUser?.role === 'Admin';
+
+  // Extract all teachers in the institution (for Admin oversight)
+  const allTeachers = useMemo(() => {
+    const list: Array<{
+      id: string;
+      name: string;
+      email: string;
+      staffCode: string;
+      assignedClass?: string;
+      designation: string;
+      department: string;
+      phone: string;
+      basicSalary: number;
+    }> = [];
+
+    // From staff list
+    staff.forEach((s) => {
+      const isTeacher =
+        s.role === 'Teacher' ||
+        s.designation.toLowerCase().includes('teacher') ||
+        classes.some((c) => c.classTeacher?.toLowerCase() === s.name.toLowerCase());
+      if (isTeacher && !list.some((item) => item.name.toLowerCase() === s.name.toLowerCase())) {
+        const assigned = classes.find((c) => c.classTeacher?.toLowerCase() === s.name.toLowerCase())?.name;
+        list.push({
+          id: s.id,
+          name: s.name,
+          email: s.email,
+          staffCode: s.staffCode || `TCH-${s.id.slice(0, 4)}`,
+          assignedClass: assigned,
+          designation: s.designation || 'Class Teacher',
+          department: s.department || 'Academic',
+          phone: s.phone || '+233 24 000 0000',
+          basicSalary: s.basicSalary || 2800
+        });
+      }
+    });
+
+    // From auth users
+    (authUsers || []).forEach((u) => {
+      if (u.role === 'Teacher' && !list.some((item) => item.name.toLowerCase() === u.name.toLowerCase())) {
+        const assigned = u.assignedClass || classes.find((c) => c.classTeacher?.toLowerCase() === u.name.toLowerCase())?.name;
+        list.push({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          staffCode: u.staffCode || `TCH-${u.id.slice(0, 4)}`,
+          assignedClass: assigned,
+          designation: assigned ? `Class Teacher (${assigned})` : 'Class Teacher',
+          department: 'Academic',
+          phone: u.phone || '+233 24 000 0000',
+          basicSalary: 2800
+        });
+      }
+    });
+
+    return list;
+  }, [staff, authUsers, classes]);
+
+  // Admin teacher inspector state (Admin can inspect any teacher; Teacher CANNOT inspect others)
+  const [inspectedTeacherId, setInspectedTeacherId] = useState<string | null>(null);
+
+  const activeTeacher = useMemo(() => {
+    // If admin is inspecting a specific teacher
+    if (isAdminRole && inspectedTeacherId) {
+      return allTeachers.find((t) => t.id === inspectedTeacherId) || allTeachers[0] || null;
+    }
+    // If admin has not picked yet, default to first teacher
+    if (isAdminRole && allTeachers.length > 0) {
+      return allTeachers[0];
+    }
+    // If actual Teacher logged in, strictly enforce their OWN profile
+    if (currentUser) {
+      const matchInStaff = staff.find((s) => s.name.toLowerCase() === currentUser.name.toLowerCase());
+      return {
+        id: currentUser.id,
+        name: currentUser.name,
+        email: currentUser.email,
+        staffCode: currentUser.staffCode || 'TCH-001',
+        assignedClass: currentUser.assignedClass || classes.find((c) => c.classTeacher?.toLowerCase() === currentUser.name.toLowerCase())?.name,
+        designation: currentUser.assignedClass ? `Class Teacher (${currentUser.assignedClass})` : 'Class Teacher',
+        department: 'Academic',
+        phone: currentUser.phone || '+233 24 000 0000',
+        basicSalary: matchInStaff?.basicSalary || 2800
+      };
+    }
+    return allTeachers[0] || null;
+  }, [isAdminRole, inspectedTeacherId, allTeachers, currentUser, classes, staff]);
+
+  const teacherName = activeTeacher?.name || currentUser?.name || 'Teacher / Staff';
+  const teacherEmail = activeTeacher?.email || currentUser?.email || '';
+  const teacherAssignedClass = activeTeacher?.assignedClass || currentUser?.assignedClass;
+
+  // Teacher Oversight Roster filter & search (Admin mode)
+  const [teacherSearch, setTeacherSearch] = useState('');
+
+  // Class Scope & JHS Multi-Class Switching Access
+  const teacherContext = useMemo(() => {
+    return {
+      id: activeTeacher?.id || currentUser?.id,
+      name: teacherName,
+      role: (activeTeacher ? 'Teacher' : (currentUser?.role || activeRole)),
+      assignedClass: teacherAssignedClass,
+      designation: activeTeacher?.designation || (currentUser as any)?.designation,
+      department: activeTeacher?.department || (currentUser as any)?.department
+    };
+  }, [activeTeacher, currentUser, activeRole, teacherName, teacherAssignedClass]);
+
+  const isTeacherJHS = useMemo(() => isJHSTeacher(teacherContext), [teacherContext]);
+  const teacherAllowedClasses = useMemo(() => {
+    return getAllowedClassesForTeacher(teacherContext, classes, isAdminRole && !inspectedTeacherId);
+  }, [teacherContext, classes, isAdminRole, inspectedTeacherId]);
+
+  // JHS teachers can switch between JHS 1, JHS 2, JHS 3 or All JHS
+  const [jhsActiveFilter, setJhsActiveFilter] = useState<string>('All JHS');
 
   // Pupil Registration within Teacher Portal
   const [isAdmitModalOpen, setIsAdmitModalOpen] = useState(false);
@@ -96,7 +233,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     lastName: '',
     gender: 'Male' as 'Male' | 'Female',
     dateOfBirth: '2015-05-15',
-    className: teacherAssignedClass || 'Primary 1 (Grade 1)',
+    className: teacherAssignedClass || teacherAllowedClasses[0]?.name || 'Primary 1 (Grade 1)',
     section: 'A',
     rollNo: '',
     guardianName: '',
@@ -106,28 +243,27 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     photoUrl: ''
   });
 
-  // Teacher's assigned students (strictly matching teacherAssignedClass or classTeacher name)
-  const myStudents = students.filter((s) => {
-    if (teacherAssignedClass) {
-      const assignedLower = teacherAssignedClass.trim().toLowerCase();
-      const studentClassLower = (s.className || '').trim().toLowerCase();
-      if (studentClassLower === assignedLower || studentClassLower.includes(assignedLower) || assignedLower.includes(studentClassLower)) {
-        return true;
-      }
+  // Display students strictly scoped by teacher role:
+  // - Class 1 teacher: strictly Class 1 students only! No access to Class 2 or Creche.
+  // - JHS teacher: can switch across JHS 1, JHS 2, and JHS 3!
+  // - Admin (not inspecting): all students.
+  const displayStudents = useMemo(() => {
+    if (isAdminRole && !inspectedTeacherId) {
+      return students;
     }
-    if (s.classTeacher && teacherName && s.classTeacher.toLowerCase() === teacherName.toLowerCase()) {
-      return true;
-    }
-    if (currentUser?.name && s.classTeacher?.toLowerCase().includes(currentUser.name.toLowerCase())) {
-      return true;
-    }
-    return false;
-  });
 
-  // If teacher has an assigned class or is a class teacher, show only their students. If none enrolled yet, keep as empty array rather than dumping all school students.
-  const displayStudents = (teacherAssignedClass || currentUser?.role === 'Teacher')
-    ? (myStudents.length > 0 ? myStudents : (teacherAssignedClass ? students.filter(s => (s.className || '').trim().toLowerCase() === teacherAssignedClass.trim().toLowerCase()) : []))
-    : students;
+    if (isTeacherJHS) {
+      return students.filter((s) => {
+        if (!isJHSClass(s.className)) return false;
+        if (jhsActiveFilter === 'All JHS') return true;
+        return normalizeClassKey(s.className) === normalizeClassKey(jhsActiveFilter);
+      });
+    }
+
+    const targetClass = teacherAssignedClass || teacherAllowedClasses[0]?.name || 'Primary 1 (Grade 1)';
+    const targetKey = normalizeClassKey(targetClass);
+    return students.filter((s) => normalizeClassKey(s.className) === targetKey);
+  }, [isAdminRole, inspectedTeacherId, isTeacherJHS, jhsActiveFilter, teacherAssignedClass, teacherAllowedClasses, students]);
 
   const filteredMyStudents = displayStudents.filter(
     (s) =>
@@ -150,9 +286,63 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     ? Math.round((presentCount / displayStudents.length) * 100)
     : 0;
 
-  // Teacher's payroll records
-  const teacherPayrolls = payrolls.filter((p) => p.staffName.includes(teacherName) || (currentUser?.id && p.staffId === currentUser.id));
-  const latestPayroll = teacherPayrolls[0] || payrolls[0] || null;
+  // Teacher's payroll records - strictly matching this teacher's name or ID (no leaking other teachers' slips!)
+  const teacherPayrolls = useMemo(() => {
+    const tLower = (teacherName || '').toLowerCase();
+    const tId = activeTeacher?.id;
+    return payrolls.filter((p) => {
+      if (tLower && p.staffName && p.staffName.toLowerCase().includes(tLower)) return true;
+      if (tId && p.staffId === tId) return true;
+      if (currentUser?.id && p.staffId === currentUser.id) return true;
+      return false;
+    });
+  }, [payrolls, teacherName, activeTeacher, currentUser]);
+
+  const [selectedPayrollId, setSelectedPayrollId] = useState<string>('');
+  const latestPayroll =
+    teacherPayrolls.find((p) => p.id === selectedPayrollId) || teacherPayrolls[0] || null;
+
+  // Teacher's reimbursements - strictly private to this teacher!
+  const myReimbursements = useMemo(() => {
+    const tLower = (teacherName || '').toLowerCase();
+    const tId = activeTeacher?.id;
+    return reimbursements.filter((r) => {
+      if (tLower && r.staffName && r.staffName.toLowerCase().includes(tLower)) return true;
+      if (tId && r.staffId === tId) return true;
+      if (currentUser?.id && r.staffId === currentUser.id) return true;
+      return false;
+    });
+  }, [reimbursements, teacherName, activeTeacher, currentUser]);
+
+  // Handler to generate official payslip for current month
+  const [payrollGenMessage, setPayrollGenMessage] = useState<string | null>(null);
+  const handleGenerateMyCurrentSlip = () => {
+    const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+    const currentYear = new Date().getFullYear();
+
+    // Ensure teacher is registered in staff list so SchoolContext creates the payroll record
+    const existsInStaff = staff.some(
+      (s) => s.name.toLowerCase() === teacherName.toLowerCase() || (activeTeacher?.id && s.id === activeTeacher.id)
+    );
+    if (!existsInStaff && teacherName) {
+      addStaff({
+        staffCode: activeTeacher?.staffCode || `STF-${Math.floor(100 + Math.random() * 900)}`,
+        name: teacherName,
+        email: teacherEmail || `${teacherName.toLowerCase().replace(/\s/g, '.')}@gracewhitedove.edu.gh`,
+        role: 'Teacher',
+        designation: teacherAssignedClass ? `Class Teacher (${teacherAssignedClass})` : 'Class Teacher',
+        department: 'Academic',
+        phone: activeTeacher?.phone || '+233 24 000 0000',
+        basicSalary: activeTeacher?.basicSalary || 2800,
+        status: 'Active',
+        qualification: 'Bachelor of Education (B.Ed)'
+      });
+    }
+
+    generateMonthlyPayroll(currentMonth, currentYear);
+    setPayrollGenMessage(`Generated official ${currentMonth} ${currentYear} payslip for ${teacherName}!`);
+    setTimeout(() => setPayrollGenMessage(null), 4000);
+  };
 
   // Grade distributions dynamically from marks
   const subjectMarks = marks.filter((m) => !selectedGradeSubject || m.subject === selectedGradeSubject || m.subjectName === selectedGradeSubject);
@@ -210,7 +400,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
     e.preventDefault();
     if (!reimburseForm.title || !reimburseForm.amount) return;
     addReimbursement({
-      staffId: currentUser?.id || 'stf-002',
+      staffId: activeTeacher?.id || currentUser?.id || 'stf-002',
       staffName: teacherName,
       title: reimburseForm.title,
       category: reimburseForm.category,
@@ -269,6 +459,65 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      {/* Administrator Oversight Header Bar (Visible only to Admin role) */}
+      {isAdminRole && (
+        <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-700 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-amber-400 text-slate-950 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
+                  Admin Oversight
+                </span>
+                <span className="text-xs text-slate-300">Total Teachers: {allTeachers.length}</span>
+              </div>
+              <h3 className="text-sm font-bold text-white mt-0.5">
+                Faculty & Teacher Portal Oversight Control
+              </h3>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label htmlFor="teacher-inspector-select" className="text-xs font-semibold text-slate-300">
+                Inspect Teacher:
+              </label>
+              <select
+                id="teacher-inspector-select"
+                value={activeTeacher?.id || ''}
+                onChange={(e) => {
+                  setInspectedTeacherId(e.target.value);
+                  if (currentTab === 'teachers-oversight') {
+                    setCurrentTab('overview');
+                  }
+                }}
+                className="bg-slate-800 text-white border border-slate-600 rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer"
+              >
+                {allTeachers.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} — {t.assignedClass || t.designation || 'Teacher'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={() => setCurrentTab('teachers-oversight')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                currentTab === 'teachers-oversight'
+                  ? 'bg-amber-400 text-slate-950 shadow-sm'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+              }`}
+            >
+              <Eye className="w-4 h-4 text-amber-300" />
+              All Teachers Roster ({allTeachers.length})
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Teacher Profile Banner in Deep Emerald & Gold */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950 via-emerald-900 to-emerald-800 p-6 text-white shadow-md border border-emerald-700/60">
         <div className="absolute right-0 top-0 -mt-8 -mr-8 h-48 w-48 rounded-full bg-amber-400/10 blur-2xl pointer-events-none" />
@@ -283,12 +532,17 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                 <span className="bg-amber-400 text-emerald-950 font-extrabold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full">
                   Teacher Workspace
                 </span>
-                {teacherAssignedClass && (
+                {isTeacherJHS ? (
                   <span className="bg-emerald-800/90 text-amber-300 border border-amber-400/40 font-bold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1">
                     <GraduationCap className="w-3 h-3 text-amber-400" />
-                    Class: {teacherAssignedClass}
+                    JHS Department Faculty (JHS 1 to 3)
                   </span>
-                )}
+                ) : teacherAssignedClass ? (
+                  <span className="bg-emerald-800/90 text-amber-300 border border-amber-400/40 font-bold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-amber-300" />
+                    Class: {teacherAssignedClass} (Locked Scope)
+                  </span>
+                ) : null}
                 <span className="text-emerald-300 text-xs font-medium">
                   {academicYear} • {currentTerm}
                 </span>
@@ -327,6 +581,56 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
             </button>
           </div>
         </div>
+
+        {/* JHS Class Switcher OR Single Class Lockdown Notification */}
+        {isTeacherJHS ? (
+          <div className="mt-5 pt-3 border-t border-emerald-800/80 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                JHS Class Switcher:
+              </span>
+              <div className="inline-flex rounded-xl bg-emerald-950/80 p-1 border border-emerald-700/80">
+                {(['All JHS', 'JHS 1 (Grade 7)', 'JHS 2 (Grade 8)', 'JHS 3 (Grade 9)'] as const).map((cls) => {
+                  const isActive = jhsActiveFilter === cls;
+                  const label = cls === 'All JHS' ? 'All JHS (1 – 3)' : cls.replace(' (Grade ', ' (B').replace(')', ')');
+                  return (
+                    <button
+                      key={cls}
+                      type="button"
+                      onClick={() => setJhsActiveFilter(cls)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-amber-400 text-emerald-950 shadow-xs'
+                          : 'text-emerald-200 hover:text-white hover:bg-emerald-800/50'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <span className="text-[11px] text-emerald-200/90 font-medium">
+              Viewing: <strong className="text-white">{jhsActiveFilter === 'All JHS' ? 'All JHS Students' : jhsActiveFilter}</strong> ({displayStudents.length} Students)
+            </span>
+          </div>
+        ) : (!isAdminRole || inspectedTeacherId) ? (
+          <div className="mt-5 pt-3 border-t border-emerald-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-emerald-100">
+              <Shield className="w-4 h-4 text-amber-300 shrink-0" />
+              <span>
+                Class Scope: <strong className="text-white">{teacherAssignedClass || teacherAllowedClasses[0]?.name || 'Primary 1 (Grade 1)'}</strong>
+              </span>
+              <span className="bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded text-[10px] font-bold">
+                Access to other classes or Creche is restricted
+              </span>
+            </div>
+            <span className="text-[11px] text-emerald-200/90">
+              Enrolled Pupils: <strong className="text-white">{displayStudents.length}</strong>
+            </span>
+          </div>
+        ) : null}
       </div>
 
       {/* Main Teacher Dashboard Navigation Tabs (Requested Menu Sub-Views) */}
@@ -398,6 +702,19 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
             <DollarSign className="w-4 h-4 text-amber-400" />
             My Salary
           </button>
+          {isAdminRole && (
+            <button
+              onClick={() => setCurrentTab('teachers-oversight')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                currentTab === 'teachers-oversight'
+                  ? 'bg-amber-400 text-slate-950 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 text-amber-600" />
+              Faculty Oversight Roster ({allTeachers.length})
+            </button>
+          )}
         </div>
       </div>
 
@@ -911,21 +1228,49 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
         <TimetableManagement isTeacherPortalView={true} preselectedClass={teacherAssignedClass} />
       )}
 
-      {/* 6. MY SALARY TAB (Requested Component) */}
+      {/* 6. MY SALARY TAB (Strictly Private to Logged-in Teacher, with Month Selector & Payslip Generation) */}
       {currentTab === 'my-salary' && (
         <div className="space-y-6">
+          {payrollGenMessage && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-700" />
+              {payrollGenMessage}
+            </div>
+          )}
+
           {latestPayroll ? (
             /* Payslip Header Card */
             <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
                 <div>
-                  <span className="bg-emerald-100 text-emerald-900 font-extrabold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-                    Official Payslip • {latestPayroll.month} {latestPayroll.year}
-                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="bg-emerald-100 text-emerald-900 font-extrabold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                      Official Payslip • {latestPayroll.month} {latestPayroll.year}
+                    </span>
+                    <span className="bg-slate-100 text-slate-700 font-bold text-[10px] px-2 py-0.5 rounded-full">
+                      Staff: {latestPayroll.staffName}
+                    </span>
+                  </div>
                   <h3 className="text-xl font-bold text-slate-900 mt-1">Staff Remuneration & Payroll Breakdown</h3>
-                  <p className="text-xs text-slate-500">Payslip No: <span className="font-mono font-bold text-emerald-900">{latestPayroll.payslipNo}</span></p>
+                  <p className="text-xs text-slate-500">
+                    Payslip No: <span className="font-mono font-bold text-emerald-900">{latestPayroll.payslipNo}</span>
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {teacherPayrolls.length > 1 && (
+                    <select
+                      value={latestPayroll.id}
+                      onChange={(e) => setSelectedPayrollId(e.target.value)}
+                      className="bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 cursor-pointer"
+                    >
+                      {teacherPayrolls.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.month} {p.year} (GHS {p.netSalary.toLocaleString()})
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <button
                     onClick={() => window.print()}
                     className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
@@ -1028,37 +1373,130 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-xs text-center space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 mx-auto flex items-center justify-center">
-                <DollarSign className="w-6 h-6" />
+            /* Fallback: Official Contract Remuneration Structure & One-Click Payslip Generation */
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div>
+                  <span className="bg-amber-100 text-amber-900 font-extrabold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                    Faculty Contract Remuneration
+                  </span>
+                  <h3 className="text-xl font-bold text-slate-900 mt-1">Staff Salary Structure & Entitlements</h3>
+                  <p className="text-xs text-slate-500">
+                    Faculty Member: <span className="font-bold text-slate-800">{teacherName}</span> • Standard GES/GWDS Academic Grade
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleGenerateMyCurrentSlip}
+                    className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Check className="w-4 h-4 text-amber-300" />
+                    Generate Current Month Payslip
+                  </button>
+                  <button
+                    onClick={() => setIsReimburseModalOpen(true)}
+                    className="bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Claim Reimbursement
+                  </button>
+                </div>
               </div>
-              <h3 className="font-bold text-sm text-slate-900">No Payslip Records Generated Yet</h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Official staff remuneration and monthly salary slips will appear here once processed by the accounts department.
-              </p>
-              <button
-                onClick={() => setIsReimburseModalOpen(true)}
-                className="inline-flex items-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition-all cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                Claim Reimbursement
-              </button>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 text-emerald-800">
+                    <TrendingUp className="w-4 h-4" />
+                    Scheduled Earnings
+                  </h4>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Basic Contract Salary</span>
+                      <span className="font-mono font-bold text-slate-900">GHS {(activeTeacher?.basicSalary || 2800).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Housing Allowance (15%)</span>
+                      <span className="font-mono font-bold text-slate-900">GHS {Math.round((activeTeacher?.basicSalary || 2800) * 0.15)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Transport Allowance (10%)</span>
+                      <span className="font-mono font-bold text-slate-900">GHS {Math.round((activeTeacher?.basicSalary || 2800) * 0.10)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Medical & Utility (5%)</span>
+                      <span className="font-mono font-bold text-slate-900">GHS {Math.round((activeTeacher?.basicSalary || 2800) * 0.05)}</span>
+                    </div>
+                    <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-slate-900">
+                      <span>Gross Remuneration</span>
+                      <span className="font-mono text-emerald-900">
+                        GHS {Math.round((activeTeacher?.basicSalary || 2800) * 1.30).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 text-rose-800">
+                    <AlertCircle className="w-4 h-4" />
+                    Estimated Statutory Deductions
+                  </h4>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between text-slate-600">
+                      <span>PAYE Income Tax (GRA)</span>
+                      <span className="font-mono font-bold text-slate-900">GHS {Math.round((activeTeacher?.basicSalary || 2800) * 0.18)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>SSNIT Pension (Tier 1 & 2)</span>
+                      <span className="font-mono font-bold text-slate-900">GHS {Math.round((activeTeacher?.basicSalary || 2800) * 0.055)}</span>
+                    </div>
+                    <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-slate-900">
+                      <span>Total Deductions</span>
+                      <span className="font-mono text-rose-700">
+                        GHS {Math.round((activeTeacher?.basicSalary || 2800) * 0.235).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-emerald-950 text-white flex flex-col justify-between space-y-4">
+                  <div>
+                    <span className="text-[10px] font-extrabold text-amber-300 uppercase tracking-wider block">
+                      Estimated Net Salary
+                    </span>
+                    <div className="text-3xl font-black font-['Outfit'] text-white mt-1">
+                      GHS {Math.round((activeTeacher?.basicSalary || 2800) * 1.065).toLocaleString()}
+                    </div>
+                    <p className="text-[11px] text-emerald-200/80 mt-1">
+                      Click &apos;Generate Current Month Payslip&apos; to process your official payslip.
+                    </p>
+                  </div>
+                  <div className="pt-3 border-t border-emerald-800/80 text-[11px] flex items-center justify-between">
+                    <span className="text-emerald-300">Contract Status</span>
+                    <span className="bg-emerald-700 text-white font-bold px-2 py-0.5 rounded">
+                      Active Staff
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Reimbursement Claims Table */}
+          {/* Reimbursement Claims Table - Strictly Private to this Teacher */}
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-slate-900 uppercase">My Expense & Reimbursement Claims</h4>
+              <div>
+                <h4 className="text-xs font-bold text-slate-900 uppercase">My Expense & Reimbursement Claims</h4>
+                <p className="text-[11px] text-slate-500">Personal claims submitted by {teacherName}</p>
+              </div>
               <button
                 onClick={() => setIsReimburseModalOpen(true)}
-                className="text-xs font-bold text-emerald-800 hover:text-emerald-900"
+                className="text-xs font-bold text-emerald-800 hover:text-emerald-900 cursor-pointer"
               >
                 + New Claim
               </button>
             </div>
 
-            {reimbursements.length > 0 ? (
+            {myReimbursements.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead>
@@ -1071,7 +1509,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {reimbursements.map((rem) => (
+                    {myReimbursements.map((rem) => (
                       <tr key={rem.id}>
                         <td className="py-2.5 px-3 font-bold text-slate-900">{rem.title || 'Class Supplies'}</td>
                         <td className="py-2.5 px-3 text-slate-500">{rem.category}</td>
@@ -1094,8 +1532,171 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                 </table>
               </div>
             ) : (
-              <p className="text-xs text-slate-400 italic py-2">No reimbursement claims filed.</p>
+              <p className="text-xs text-slate-400 italic py-2">No personal reimbursement claims filed by {teacherName}.</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 7. ADMIN OVERSIGHT: ALL TEACHERS ROSTER (Visible only to Admin) */}
+      {currentTab === 'teachers-oversight' && isAdminRole && (
+        <div className="space-y-6">
+          {/* Top Oversight Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+              <span className="text-xs font-semibold text-slate-500 uppercase">Teaching Faculty</span>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-2xl font-black text-slate-900 font-['Outfit']">{allTeachers.length}</span>
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">All Registered</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Full teaching staff directory</p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+              <span className="text-xs font-semibold text-slate-500 uppercase">Assigned Class Teachers</span>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-2xl font-black text-slate-900 font-['Outfit']">
+                  {allTeachers.filter((t) => t.assignedClass).length}
+                </span>
+                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">Active Leads</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Leading specific grade levels</p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+              <span className="text-xs font-semibold text-slate-500 uppercase">Total Timetable Slots</span>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-2xl font-black text-slate-900 font-['Outfit']">{timetable.length}</span>
+                <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">Scheduled</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Weekly lesson periods covered</p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+              <span className="text-xs font-semibold text-slate-500 uppercase">Monthly Payroll Budget</span>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-xl font-black text-slate-900 font-['Outfit']">
+                  GHS {allTeachers.reduce((acc, t) => acc + (t.basicSalary || 2800), 0).toLocaleString()}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Base monthly teaching remuneration</p>
+            </div>
+          </div>
+
+          {/* Teachers Oversight Directory Table */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Administrator Faculty Oversight Roster</h3>
+                <p className="text-xs text-slate-500">Monitor all teachers, class allocations, timetable workload, and payroll status</p>
+              </div>
+
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search teacher by name or class..."
+                  value={teacherSearch}
+                  onChange={(e) => setTeacherSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 font-bold border-y border-slate-100">
+                    <th className="py-3 px-3">Teacher</th>
+                    <th className="py-3 px-3">Staff Code</th>
+                    <th className="py-3 px-3">Assigned Class</th>
+                    <th className="py-3 px-3 text-center">Timetable Workload</th>
+                    <th className="py-3 px-3">Basic Salary</th>
+                    <th className="py-3 px-3 text-center">Payroll Slips</th>
+                    <th className="py-3 px-3 text-right">Oversight Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {allTeachers
+                    .filter(
+                      (t) =>
+                        teacherSearch === '' ||
+                        t.name.toLowerCase().includes(teacherSearch.toLowerCase()) ||
+                        (t.assignedClass && t.assignedClass.toLowerCase().includes(teacherSearch.toLowerCase())) ||
+                        t.staffCode.toLowerCase().includes(teacherSearch.toLowerCase())
+                    )
+                    .map((t) => {
+                      // Calculate weekly lessons
+                      const tLower = t.name.toLowerCase();
+                      const teacherSlots = timetable.filter(
+                        (entry) =>
+                          (entry.teacherName && entry.teacherName.toLowerCase().includes(tLower)) ||
+                          (t.assignedClass && entry.className?.toLowerCase() === t.assignedClass.toLowerCase())
+                      );
+                      const teacherSlipCount = payrolls.filter(
+                        (p) => p.staffName.toLowerCase().includes(tLower) || p.staffId === t.id
+                      ).length;
+
+                      return (
+                        <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-3 font-bold text-slate-900">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-900 font-bold flex items-center justify-center text-xs">
+                                {t.name.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-900">{t.name}</div>
+                                <div className="text-[10px] text-slate-400 font-normal">{t.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 font-mono font-semibold text-slate-600">{t.staffCode}</td>
+                          <td className="py-3 px-3">
+                            {t.assignedClass ? (
+                              <span className="bg-emerald-50 border border-emerald-200 text-emerald-900 font-bold px-2 py-0.5 rounded text-[11px]">
+                                {t.assignedClass}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 italic text-[11px]">Subject Specialist</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="font-mono font-bold text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded text-[11px]">
+                              {teacherSlots.length} periods/wk
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 font-mono font-bold text-slate-900">
+                            GHS {t.basicSalary.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                teacherSlipCount > 0
+                                  ? 'bg-emerald-50 text-emerald-800'
+                                  : 'bg-amber-50 text-amber-800'
+                              }`}
+                            >
+                              {teacherSlipCount > 0 ? `${teacherSlipCount} Slips Generated` : 'Pending Generation'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <button
+                              onClick={() => {
+                                setInspectedTeacherId(t.id);
+                                setCurrentTab('overview');
+                              }}
+                              className="bg-emerald-900 hover:bg-emerald-950 text-amber-400 font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 ml-auto cursor-pointer shadow-xs"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              Inspect Portal
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -1234,17 +1835,27 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Class Assigned *</label>
-                  <select
-                    value={admitFormData.className}
-                    onChange={(e) => setAdmitFormData({ ...admitFormData, className: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800"
-                  >
-                    {classes.map((cls) => (
-                      <option key={cls.id} value={cls.name}>
-                        {cls.name}
-                      </option>
-                    ))}
-                  </select>
+                  {(!isAdminRole || inspectedTeacherId) && !isTeacherJHS && teacherAllowedClasses.length === 1 ? (
+                    <div className="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        <span>{teacherAllowedClasses[0].name}</span>
+                      </div>
+                      <span className="text-[9px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-extrabold">Assigned Class</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={admitFormData.className}
+                      onChange={(e) => setAdmitFormData({ ...admitFormData, className: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-800 cursor-pointer"
+                    >
+                      {(isTeacherJHS ? teacherAllowedClasses : classes).map((cls) => (
+                        <option key={cls.id} value={cls.name}>
+                          {cls.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 

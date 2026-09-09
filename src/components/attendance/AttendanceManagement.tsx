@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { AttendanceRecord, Student } from '../../types';
 import {
@@ -14,8 +14,17 @@ import {
   Search,
   Calendar,
   Sparkles,
-  PhoneCall
+  PhoneCall,
+  Shield,
+  Lock,
+  Layers
 } from 'lucide-react';
+import {
+  getAllowedClassesForTeacher,
+  canTeacherAccessClass,
+  isJHSTeacher,
+  normalizeClassKey
+} from '../../utils/classAccess';
 
 export const AttendanceManagement: React.FC<{ initialOpenScanner?: boolean }> = ({ initialOpenScanner }) => {
   const {
@@ -24,16 +33,50 @@ export const AttendanceManagement: React.FC<{ initialOpenScanner?: boolean }> = 
     markAttendance,
     bulkMarkAttendance,
     gateCheckIn,
-    sendBroadcast
+    sendBroadcast,
+    currentUser,
+    activeRole,
+    classes
   } = useSchool();
 
-  const [selectedClass, setSelectedClass] = useState<string>('JHS 2 (Grade 8)');
+  const isAdmin = activeRole === 'Admin' || currentUser?.role === 'Admin';
+  const isTeacher = !isAdmin && (activeRole === 'Teacher' || currentUser?.role === 'Teacher');
+
+  // Allowed classes based on role & assignment
+  const allowedClasses = useMemo(() => {
+    return getAllowedClassesForTeacher(currentUser, classes, isAdmin);
+  }, [currentUser, classes, isAdmin]);
+
+  const isJHS = useMemo(() => isJHSTeacher(currentUser), [currentUser]);
+
+  // Default selected class to first allowed class
+  const [selectedClass, setSelectedClass] = useState<string>(() => {
+    if (allowedClasses.length > 0) return allowedClasses[0].name;
+    return 'Primary 1 (Grade 1)';
+  });
+
+  // Ensure selected class is valid when allowedClasses change
+  useEffect(() => {
+    if (allowedClasses.length > 0) {
+      const isStillAllowed = allowedClasses.some(
+        (c) => normalizeClassKey(c.name) === normalizeClassKey(selectedClass)
+      );
+      if (!isStillAllowed) {
+        setSelectedClass(allowedClasses[0].name);
+      }
+    }
+  }, [allowedClasses, selectedClass]);
+
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [scanInput, setScanInput] = useState<string>('');
   const [scanResult, setScanResult] = useState<{ success: boolean; message: string; student?: Student } | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState<boolean>(initialOpenScanner || false);
 
-  const classStudents = students.filter((s) => s.className === selectedClass);
+  const classStudents = useMemo(() => {
+    return students.filter(
+      (s) => normalizeClassKey(s.className) === normalizeClassKey(selectedClass)
+    );
+  }, [students, selectedClass]);
 
   // Get attendance status for a student for selected date
   const getStatusForStudent = (studentId: string): AttendanceRecord['status'] => {
@@ -58,6 +101,18 @@ export const AttendanceManagement: React.FC<{ initialOpenScanner?: boolean }> = 
     e.preventDefault();
     if (!scanInput.trim()) return;
     const res = gateCheckIn(scanInput);
+    if (res.success && res.student && isTeacher) {
+      const isAllowed = canTeacherAccessClass(currentUser, res.student.className, classes, isAdmin);
+      if (!isAllowed) {
+        setScanResult({
+          success: false,
+          message: `Access denied: Student ${res.student.firstName} ${res.student.lastName} belongs to ${res.student.className}. You are authorized for ${isJHS ? 'JHS 1 - JHS 3' : (currentUser?.assignedClass || selectedClass)} only.`,
+          student: res.student
+        });
+        setScanInput('');
+        return;
+      }
+    }
     setScanResult(res);
     setScanInput('');
   };
@@ -105,23 +160,52 @@ export const AttendanceManagement: React.FC<{ initialOpenScanner?: boolean }> = 
         </div>
       </div>
 
+      {/* Teacher Scope Notification Banner */}
+      {isTeacher && (
+        <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-emerald-800 shrink-0" />
+            <div>
+              <span className="font-bold text-emerald-950">
+                {isJHS ? 'Junior High School Faculty Access' : `Assigned Class Teacher: ${currentUser?.assignedClass || selectedClass}`}
+              </span>
+              <p className="text-[11px] text-emerald-800">
+                {isJHS
+                  ? 'As a JHS subject teacher, you can switch between JHS 1, JHS 2, and JHS 3. Access to Primary and Pre-School classes is restricted.'
+                  : `Access restricted strictly to your assigned classroom (${currentUser?.assignedClass || selectedClass}). Access to other classes or Creche is denied.`}
+              </p>
+            </div>
+          </div>
+          <span className="bg-emerald-800 text-amber-300 font-bold px-2.5 py-1 rounded-lg text-[10px] shrink-0 uppercase tracking-wide">
+            {isJHS ? 'JHS 1 - JHS 3' : 'Single Class Only'}
+          </span>
+        </div>
+      )}
+
       {/* Control Bar: Class selector, Date Picker, and Quick Mark */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5">
             <span className="font-semibold text-slate-600">Select Class:</span>
-            <select
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-600"
-            >
-              <option value="Primary 1 (Grade 1)">Primary 1 (Grade 1)</option>
-              <option value="Primary 4 (Grade 4)">Primary 4 (Grade 4)</option>
-              <option value="Primary 6 (Grade 6)">Primary 6 (Grade 6)</option>
-              <option value="JHS 1 (Grade 7)">JHS 1 (Grade 7)</option>
-              <option value="JHS 2 (Grade 8)">JHS 2 (Grade 8)</option>
-              <option value="JHS 3 (Grade 9)">JHS 3 (Grade 9)</option>
-            </select>
+            {isTeacher && !isJHS && allowedClasses.length === 1 ? (
+              <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-emerald-950">
+                <Lock className="w-3.5 h-3.5 text-slate-500" />
+                <span>{allowedClasses[0].name}</span>
+                <span className="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded ml-1">Restricted</span>
+              </div>
+            ) : (
+              <select
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
+              >
+                {allowedClasses.map((c) => (
+                  <option key={c.id || c.name} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">

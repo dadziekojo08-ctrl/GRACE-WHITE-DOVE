@@ -34,6 +34,7 @@ export type NavigationTab =
   | 'fees'
   | 'staff'
   | 'payroll'
+  | 'my-payroll'
   | 'transport'
   | 'communication'
   | 'reports'

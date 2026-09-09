@@ -20,7 +20,9 @@ import {
   Sparkles,
   Layers,
   TrendingUp,
-  FileText
+  FileText,
+  Lock,
+  Shield
 } from 'lucide-react';
 import {
   JHS_GRADING_SCHEME,
@@ -32,27 +34,117 @@ import {
   calculateJHSGPA,
   isLowerPrimaryOrPreschool
 } from '../../utils/jhsGrading';
+import {
+  getAllowedClassesForTeacher,
+  canTeacherAccessClass,
+  isJHSTeacher,
+  filterStudentsForTeacherScope,
+  normalizeClassKey
+} from '../../utils/classAccess';
 
 export const ExamManagement: React.FC = () => {
-  const { exams, addExam, examSchedules, marks, bulkRecordMarks, students, academicYear, currentTerm } = useSchool();
+  const {
+    exams,
+    addExam,
+    examSchedules,
+    marks,
+    bulkRecordMarks,
+    students,
+    academicYear,
+    currentTerm,
+    currentUser,
+    activeRole,
+    classes
+  } = useSchool();
+
+  const isAdmin = activeRole === 'Admin' || currentUser?.role === 'Admin';
+  const isTeacher = !isAdmin && (activeRole === 'Teacher' || currentUser?.role === 'Teacher');
+
+  // Allowed classes computed strictly based on teacher scope:
+  // Primary/Creche teachers: only their assigned class!
+  // JHS teachers: JHS 1, JHS 2, JHS 3!
+  // Admin: all classes.
+  const allowedClasses = React.useMemo(() => {
+    return getAllowedClassesForTeacher(currentUser, classes, isAdmin);
+  }, [currentUser, classes, isAdmin]);
+
+  const isJHS = React.useMemo(() => isJHSTeacher(currentUser), [currentUser]);
 
   const [activeTab, setActiveTab] = useState<'marks-entry' | 'schedules' | 'report-card' | 'grading-scheme'>('marks-entry');
   const [selectedExam, setSelectedExam] = useState<string>(exams[0]?.id || 'term-exam-01');
-  const [selectedClass, setSelectedClass] = useState<string>('Primary 2 (Grade 2)');
+
+  // Default selected class to first allowed class
+  const [selectedClass, setSelectedClass] = useState<string>(() => {
+    if (allowedClasses.length > 0) return allowedClasses[0].name;
+    return 'Primary 1 (Grade 1)';
+  });
+
+  // Ensure selected class is always within allowed classes for teachers
+  React.useEffect(() => {
+    if (allowedClasses.length > 0) {
+      const isAllowed = allowedClasses.some(
+        (c) => normalizeClassKey(c.name) === normalizeClassKey(selectedClass)
+      );
+      if (!isAllowed) {
+        setSelectedClass(allowedClasses[0].name);
+      }
+    }
+  }, [allowedClasses, selectedClass]);
+
   const [selectedSubject, setSelectedSubject] = useState<string>('Mathematics');
   const [showSchemeReference, setShowSchemeReference] = useState<boolean>(true);
   const [activeSchemeTab, setActiveSchemeTab] = useState<'lower-primary' | 'jhs-upper'>('lower-primary');
 
   // Report Card State
-  const [reportStudentId, setReportStudentId] = useState<string>(students[0]?.id || '');
-  const [reportClassFilter, setReportClassFilter] = useState<string>('All');
+  const [reportClassFilter, setReportClassFilter] = useState<string>(() => {
+    if (isTeacher && allowedClasses.length > 0) {
+      return allowedClasses[0].name;
+    }
+    return 'All';
+  });
+
+  // Keep reportClassFilter in sync if teacher allowedClasses change
+  React.useEffect(() => {
+    if (isTeacher && allowedClasses.length > 0) {
+      const isAllowed = allowedClasses.some(
+        (c) => normalizeClassKey(c.name) === normalizeClassKey(reportClassFilter)
+      );
+      if (!isAllowed) {
+        setReportClassFilter(allowedClasses[0].name);
+      }
+    }
+  }, [isTeacher, allowedClasses, reportClassFilter]);
+
+  // Scoped students for report cards
+  const filteredStudentsForReport = React.useMemo(() => {
+    return filterStudentsForTeacherScope(students, currentUser, reportClassFilter, classes, isAdmin);
+  }, [students, currentUser, reportClassFilter, classes, isAdmin]);
+
+  const [reportStudentId, setReportStudentId] = useState<string>(() => {
+    return filteredStudentsForReport[0]?.id || students[0]?.id || '';
+  });
+
+  // Ensure reportStudentId is valid when filtered list changes
+  React.useEffect(() => {
+    if (filteredStudentsForReport.length > 0) {
+      const exists = filteredStudentsForReport.some((s) => s.id === reportStudentId);
+      if (!exists) {
+        setReportStudentId(filteredStudentsForReport[0].id);
+      }
+    }
+  }, [filteredStudentsForReport, reportStudentId]);
+
   const [reportCardSubView, setReportCardSubView] = useState<'transcript' | 'progress-chart'>('transcript');
 
   // Check if active selected class is Pre-School / Lower Primary
   const isCurrentClassLowerPrimary = isLowerPrimaryOrPreschool(selectedClass);
 
   // Marks inputs state for active class & subject
-  const classStudents = students.filter((s) => s.className === selectedClass);
+  const classStudents = React.useMemo(() => {
+    return students.filter(
+      (s) => normalizeClassKey(s.className) === normalizeClassKey(selectedClass)
+    );
+  }, [students, selectedClass]);
   const [tempScores, setTempScores] = useState<
     Record<string, { rawScore: number; specialStatus?: 'None' | 'IC' | 'Audit'; remarks?: string }>
   >({});
@@ -158,11 +250,6 @@ export const ExamManagement: React.FC = () => {
     joinedDate: '2023-09-01',
     balanceDue: 0
   };
-
-  // Selected student for report card
-  const filteredStudentsForReport = reportClassFilter === 'All' 
-    ? students 
-    : students.filter((s) => s.className === reportClassFilter);
 
   const currentReportStudent =
     students.find((s) => s.id === reportStudentId) ||
@@ -571,6 +658,28 @@ export const ExamManagement: React.FC = () => {
       {/* ========================================================================= */}
       {activeTab === 'marks-entry' && (
         <div className="space-y-4">
+          {/* Teacher Scope Notification */}
+          {isTeacher && (
+            <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-emerald-800 shrink-0" />
+                <div>
+                  <span className="font-bold text-emerald-950">
+                    {isJHS ? 'Junior High School Department Scope' : `Class Teacher Scope: ${currentUser?.assignedClass || selectedClass}`}
+                  </span>
+                  <p className="text-[11px] text-emerald-800">
+                    {isJHS
+                      ? 'As a JHS subject teacher, you can switch and record marks across JHS 1, JHS 2, and JHS 3. Access to Primary and Pre-School marks is locked.'
+                      : `You are authorized to view and enter marks strictly for ${currentUser?.assignedClass || selectedClass}. Access to other classes or Creche is restricted.`}
+                  </p>
+                </div>
+              </div>
+              <span className="bg-emerald-800 text-amber-300 font-bold px-2.5 py-1 rounded-lg text-[10px] shrink-0 uppercase tracking-wide">
+                {isJHS ? 'JHS 1 – JHS 3 Access' : 'Assigned Class Only'}
+              </span>
+            </div>
+          )}
+
           <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex flex-wrap items-center gap-3">
               <div>
@@ -578,7 +687,7 @@ export const ExamManagement: React.FC = () => {
                 <select
                   value={selectedExam}
                   onChange={(e) => setSelectedExam(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-slate-800"
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-slate-800 cursor-pointer"
                 >
                   <option value="term-exam-01">Terminal Examination ({currentTerm})</option>
                   <option value="mid-term-01">Mid-Term Assessment</option>
@@ -589,34 +698,56 @@ export const ExamManagement: React.FC = () => {
 
               <div>
                 <span className="font-semibold text-slate-600 mr-2">Class Level:</span>
-                <select
-                  value={selectedClass}
-                  onChange={(e) => setSelectedClass(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-slate-800"
-                >
-                  <optgroup label="Pre-School (Nursery to KG)">
-                    <option value="Creche">Creche</option>
-                    <option value="Nursery 1">Nursery 1</option>
-                    <option value="Nursery 2">Nursery 2</option>
-                    <option value="Kindergarten 1 (KG 1)">Kindergarten 1 (KG 1)</option>
-                    <option value="Kindergarten 2 (KG 2)">Kindergarten 2 (KG 2)</option>
-                  </optgroup>
-                  <optgroup label="Lower Primary (Basic 1 to Basic 3)">
-                    <option value="Primary 1 (Grade 1)">Primary 1 (Grade 1 / Basic 1)</option>
-                    <option value="Primary 2 (Grade 2)">Primary 2 (Grade 2 / Basic 2)</option>
-                    <option value="Primary 3 (Grade 3)">Primary 3 (Grade 3 / Basic 3)</option>
-                  </optgroup>
-                  <optgroup label="Upper Primary (Basic 4 to Basic 6)">
-                    <option value="Primary 4 (Grade 4)">Primary 4 (Grade 4 / Basic 4)</option>
-                    <option value="Primary 5 (Grade 5)">Primary 5 (Grade 5 / Basic 5)</option>
-                    <option value="Primary 6 (Grade 6)">Primary 6 (Grade 6 / Basic 6)</option>
-                  </optgroup>
-                  <optgroup label="Junior High School (JHS 1 to JHS 3)">
-                    <option value="JHS 1 (Grade 7)">JHS 1 (Grade 7 / Basic 7)</option>
-                    <option value="JHS 2 (Grade 8)">JHS 2 (Grade 8 / Basic 8)</option>
-                    <option value="JHS 3 (Grade 9)">JHS 3 (Grade 9 / Basic 9)</option>
-                  </optgroup>
-                </select>
+                {isTeacher && !isJHS && allowedClasses.length === 1 ? (
+                  <div className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-800">
+                    <Lock className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{allowedClasses[0].name}</span>
+                    <span className="text-[9px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-extrabold ml-1">Class Teacher Only</span>
+                  </div>
+                ) : isTeacher ? (
+                  <select
+                    value={selectedClass}
+                    onChange={(e) => setSelectedClass(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-slate-800 cursor-pointer"
+                  >
+                    <optgroup label={isJHS ? 'Junior High School (JHS 1 to 3) - Department Access' : 'Allowed Classes'}>
+                      {allowedClasses.map((c) => (
+                        <option key={`opt-${c.id || c.name}`} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                ) : (
+                  <select
+                    value={selectedClass}
+                    onChange={(e) => setSelectedClass(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-slate-800 cursor-pointer"
+                  >
+                    <optgroup label="Pre-School (Nursery to KG)">
+                      <option value="Creche">Creche</option>
+                      <option value="Nursery 1">Nursery 1</option>
+                      <option value="Nursery 2">Nursery 2</option>
+                      <option value="Kindergarten 1 (KG 1)">Kindergarten 1 (KG 1)</option>
+                      <option value="Kindergarten 2 (KG 2)">Kindergarten 2 (KG 2)</option>
+                    </optgroup>
+                    <optgroup label="Lower Primary (Basic 1 to Basic 3)">
+                      <option value="Primary 1 (Grade 1)">Primary 1 (Grade 1 / Basic 1)</option>
+                      <option value="Primary 2 (Grade 2)">Primary 2 (Grade 2 / Basic 2)</option>
+                      <option value="Primary 3 (Grade 3)">Primary 3 (Grade 3 / Basic 3)</option>
+                    </optgroup>
+                    <optgroup label="Upper Primary (Basic 4 to Basic 6)">
+                      <option value="Primary 4 (Grade 4)">Primary 4 (Grade 4 / Basic 4)</option>
+                      <option value="Primary 5 (Grade 5)">Primary 5 (Grade 5 / Basic 5)</option>
+                      <option value="Primary 6 (Grade 6)">Primary 6 (Grade 6 / Basic 6)</option>
+                    </optgroup>
+                    <optgroup label="Junior High School (JHS 1 to JHS 3)">
+                      <option value="JHS 1 (Grade 7)">JHS 1 (Grade 7 / Basic 7)</option>
+                      <option value="JHS 2 (Grade 8)">JHS 2 (Grade 8 / Basic 8)</option>
+                      <option value="JHS 3 (Grade 9)">JHS 3 (Grade 9 / Basic 9)</option>
+                    </optgroup>
+                  </select>
+                )}
               </div>
 
               <div>
@@ -797,31 +928,53 @@ export const ExamManagement: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3">
               <div>
                 <span className="font-semibold text-slate-600 mr-2">Filter Class:</span>
-                <select
-                  value={reportClassFilter}
-                  onChange={(e) => setReportClassFilter(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-slate-800"
-                >
-                  <option value="All">All School Classes</option>
-                  <optgroup label="Pre-School & Lower Primary (Nursery - Basic 3)">
-                    <option value="Creche">Creche</option>
-                    <option value="Nursery 1">Nursery 1</option>
-                    <option value="Nursery 2">Nursery 2</option>
-                    <option value="Kindergarten 1 (KG 1)">Kindergarten 1 (KG 1)</option>
-                    <option value="Kindergarten 2 (KG 2)">Kindergarten 2 (KG 2)</option>
-                    <option value="Primary 1 (Grade 1)">Primary 1 (Grade 1)</option>
-                    <option value="Primary 2 (Grade 2)">Primary 2 (Grade 2)</option>
-                    <option value="Primary 3 (Grade 3)">Primary 3 (Grade 3)</option>
-                  </optgroup>
-                  <optgroup label="Upper Primary & JHS (Basic 4 - JHS 3)">
-                    <option value="Primary 4 (Grade 4)">Primary 4 (Grade 4)</option>
-                    <option value="Primary 5 (Grade 5)">Primary 5 (Grade 5)</option>
-                    <option value="Primary 6 (Grade 6)">Primary 6 (Grade 6)</option>
-                    <option value="JHS 1 (Grade 7)">JHS 1 (Grade 7)</option>
-                    <option value="JHS 2 (Grade 8)">JHS 2 (Grade 8)</option>
-                    <option value="JHS 3 (Grade 9)">JHS 3 (Grade 9)</option>
-                  </optgroup>
-                </select>
+                {isTeacher && !isJHS && allowedClasses.length === 1 ? (
+                  <div className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-300 rounded-lg px-3 py-1.5 font-bold text-slate-800">
+                    <Lock className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{allowedClasses[0].name}</span>
+                    <span className="text-[9px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-extrabold ml-1">Class Teacher Only</span>
+                  </div>
+                ) : isTeacher ? (
+                  <select
+                    value={reportClassFilter}
+                    onChange={(e) => setReportClassFilter(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-slate-800 cursor-pointer"
+                  >
+                    <optgroup label={isJHS ? 'Junior High School (JHS 1 to 3) - Department Access' : 'Allowed Classes'}>
+                      {allowedClasses.map((c) => (
+                        <option key={`report-opt-${c.id || c.name}`} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                ) : (
+                  <select
+                    value={reportClassFilter}
+                    onChange={(e) => setReportClassFilter(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-bold text-slate-800 cursor-pointer"
+                  >
+                    <option value="All">All School Classes</option>
+                    <optgroup label="Pre-School & Lower Primary (Nursery - Basic 3)">
+                      <option value="Creche">Creche</option>
+                      <option value="Nursery 1">Nursery 1</option>
+                      <option value="Nursery 2">Nursery 2</option>
+                      <option value="Kindergarten 1 (KG 1)">Kindergarten 1 (KG 1)</option>
+                      <option value="Kindergarten 2 (KG 2)">Kindergarten 2 (KG 2)</option>
+                      <option value="Primary 1 (Grade 1)">Primary 1 (Grade 1)</option>
+                      <option value="Primary 2 (Grade 2)">Primary 2 (Grade 2)</option>
+                      <option value="Primary 3 (Grade 3)">Primary 3 (Grade 3)</option>
+                    </optgroup>
+                    <optgroup label="Upper Primary & JHS (Basic 4 - JHS 3)">
+                      <option value="Primary 4 (Grade 4)">Primary 4 (Grade 4)</option>
+                      <option value="Primary 5 (Grade 5)">Primary 5 (Grade 5)</option>
+                      <option value="Primary 6 (Grade 6)">Primary 6 (Grade 6)</option>
+                      <option value="JHS 1 (Grade 7)">JHS 1 (Grade 7)</option>
+                      <option value="JHS 2 (Grade 8)">JHS 2 (Grade 8)</option>
+                      <option value="JHS 3 (Grade 9)">JHS 3 (Grade 9)</option>
+                    </optgroup>
+                  </select>
+                )}
               </div>
 
               <div>

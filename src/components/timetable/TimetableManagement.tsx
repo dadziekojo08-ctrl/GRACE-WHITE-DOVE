@@ -37,8 +37,19 @@ import {
   Calendar,
   Sliders,
   Filter,
-  ArrowRight
+  ArrowRight,
+  PlusCircle,
+  GraduationCap,
+  BookmarkPlus,
+  Lock,
+  Shield
 } from 'lucide-react';
+import {
+  getAllowedClassesForTeacher,
+  canTeacherAccessClass,
+  isJHSTeacher,
+  normalizeClassKey
+} from '../../utils/classAccess';
 
 interface TimetableManagementProps {
   isTeacherPortalView?: boolean;
@@ -58,7 +69,9 @@ export const TimetableManagement: React.FC<TimetableManagementProps> = ({
     copyClassTimetable,
     setFullClassTimetable,
     classes,
+    updateClass,
     subjects: registeredSubjects,
+    addSubject,
     staff,
     selectedTimetableClass,
     setSelectedTimetableClass,
@@ -67,26 +80,61 @@ export const TimetableManagement: React.FC<TimetableManagementProps> = ({
     activeRole
   } = useSchool();
 
-  const isTeacherRole = activeRole === 'Teacher' || currentUser?.role === 'Teacher' || isTeacherPortalView;
+  const isAdmin = activeRole === 'Admin' || currentUser?.role === 'Admin';
+  const isTeacherRole = !isAdmin && (activeRole === 'Teacher' || currentUser?.role === 'Teacher' || isTeacherPortalView);
   const teacherName = currentUser?.name || '';
-  const teacherAssignedClass = currentUser?.assignedClass || classes.find((c) => c.classTeacher?.toLowerCase() === teacherName.toLowerCase())?.name;
+  const teacherAssignedClass = currentUser?.assignedClass || classes.find((c) => c.classTeacher?.toLowerCase() === teacherName.toLowerCase())?.name || preselectedClass;
 
-  // Active selected class name - respects user selection first, then preselectedClass or teacher assigned class
-  const currentClassName =
-    selectedTimetableClass ||
-    preselectedClass ||
-    (isTeacherRole && teacherAssignedClass ? teacherAssignedClass : (classes.length > 0 ? classes[0].name : 'Creche'));
+  const isJHS = useMemo(() => isJHSTeacher(currentUser || { assignedClass: teacherAssignedClass, name: teacherName }), [currentUser, teacherAssignedClass, teacherName]);
 
-  // Ensure selectedTimetableClass is in sync with teacher's assigned class on initial mount if teacher
+  // Allowed classes strictly computed based on role & assignment:
+  // Primary/Creche teachers: only their assigned class!
+  // JHS teachers: JHS 1, JHS 2, JHS 3!
+  // Admin: all classes.
+  const allowedClasses = useMemo(() => {
+    return getAllowedClassesForTeacher(
+      currentUser || { name: teacherName, assignedClass: teacherAssignedClass, role: 'Teacher' },
+      classes,
+      isAdmin
+    );
+  }, [currentUser, teacherName, teacherAssignedClass, classes, isAdmin]);
+
+  // If teacher role, teacherVariousClasses is strictly allowedClasses!
+  const teacherVariousClasses = useMemo(() => {
+    if (isTeacherRole) return allowedClasses;
+    return classes;
+  }, [isTeacherRole, allowedClasses, classes]);
+
+  // Active selected class name - strictly verified against allowedClasses if teacher
+  const currentClassName = useMemo(() => {
+    if (isTeacherRole) {
+      if (selectedTimetableClass && allowedClasses.some((c) => normalizeClassKey(c.name) === normalizeClassKey(selectedTimetableClass))) {
+        return selectedTimetableClass;
+      }
+      if (preselectedClass && allowedClasses.some((c) => normalizeClassKey(c.name) === normalizeClassKey(preselectedClass))) {
+        return preselectedClass;
+      }
+      if (teacherAssignedClass && allowedClasses.some((c) => normalizeClassKey(c.name) === normalizeClassKey(teacherAssignedClass))) {
+        return teacherAssignedClass;
+      }
+      return allowedClasses[0]?.name || 'Primary 1 (Grade 1)';
+    }
+    return (
+      selectedTimetableClass ||
+      preselectedClass ||
+      (classes.length > 0 ? classes[0].name : 'Creche')
+    );
+  }, [isTeacherRole, selectedTimetableClass, preselectedClass, teacherAssignedClass, allowedClasses, classes]);
+
+  // Ensure selectedTimetableClass is in sync with valid allowed class
   useEffect(() => {
-    if (!selectedTimetableClass) {
-      if (preselectedClass) {
-        setSelectedTimetableClass(preselectedClass);
-      } else if (isTeacherRole && teacherAssignedClass) {
-        setSelectedTimetableClass(teacherAssignedClass);
+    if (isTeacherRole && allowedClasses.length > 0) {
+      const isAllowed = allowedClasses.some((c) => normalizeClassKey(c.name) === normalizeClassKey(selectedTimetableClass));
+      if (!isAllowed) {
+        setSelectedTimetableClass(allowedClasses[0].name);
       }
     }
-  }, [preselectedClass, isTeacherRole, teacherAssignedClass, selectedTimetableClass, setSelectedTimetableClass]);
+  }, [isTeacherRole, allowedClasses, selectedTimetableClass, setSelectedTimetableClass]);
 
   const currentClassObj = classes.find((c) => c.name === currentClassName) || classes[0];
 
@@ -101,6 +149,13 @@ export const TimetableManagement: React.FC<TimetableManagementProps> = ({
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [isAddSubjectModalOpen, setIsAddSubjectModalOpen] = useState(false);
+  const [newSubjectData, setNewSubjectData] = useState({
+    name: '',
+    department: 'General Studies',
+    periodsPerWeek: 4,
+    code: ''
+  });
 
   const [editingEntry, setEditingEntry] = useState<TimetableEntry | null>(null);
   const [sourceClassToCopy, setSourceClassToCopy] = useState<string>('');
@@ -109,6 +164,41 @@ export const TimetableManagement: React.FC<TimetableManagementProps> = ({
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleAddSubjectToClass = (e: React.FormEvent) => {
+    e.preventDefault();
+    const subName = newSubjectData.name.trim();
+    if (!subName) return;
+
+    // 1. Add to current class subjects list
+    const currentSubjects = currentClassObj?.subjects || [];
+    if (!currentSubjects.includes(subName)) {
+      updateClass(currentClassObj.id, {
+        subjects: [...currentSubjects, subName]
+      });
+    }
+
+    // 2. Add to school-wide subjects catalog if not already present
+    const existsInCatalog = registeredSubjects.some(
+      (s) => s.name.toLowerCase() === subName.toLowerCase() && s.classLevel?.toLowerCase() === (currentClassObj?.level || '').toLowerCase()
+    );
+    if (!existsInCatalog) {
+      addSubject({
+        name: subName,
+        code: newSubjectData.code.trim() || `${subName.slice(0, 3).toUpperCase()}-${(currentClassObj?.name || 'CLS').slice(0, 3).replace(/\s/g, '').toUpperCase()}`,
+        classLevel: currentClassObj?.level || 'Primary',
+        department: newSubjectData.department || 'General Studies',
+        teacher: isTeacherRole && teacherName ? teacherName : (currentClassObj?.classTeacher || 'Class Teacher'),
+        periodsPerWeek: Number(newSubjectData.periodsPerWeek) || 4
+      });
+    }
+
+    // 3. Automatically select the newly created subject in the active slot form
+    setForm((prev) => ({ ...prev, subject: subName }));
+    setIsAddSubjectModalOpen(false);
+    setNewSubjectData({ name: '', department: 'General Studies', periodsPerWeek: 4, code: '' });
+    showToast(`Added subject "${subName}" to ${currentClassName} timetable!`);
   };
 
   // Form State for Slot Add / Edit with granular Lesson Start Time & End Time
@@ -399,48 +489,95 @@ export const TimetableManagement: React.FC<TimetableManagementProps> = ({
 
       {/* Teacher Workspace Banner if Teacher Mode */}
       {isTeacherRole && (
-        <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white p-5 rounded-2xl shadow-sm border border-emerald-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-black text-lg shadow-sm shrink-0">
-              <CalendarDays className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-black font-['Outfit']">
-                  Teacher Timetable & Lesson Scheduler
-                </h2>
-                <span className="bg-amber-400 text-emerald-950 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                  Self-Service Mode
-                </span>
+        <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white p-5 rounded-2xl shadow-sm border border-emerald-700 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-black text-lg shadow-sm shrink-0">
+                <CalendarDays className="w-6 h-6" />
               </div>
-              <p className="text-xs text-emerald-100 mt-1">
-                Welcome, <strong>{teacherName || 'Teacher'}</strong>! You can customize lesson start and end times, change lessons, and enter subjects directly for your classroom.
-              </p>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base sm:text-lg font-black font-['Outfit']">
+                    Teacher Timetable & Lesson Scheduler
+                  </h2>
+                  <span className="bg-amber-400 text-emerald-950 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                    Self-Service Mode
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-100 mt-1">
+                  Welcome, <strong>{teacherName || 'Teacher'}</strong>! You can customize lesson start and end times, change lessons, and add subjects directly to your classes.
+                </p>
+                <div className="mt-2 inline-flex items-center gap-1.5 bg-emerald-950/70 border border-emerald-600/80 px-2.5 py-1 rounded-lg text-[11px] text-amber-200">
+                  <Shield className="w-3.5 h-3.5 text-amber-400" />
+                  <span>
+                    {isJHS
+                      ? 'JHS Department Faculty: You have switching access across JHS 1, JHS 2, and JHS 3.'
+                      : `Class Teacher Scope: Restricted strictly to ${currentClassName}. No access to other classes or Creche.`}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setIsAddSubjectModalOpen(true)}
+                className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 border border-emerald-500 shadow-sm cursor-pointer transition-all"
+              >
+                <PlusCircle className="w-4 h-4 text-amber-300" />
+                Add Subject to {currentClassName}
+              </button>
+              <button
+                onClick={() => handleOpenAddForSlot('Monday', '08:00 - 08:50')}
+                className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Add New Lesson
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {teacherAssignedClass && (
-              <button
-                onClick={() => setSelectedTimetableClass(teacherAssignedClass)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  currentClassName === teacherAssignedClass
-                    ? 'bg-amber-400 text-emerald-950 shadow-xs'
-                    : 'bg-emerald-800/80 hover:bg-emerald-700 text-white border border-emerald-600'
-                }`}
-              >
-                <School className="w-3.5 h-3.5" />
-                My Class: {teacherAssignedClass}
-              </button>
-            )}
-            <button
-              onClick={() => handleOpenAddForSlot('Monday', '08:00 - 08:50')}
-              className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Add New Lesson
-            </button>
-          </div>
+          {/* Quick Switcher for Teacher's Various Classes */}
+          {teacherVariousClasses.length > 0 && (
+            <div className="pt-3 border-t border-emerald-700/80 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                  <GraduationCap className="w-4 h-4 text-amber-400" />
+                  My Teaching Classes:
+                </span>
+                {teacherVariousClasses.map((cls) => {
+                  const isMaster = cls.classTeacher && teacherName && cls.classTeacher.toLowerCase().includes(teacherName.toLowerCase());
+                  const isAssigned = teacherAssignedClass && (cls.name.toLowerCase() === teacherAssignedClass.toLowerCase() || teacherAssignedClass.toLowerCase().includes(cls.name.toLowerCase()));
+                  const periodCount = timetable.filter((t) => t.className === cls.name && t.teacherName && teacherName && t.teacherName.toLowerCase().includes(teacherName.toLowerCase())).length;
+                  const isCurrent = currentClassName === cls.name;
+
+                  return (
+                    <button
+                      key={cls.id}
+                      onClick={() => setSelectedTimetableClass(cls.name)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isCurrent
+                          ? 'bg-amber-400 text-emerald-950 shadow-sm'
+                          : 'bg-emerald-950/60 hover:bg-emerald-800 text-emerald-100 border border-emerald-700/80'
+                      }`}
+                    >
+                      <span>{cls.name}</span>
+                      {isMaster ? (
+                        <span className="text-[9px] bg-emerald-900 text-amber-300 px-1.5 py-0.2 rounded font-extrabold">Master</span>
+                      ) : isAssigned ? (
+                        <span className="text-[9px] bg-emerald-900 text-amber-300 px-1.5 py-0.2 rounded font-extrabold">Assigned</span>
+                      ) : periodCount > 0 ? (
+                        <span className="text-[9px] bg-emerald-900/80 text-emerald-200 px-1.5 py-0.2 rounded font-mono">{periodCount} periods</span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="text-[11px] text-emerald-200">
+                Active: <strong className="text-white font-bold">{currentClassName}</strong>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -493,6 +630,15 @@ export const TimetableManagement: React.FC<TimetableManagementProps> = ({
           </button>
 
           <button
+            onClick={() => setIsAddSubjectModalOpen(true)}
+            className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
+            title="Add a new subject to this class timetable"
+          >
+            <PlusCircle className="w-3.5 h-3.5 text-emerald-700" />
+            Add Subject to Class
+          </button>
+
+          <button
             onClick={() => setIsTemplateModalOpen(true)}
             className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
             title="Auto-fill schedule according to level curriculum"
@@ -528,42 +674,65 @@ export const TimetableManagement: React.FC<TimetableManagementProps> = ({
             <label htmlFor="class-select-dropdown" className="font-bold text-slate-800 text-xs">
               Active Classroom:
             </label>
-            <select
-              id="class-select-dropdown"
-              value={currentClassName}
-              onChange={(e) => setSelectedTimetableClass(e.target.value)}
-              className="bg-emerald-50 border border-emerald-300 rounded-xl px-3 py-1.5 font-bold text-emerald-950 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-700 cursor-pointer"
-            >
-              {preschoolClasses.length > 0 && (
-                <optgroup label="Early Childhood (Creche, Nursery, KG)">
-                  {preschoolClasses.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name} {teacherAssignedClass === c.name ? '★ (My Class)' : ''}
+            {isTeacherRole && !isJHS && allowedClasses.length === 1 ? (
+              <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-emerald-950 text-xs">
+                <Lock className="w-3.5 h-3.5 text-slate-500" />
+                <span>{allowedClasses[0].name}</span>
+                <span className="text-[9px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-extrabold ml-1">Class Teacher Only</span>
+              </div>
+            ) : isTeacherRole ? (
+              <select
+                id="class-select-dropdown"
+                value={currentClassName}
+                onChange={(e) => setSelectedTimetableClass(e.target.value)}
+                className="bg-emerald-50 border border-emerald-300 rounded-xl px-3 py-1.5 font-bold text-emerald-950 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-700 cursor-pointer"
+              >
+                <optgroup label={isJHS ? 'Junior High School (JHS 1 to 3) - Department Access' : 'Allowed Classes'}>
+                  {allowedClasses.map((c) => (
+                    <option key={`my-${c.id || c.name}`} value={c.name}>
+                      {c.name} {teacherAssignedClass === c.name ? '★ (Class Master)' : '(Teaching Class)'}
                     </option>
                   ))}
                 </optgroup>
-              )}
+              </select>
+            ) : (
+              <select
+                id="class-select-dropdown"
+                value={currentClassName}
+                onChange={(e) => setSelectedTimetableClass(e.target.value)}
+                className="bg-emerald-50 border border-emerald-300 rounded-xl px-3 py-1.5 font-bold text-emerald-950 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-700 cursor-pointer"
+              >
+                {preschoolClasses.length > 0 && (
+                  <optgroup label="Early Childhood (Creche, Nursery, KG)">
+                    {preschoolClasses.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
 
-              {primaryClasses.length > 0 && (
-                <optgroup label="Primary Department (Class 1 to 6)">
-                  {primaryClasses.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name} {teacherAssignedClass === c.name ? '★ (My Class)' : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
+                {primaryClasses.length > 0 && (
+                  <optgroup label="Primary Department (Class 1 to 6)">
+                    {primaryClasses.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
 
-              {jhsClasses.length > 0 && (
-                <optgroup label="Junior High School (JHS 1 to 3)">
-                  {jhsClasses.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name} {teacherAssignedClass === c.name ? '★ (My Class)' : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+                {jhsClasses.length > 0 && (
+                  <optgroup label="Junior High School (JHS 1 to 3)">
+                    {jhsClasses.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            )}
           </div>
 
           {/* View Mode Toggle: Weekly Master vs Daily Tabs */}
@@ -1063,9 +1232,19 @@ export const TimetableManagement: React.FC<TimetableManagementProps> = ({
 
               {/* Subject Input & Quick Suggestions */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Subject Name
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-slate-700">
+                    Subject Name
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddSubjectModalOpen(true)}
+                    className="text-[11px] text-emerald-800 hover:text-emerald-950 font-bold flex items-center gap-1 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-2.5 py-0.5 rounded-lg border border-emerald-300"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5 text-emerald-700" />
+                    + Add New Subject
+                  </button>
+                </div>
                 <div className="space-y-2">
                   <input
                     type="text"
@@ -1295,9 +1474,19 @@ export const TimetableManagement: React.FC<TimetableManagementProps> = ({
 
               {/* Subject Input & Quick Suggestions */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Change Subject
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-slate-700">
+                    Change Subject
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddSubjectModalOpen(true)}
+                    className="text-[11px] text-emerald-800 hover:text-emerald-950 font-bold flex items-center gap-1 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-2.5 py-0.5 rounded-lg border border-emerald-300"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5 text-emerald-700" />
+                    + Add New Subject
+                  </button>
+                </div>
                 <div className="space-y-2">
                   <input
                     type="text"
@@ -1568,6 +1757,161 @@ export const TimetableManagement: React.FC<TimetableManagementProps> = ({
                 Yes, Reset Timetable
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 6: ADD SUBJECT TO CLASS TIMETABLE                                    */}
+      {/* ========================================================================= */}
+      {isAddSubjectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 my-8">
+            <div className="bg-emerald-800 text-white px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-700/80 rounded-xl">
+                  <BookmarkPlus className="w-5 h-5 text-amber-300" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base font-['Outfit']">Add Subject to Class Timetable</h3>
+                  <p className="text-[11px] text-emerald-200">Target Classroom: <strong>{currentClassName}</strong></p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAddSubjectModalOpen(false)}
+                className="text-emerald-200 hover:text-white p-1 rounded-lg hover:bg-emerald-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddSubjectToClass} className="p-5 space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Subject Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newSubjectData.name}
+                  onChange={(e) => setNewSubjectData({ ...newSubjectData, name: e.target.value })}
+                  placeholder="e.g. Computing / ICT, Creative Arts, R.M.E"
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                />
+              </div>
+
+              {/* Quick Pick Standard Ghanaian Curriculum Subjects */}
+              <div>
+                <span className="text-[11px] text-slate-500 font-semibold block mb-1.5">
+                  Or select from Ghana GES Curriculum subjects:
+                </span>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
+                  {[
+                    'Core Mathematics',
+                    'English Language',
+                    'Integrated Science',
+                    'Computing / ICT',
+                    'Social Studies',
+                    'Religious & Moral Education (RME)',
+                    'Creative Arts & Design',
+                    'Career Technology',
+                    'Ghanaian Language (Twi/Fante/Ga)',
+                    'Physical & Health Education (PHE)',
+                    'French Language',
+                    'Music & Dance',
+                    'Handwriting & Phonics',
+                    'Our World and Our People (OWOP)'
+                  ].map((sub) => (
+                    <button
+                      key={sub}
+                      type="button"
+                      onClick={() => {
+                        const codeSlug = sub.split(' ').map((w) => w[0]).join('').slice(0, 4).toUpperCase();
+                        setNewSubjectData({
+                          ...newSubjectData,
+                          name: sub,
+                          code: `${codeSlug}-${currentClassName.slice(0, 3).replace(/\s/g, '').toUpperCase()}`
+                        });
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                        newSubjectData.name === sub
+                          ? 'bg-emerald-800 text-white font-bold'
+                          : 'bg-white text-slate-700 hover:bg-emerald-50 hover:text-emerald-950 border border-slate-200'
+                      }`}
+                    >
+                      {sub}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Department</label>
+                  <select
+                    value={newSubjectData.department}
+                    onChange={(e) => setNewSubjectData({ ...newSubjectData, department: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-800 font-medium"
+                  >
+                    <option value="General Studies">General Studies</option>
+                    <option value="Science & Technology">Science & Technology</option>
+                    <option value="Humanities & Social Sciences">Humanities & Social Sciences</option>
+                    <option value="Languages">Languages</option>
+                    <option value="Creative Arts & Vocations">Creative Arts & Vocations</option>
+                    <option value="Physical Education">Physical Education</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Periods / Week</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={15}
+                    value={newSubjectData.periodsPerWeek}
+                    onChange={(e) => setNewSubjectData({ ...newSubjectData, periodsPerWeek: Number(e.target.value) })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Subject Code (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={newSubjectData.code}
+                  onChange={(e) => setNewSubjectData({ ...newSubjectData, code: e.target.value })}
+                  placeholder="e.g. MTH-P1, SCI-JHS"
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 uppercase font-mono focus:outline-none focus:ring-2 focus:ring-emerald-800"
+                />
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-900">
+                <p>
+                  Adding this subject will register it under <strong>{currentClassName}</strong> and enable it across all timetable lesson slots and report card grading.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddSubjectModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newSubjectData.name.trim()}
+                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 disabled:opacity-50 text-white font-bold rounded-xl cursor-pointer flex items-center gap-1.5 shadow-sm"
+                >
+                  <Check className="w-4 h-4 text-amber-300" />
+                  Save Subject to Timetable
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

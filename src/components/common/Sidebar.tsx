@@ -62,14 +62,15 @@ const parentNavItems: NavItem[] = [
 ];
 
 const teacherNavItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, subText: 'My Students • Attendance • Grades • Salary' },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, subText: 'My Students • Attendance • Grades' },
+  { id: 'timetable', label: 'Timetable', icon: CalendarDays, subText: 'Weekly Period Schedules' },
+  { id: 'my-payroll', label: 'My Salary & Payroll', icon: DollarSign, subText: 'Monthly Slips & Remuneration' },
   { id: 'students', label: 'Students', icon: Users, subText: 'Student Directory & Profiles' },
-  { id: 'library', label: 'Library', icon: BookOpen, subText: 'Books Catalog & Borrowing' },
   { id: 'classes', label: 'Class', icon: GraduationCap, subText: 'Classrooms & Sections' },
   { id: 'subjects', label: 'Subjects', icon: BookmarkCheck, subText: 'Syllabus & Course Codes' },
-  { id: 'timetable', label: 'Timetable', icon: CalendarDays, subText: 'Weekly Period Schedules' },
   { id: 'attendance', label: 'Attendance', icon: CheckSquare, subText: 'Daily Roll Marking' },
   { id: 'exams', label: 'Examination', icon: Award, subText: 'Marks, Grades & Terminal Reports' },
+  { id: 'library', label: 'Library', icon: BookOpen, subText: 'Books Catalog & Borrowing' },
   { id: 'calendar', label: 'Calendar', icon: CalendarIcon, subText: 'Academic Dates & Events' },
   { id: 'announcements', label: 'Announcement', icon: Megaphone, subText: 'Notice Board & Circulars' }
 ];
@@ -337,7 +338,7 @@ export const Sidebar: React.FC<{
             <div className="space-y-1">
               <div className="px-3 text-[10px] font-extrabold tracking-wider text-amber-400 uppercase flex items-center justify-between">
                 <span>Teacher Workspace</span>
-                <span className="bg-emerald-800 text-emerald-200 text-[9px] px-1.5 py-0.2 rounded">10 Menus</span>
+                <span className="bg-emerald-800 text-emerald-200 text-[9px] px-1.5 py-0.2 rounded">11 Menus</span>
               </div>
               <div className="mt-2 space-y-1">
                 {teacherNavItems.map((item) => {
