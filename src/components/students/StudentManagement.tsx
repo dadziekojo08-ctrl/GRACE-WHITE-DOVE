@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { DigitalIdCardGenerator } from './DigitalIdCardGenerator';
 import { AcademicProgressChart } from '../academic/AcademicProgressChart';
+import { getAllowedClassesForTeacher, normalizeClassKey } from '../../utils/classAccess';
 
 export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: Student) => void }> = ({
   onOpenPaystackForStudent
@@ -66,7 +67,25 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
 
   const isTeacher = activeRole === 'Teacher' || currentUser?.role === 'Teacher';
 
-  const [selectedClass, setSelectedClass] = useState<string>('all');
+  // Teacher class access resolution: "Remove the class from teachers portal and give them the class they only teach."
+  const teacherAllowedClasses = React.useMemo(() => {
+    return getAllowedClassesForTeacher(currentUser, classes, !isTeacher);
+  }, [currentUser, classes, isTeacher]);
+
+  const [selectedClass, setSelectedClass] = useState<string>(() => {
+    if (isTeacher && teacherAllowedClasses.length > 0) {
+      return teacherAllowedClasses[0].name;
+    }
+    return 'all';
+  });
+
+  React.useEffect(() => {
+    if (isTeacher && teacherAllowedClasses.length > 0) {
+      if (selectedClass === 'all' || !teacherAllowedClasses.some((c) => c.name === selectedClass)) {
+        setSelectedClass(teacherAllowedClasses[0].name);
+      }
+    }
+  }, [isTeacher, teacherAllowedClasses, selectedClass]);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [activeStudentProfile, setActiveStudentProfile] = useState<Student | null>(null);
   const [profileActiveTab, setProfileActiveTab] = useState<'academics' | 'particulars' | 'finance'>('academics');
@@ -132,27 +151,32 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
 
   const [localSearch, setLocalSearch] = useState('');
 
-  const classList = [
-    'All Classes',
-    ...(classes && classes.length > 0
-      ? classes.map((c) => c.name)
-      : [
-          'Creche',
-          'Nursery 1',
-          'Nursery 2',
-          'KG 1 (Kindergarten)',
-          'KG 2 (Kindergarten)',
-          'Primary 1 (Grade 1)',
-          'Primary 2 (Grade 2)',
-          'Primary 3 (Grade 3)',
-          'Primary 4 (Grade 4)',
-          'Primary 5 (Grade 5)',
-          'Primary 6 (Grade 6)',
-          'JHS 1 (Basic 7)',
-          'JHS 2 (Basic 8)',
-          'JHS 3 (Basic 9)'
-        ])
-  ];
+  const classList = React.useMemo(() => {
+    if (isTeacher) {
+      return teacherAllowedClasses.map((c) => c.name);
+    }
+    return [
+      'All Classes',
+      ...(classes && classes.length > 0
+        ? classes.map((c) => c.name)
+        : [
+            'Creche',
+            'Nursery 1',
+            'Nursery 2',
+            'KG 1 (Kindergarten)',
+            'KG 2 (Kindergarten)',
+            'Primary 1 (Grade 1)',
+            'Primary 2 (Grade 2)',
+            'Primary 3 (Grade 3)',
+            'Primary 4 (Grade 4)',
+            'Primary 5 (Grade 5)',
+            'Primary 6 (Grade 6)',
+            'JHS 1 (Basic 7)',
+            'JHS 2 (Basic 8)',
+            'JHS 3 (Basic 9)'
+          ])
+    ];
+  }, [isTeacher, teacherAllowedClasses, classes]);
 
   // Auto-suggested teacher for the currently selected class in the form
   const currentSuggestedTeacher = suggestTeacherForClass(formData.className);
@@ -168,6 +192,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
   };
 
   const handleOpenAdd = () => {
+    if (isTeacher) return; // Teachers should not have access to enroll new students
     setEditingStudent(null);
     const initialClass = classes[0]?.name || 'Primary 1 (Grade 1)';
     const suggested = suggestTeacherForClass(initialClass);
@@ -187,6 +212,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       guardianEmail: '',
       address: '',
       balanceDue: 0,
+      manualArrears: 0,
       photoUrl: ''
     });
     setIsAddModalOpen(true);
@@ -194,6 +220,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
 
   // Bulk auto-sync teachers for all enrolled students
   const handleAutoSyncAllTeachers = () => {
+    if (isTeacher) return; // Teachers should not auto sync teachers
     let syncedCount = 0;
     students.forEach((std) => {
       const matched = suggestTeacherForClass(std.className);
@@ -219,8 +246,15 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
 
     const matchesClass = selectedClass === 'all' || selectedClass === 'All Classes' || s.className === selectedClass;
     const matchesStatus = selectedStatus === 'all' || s.status === selectedStatus;
+    
+    // Scoped strictly to the class the teacher teaches
+    const matchesTeacherAccess =
+      !isTeacher ||
+      teacherAllowedClasses.some(
+        (c) => normalizeClassKey(c.name) === normalizeClassKey(s.className) || c.id === s.classId
+      );
 
-    return matchesSearch && matchesClass && matchesStatus;
+    return matchesSearch && matchesClass && matchesStatus && matchesTeacherAccess;
   });
 
   const handleSaveStudent = (e: React.FormEvent) => {
@@ -247,6 +281,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       });
       setEditingStudent(null);
     } else {
+      if (isTeacher) return; // Teachers should not have access to enroll new students
       addStudent({
         admissionNo: formData.admissionNo.trim() || undefined,
         firstName: formData.firstName,
@@ -369,6 +404,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
 
   // Reassign / Push Students to Class Handlers
   const handleOpenReassignSingle = (std: Student) => {
+    if (isTeacher) return;
     setReassignStudentsList([std]);
     setTargetReassignClass(std.className);
     setTargetReassignSection(std.section || 'A');
@@ -377,6 +413,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
   };
 
   const handleOpenReassignBulk = () => {
+    if (isTeacher) return;
     const selected = students.filter(s => selectedStudentIds.includes(s.id));
     if (selected.length === 0) return;
     setReassignStudentsList(selected);
@@ -440,25 +477,29 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleAutoSyncAllTeachers}
-            className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-            title="Auto-match and assign class teachers for all students based on their class levels"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-emerald-700" />
-            Auto-Sync Teachers
-          </button>
-          <button
-            onClick={() => {
-              setSelectedIdCardStudent(null);
-              setIsIdGeneratorOpen(true);
-            }}
-            className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-            title="Open Digital ID Card Generator for single student or bulk class batch"
-          >
-            <CreditCard className="w-4 h-4 text-amber-600" />
-            Digital ID Generator
-          </button>
+          {!isTeacher && (
+            <button
+              onClick={handleAutoSyncAllTeachers}
+              className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+              title="Auto-match and assign class teachers for all students based on their class levels"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-emerald-700" />
+              Auto-Sync Teachers
+            </button>
+          )}
+          {!isTeacher && (
+            <button
+              onClick={() => {
+                setSelectedIdCardStudent(null);
+                setIsIdGeneratorOpen(true);
+              }}
+              className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+              title="Open Digital ID Card Generator for single student or bulk class batch"
+            >
+              <CreditCard className="w-4 h-4 text-amber-600" />
+              Digital ID Generator
+            </button>
+          )}
           <button
             onClick={handleExportCSV}
             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -466,15 +507,32 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
             <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
             Export CSV
           </button>
-          <button
-            onClick={handleOpenAdd}
-            className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4 text-amber-300" />
-            Enroll New Student
-          </button>
+          {!isTeacher && (
+            <button
+              onClick={handleOpenAdd}
+              className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4 text-amber-300" />
+              Enroll New Student
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Scope Banner if Teacher */}
+      {isTeacher && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs px-4 py-2.5 rounded-xl flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-emerald-700 shrink-0" />
+            <span>
+              Teacher Class Scope: <strong className="font-bold">{teacherAllowedClasses.map((c) => c.name).join(', ') || 'My Assigned Class'}</strong> • Viewing pupils belonging to your designated class roster.
+            </span>
+          </div>
+          <span className="bg-emerald-200/70 text-emerald-900 text-[10px] font-extrabold px-2 py-0.5 rounded uppercase">
+            Teacher Access
+          </span>
+        </div>
+      )}
 
       {syncFeedback && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs px-4 py-2.5 rounded-xl flex items-center justify-between animate-fadeIn shadow-2xs">
@@ -554,13 +612,15 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleOpenReassignBulk}
-              className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-transform active:scale-95"
-            >
-              <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-950" />
-              Push / Move to Class...
-            </button>
+            {!isTeacher && (
+              <button
+                onClick={handleOpenReassignBulk}
+                className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-transform active:scale-95"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-950" />
+                Push / Move to Class...
+              </button>
+            )}
             <button
               onClick={() => setSelectedStudentIds([])}
               className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl cursor-pointer"
@@ -723,23 +783,27 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                   {/* 7. Action */}
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => handleOpenReassignSingle(std)}
-                        className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-950 font-bold transition-colors"
-                        title="Push to Class (Move & correct teacher view)"
-                      >
-                        <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-800" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedIdCardStudent(std);
-                          setIsIdGeneratorOpen(true);
-                        }}
-                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                        title="Generate Digital ID Card"
-                      >
-                        <CreditCard className="w-3.5 h-3.5" />
-                      </button>
+                      {!isTeacher && (
+                        <button
+                          onClick={() => handleOpenReassignSingle(std)}
+                          className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-950 font-bold transition-colors"
+                          title="Push to Class (Move & correct teacher view)"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-800" />
+                        </button>
+                      )}
+                      {!isTeacher && (
+                        <button
+                          onClick={() => {
+                            setSelectedIdCardStudent(std);
+                            setIsIdGeneratorOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                          title="Generate Digital ID Card"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           window.open(
@@ -766,17 +830,19 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`Are you sure you want to delete ${std.firstName} ${std.lastName}?`)) {
-                            deleteStudent(std.id);
-                          }
-                        }}
-                        className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 transition-colors"
-                        title="Delete Student"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {!isTeacher && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to delete ${std.firstName} ${std.lastName}?`)) {
+                              deleteStudent(std.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 transition-colors"
+                          title="Delete Student"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -1062,17 +1128,19 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
 
               {/* Footer action buttons */}
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 flex-wrap">
-                <button
-                  onClick={() => {
-                    const std = activeStudentProfile;
-                    setSelectedIdCardStudent(std);
-                    setIsIdGeneratorOpen(true);
-                  }}
-                  className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <CreditCard className="w-4 h-4 text-amber-300" />
-                  Generate Digital ID Card
-                </button>
+                {!isTeacher && (
+                  <button
+                    onClick={() => {
+                      const std = activeStudentProfile;
+                      setSelectedIdCardStudent(std);
+                      setIsIdGeneratorOpen(true);
+                    }}
+                    className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <CreditCard className="w-4 h-4 text-amber-300" />
+                    Generate Digital ID Card
+                  </button>
+                )}
                 {onOpenPaystackForStudent && !isTeacher && (
                   <button
                     onClick={() => {
@@ -1099,7 +1167,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       )}
 
       {/* Add / Edit Student Modal */}
-      {isAddModalOpen && (
+      {isAddModalOpen && (!isTeacher || editingStudent) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
@@ -1439,7 +1507,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       {/* ============================================================= */}
       {/* PUSH / REASSIGN STUDENTS TO CLASS MODAL */}
       {/* ============================================================= */}
-      {isReassignModalOpen && (
+      {!isTeacher && isReassignModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             <div className="bg-emerald-900 text-white p-5 flex items-center justify-between">
@@ -1550,7 +1618,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       )}
 
       {/* Digital ID Card Generator Modal */}
-      {isIdGeneratorOpen && (
+      {!isTeacher && isIdGeneratorOpen && (
         <DigitalIdCardGenerator
           isOpen={isIdGeneratorOpen}
           initialStudent={selectedIdCardStudent}

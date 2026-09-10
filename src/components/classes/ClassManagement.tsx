@@ -23,8 +23,10 @@ import {
   AlertTriangle,
   ArrowRight,
   UserPlus,
-  Grid
+  Grid,
+  Shield
 } from 'lucide-react';
+import { getAllowedClassesForTeacher, normalizeClassKey } from '../../utils/classAccess';
 
 export const ClassManagement: React.FC = () => {
   const {
@@ -38,7 +40,9 @@ export const ClassManagement: React.FC = () => {
     staff,
     setActiveTab,
     academicYear,
-    setSelectedTimetableClass
+    setSelectedTimetableClass,
+    currentUser,
+    activeRole
   } = useSchool();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -95,7 +99,21 @@ export const ClassManagement: React.FC = () => {
     (s) => s.role === 'Teacher' || s.department.toLowerCase().includes('academic') || s.designation.toLowerCase().includes('teacher')
   );
 
-  const filteredClasses = classes.filter((cls) => {
+  const isTeacher = activeRole === 'Teacher' || currentUser?.role === 'Teacher';
+
+  // Teacher class access resolution: "Remove the class from teachers portal and give them the class they only teach."
+  const teacherAllowedClasses = React.useMemo(() => {
+    return getAllowedClassesForTeacher(currentUser, classes, !isTeacher);
+  }, [currentUser, classes, isTeacher]);
+
+  const scopedClasses = React.useMemo(() => {
+    if (isTeacher) {
+      return teacherAllowedClasses;
+    }
+    return classes;
+  }, [isTeacher, teacherAllowedClasses, classes]);
+
+  const filteredClasses = scopedClasses.filter((cls) => {
     const matchesSearch =
       cls.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (cls.classTeacher && cls.classTeacher.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -109,10 +127,12 @@ export const ClassManagement: React.FC = () => {
     return matchesSearch && matchesLevel;
   });
 
-  const totalCapacity = classes.reduce((sum, c) => sum + (Number(c.capacity) || 0), 0);
-  const totalEnrolled = students.length;
-  const totalTeachersAssigned = classes.filter((c) => c.classTeacher && c.classTeacher.trim() !== '').length;
-  const teacherCoverageRate = classes.length > 0 ? Math.round((totalTeachersAssigned / classes.length) * 100) : 0;
+  const totalCapacity = scopedClasses.reduce((sum, c) => sum + (Number(c.capacity) || 0), 0);
+  const totalEnrolled = students.filter((s) =>
+    !isTeacher || scopedClasses.some((c) => normalizeClassKey(c.name) === normalizeClassKey(s.className) || c.id === s.classId)
+  ).length;
+  const totalTeachersAssigned = scopedClasses.filter((c) => c.classTeacher && c.classTeacher.trim() !== '').length;
+  const teacherCoverageRate = scopedClasses.length > 0 ? Math.round((totalTeachersAssigned / scopedClasses.length) * 100) : 0;
   const occupancyPercentage = totalCapacity > 0 ? Math.round((totalEnrolled / totalCapacity) * 100) : 0;
 
   // Level subject suggestions
@@ -134,6 +154,7 @@ export const ClassManagement: React.FC = () => {
 
   const handleCreateClass = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isTeacher) return;
     if (!formData.name.trim()) return;
 
     const teacherToAssign = formData.classTeacher === '__custom__' ? customTeacherName.trim() : formData.classTeacher.trim();
@@ -170,6 +191,7 @@ export const ClassManagement: React.FC = () => {
 
   const handleUpdateClass = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isTeacher) return;
     if (!editingClass) return;
 
     const teacherToAssign = editingClass.classTeacher === '__custom__' ? customTeacherName.trim() : editingClass.classTeacher;
@@ -186,6 +208,7 @@ export const ClassManagement: React.FC = () => {
   };
 
   const handleDeleteClassConfirm = (id: string, name: string) => {
+    if (isTeacher) return;
     if (window.confirm(`Are you sure you want to delete "${name}"? This action will remove the class record.`)) {
       deleteClass(id);
       showToast(`Class "${name}" has been removed from the system.`);
@@ -195,7 +218,7 @@ export const ClassManagement: React.FC = () => {
   // Open Desk Capacity Modal
   const openDeskCapacityModal = () => {
     const caps: Record<string, number> = {};
-    classes.forEach((c) => {
+    scopedClasses.forEach((c) => {
       caps[c.id] = c.capacity;
     });
     setBulkCapacities(caps);
@@ -205,14 +228,16 @@ export const ClassManagement: React.FC = () => {
   // Save All Desk Capacities
   const handleSaveBulkCapacities = () => {
     Object.entries(bulkCapacities).forEach(([classId, cap]) => {
+      if (isTeacher && !scopedClasses.some(c => c.id === classId)) return;
       updateClassCapacity(classId, Number(cap) || 30);
     });
-    showToast(`Successfully updated desk capacities across all active classes.`);
+    showToast(isTeacher ? `Successfully updated desk capacity for your assigned class.` : `Successfully updated desk capacities across all active classes.`);
     setIsDeskCapacityModalOpen(false);
   };
 
   // Apply Universal Desk Capacity
   const handleApplyUniversalCapacity = () => {
+    if (isTeacher) return;
     const val = Number(universalCapacity) || 35;
     const updated: Record<string, number> = {};
     classes.forEach((c) => {
@@ -224,6 +249,7 @@ export const ClassManagement: React.FC = () => {
 
   // Save Single Inline Capacity
   const handleSaveInlineCapacity = (classId: string) => {
+    if (isTeacher && !scopedClasses.some(c => c.id === classId)) return;
     updateClassCapacity(classId, Number(inlineCapacityVal) || 30);
     setInlineEditingClassId(null);
     showToast(`Desk capacity updated to ${inlineCapacityVal}.`);
@@ -231,6 +257,7 @@ export const ClassManagement: React.FC = () => {
 
   // Open Assign Teacher Modal for a single class
   const openAssignTeacherModal = (cls: ClassRoom) => {
+    if (isTeacher) return;
     setTargetClassForTeacher(cls);
     setSelectedTeacherForClass(cls.classTeacher || '');
     setCustomTeacherName('');
@@ -239,7 +266,7 @@ export const ClassManagement: React.FC = () => {
 
   // Confirm Single Teacher Assignment
   const handleConfirmTeacherAssignment = () => {
-    if (!targetClassForTeacher) return;
+    if (isTeacher || !targetClassForTeacher) return;
     const teacherName = selectedTeacherForClass === '__custom__' ? customTeacherName.trim() : selectedTeacherForClass.trim();
     assignClassTeacher(targetClassForTeacher.id, teacherName);
     showToast(`Assigned ${teacherName || 'None'} as Class Teacher for ${targetClassForTeacher.name}.`);
@@ -249,6 +276,7 @@ export const ClassManagement: React.FC = () => {
 
   // Open Teacher Matrix Modal
   const openTeacherMatrixModal = () => {
+    if (isTeacher) return;
     const matrix: Record<string, string> = {};
     classes.forEach((c) => {
       matrix[c.id] = c.classTeacher || '';
@@ -259,6 +287,7 @@ export const ClassManagement: React.FC = () => {
 
   // Save Teacher Matrix
   const handleSaveTeacherMatrix = () => {
+    if (isTeacher) return;
     Object.entries(matrixAssignments).forEach(([classId, teacherName]) => {
       assignClassTeacher(classId, String(teacherName || ''));
     });
@@ -290,8 +319,16 @@ export const ClassManagement: React.FC = () => {
               Class & Desk Capacity Management
             </h1>
             <p className="text-xs sm:text-sm text-emerald-100/80 mt-1 max-w-2xl">
-              Configure active classes, adjust total desk capacity & classroom seat allocations, and assign class masters and mistresses.
+              {isTeacher
+                ? 'View your assigned classroom, review student seating, and adjust classroom desk capacity.'
+                : 'Configure active classes, adjust total desk capacity & classroom seat allocations, and assign class masters and mistresses.'}
             </p>
+            {isTeacher && (
+              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-800/80 border border-amber-400/40 text-xs text-amber-200">
+                <Shield className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Teacher Access Scope: Showing only your assigned class and desk capacity controls.</span>
+              </div>
+            )}
           </div>
 
           {/* Top Quick Actions */}
@@ -303,20 +340,24 @@ export const ClassManagement: React.FC = () => {
               <Building className="w-4 h-4 text-amber-300" />
               Adjust Desk Figures
             </button>
-            <button
-              onClick={openTeacherMatrixModal}
-              className="bg-emerald-800 hover:bg-emerald-700 text-white font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-xs border border-emerald-600/80 transition-all cursor-pointer"
-            >
-              <UserCheck className="w-4 h-4 text-amber-300" />
-              Assign Teachers
-            </button>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-amber-400 hover:bg-amber-300 text-emerald-950 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all shrink-0 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Add Class
-            </button>
+            {!isTeacher && (
+              <button
+                onClick={openTeacherMatrixModal}
+                className="bg-emerald-800 hover:bg-emerald-700 text-white font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-xs border border-emerald-600/80 transition-all cursor-pointer"
+              >
+                <UserCheck className="w-4 h-4 text-amber-300" />
+                Assign Teachers
+              </button>
+            )}
+            {!isTeacher && (
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-amber-400 hover:bg-amber-300 text-emerald-950 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all shrink-0 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Add Class
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -332,10 +373,14 @@ export const ClassManagement: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 font-['Outfit']">{classes.length}</span>
-            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">Active Arms</span>
+            <span className="text-2xl font-black text-slate-900 font-['Outfit']">{scopedClasses.length}</span>
+            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+              {isTeacher ? 'Assigned Class' : 'Active Arms'}
+            </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">Preschool, Primary & Junior High</p>
+          <p className="text-[11px] text-slate-400 mt-1">
+            {isTeacher ? 'Designated classroom for your teaching assignment' : 'Preschool, Primary & Junior High'}
+          </p>
         </div>
 
         {/* Total Desk Capacity Card - Interactive with direct edit action */}
@@ -381,31 +426,43 @@ export const ClassManagement: React.FC = () => {
               {occupancyPercentage}% Occupied
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">Across all active classrooms</p>
+          <p className="text-[11px] text-slate-400 mt-1">
+            {isTeacher ? 'Pupils enrolled in your classroom' : 'Across all active classrooms'}
+          </p>
         </div>
 
         {/* Class Masters Assigned */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase">Teachers Assigned</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase">
+              {isTeacher ? 'Classroom Teacher' : 'Teachers Assigned'}
+            </span>
             <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center">
               <UserCheck className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-emerald-800 font-['Outfit']">{totalTeachersAssigned} / {classes.length}</span>
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{teacherCoverageRate}%</span>
+              <span className="text-2xl font-black text-emerald-800 font-['Outfit']">
+                {isTeacher ? totalTeachersAssigned : `${totalTeachersAssigned} / ${classes.length}`}
+              </span>
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                {isTeacher ? 'Designated' : `${teacherCoverageRate}%`}
+              </span>
             </div>
-            <button
-              onClick={openTeacherMatrixModal}
-              className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
-            >
-              Assign &rarr;
-            </button>
+            {!isTeacher && (
+              <button
+                onClick={openTeacherMatrixModal}
+                className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+              >
+                Assign &rarr;
+              </button>
+            )}
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
-            {classes.length - totalTeachersAssigned > 0
+            {isTeacher
+              ? 'Your assigned master/mistress position'
+              : classes.length - totalTeachersAssigned > 0
               ? `${classes.length - totalTeachersAssigned} classes require teacher assignment`
               : 'All classes have assigned class teachers'}
           </p>
@@ -454,15 +511,19 @@ export const ClassManagement: React.FC = () => {
             </div>
             <h3 className="font-bold text-sm text-slate-800">No Classes Found</h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              No active classes match your current search or level filter. Click below to add a new class to the system.
+              {isTeacher
+                ? 'No assigned class found matching your search. If you believe this is an error, contact your school administrator.'
+                : 'No active classes match your current search or level filter. Click below to add a new class to the system.'}
             </p>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="inline-flex items-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Add First Class
-            </button>
+            {!isTeacher && (
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="inline-flex items-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Add First Class
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -492,25 +553,27 @@ export const ClassManagement: React.FC = () => {
                           {cls.name}
                         </h3>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => {
-                            setEditingClass({ ...cls });
-                            setIsEditModalOpen(true);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                          title="Edit Class Details"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClassConfirm(cls.id, cls.name)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                          title="Delete Class"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {!isTeacher && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setEditingClass({ ...cls });
+                              setIsEditModalOpen(true);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                            title="Edit Class Details"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClassConfirm(cls.id, cls.name)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Delete Class"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Class Details & Teacher Assignment */}
@@ -526,12 +589,14 @@ export const ClassManagement: React.FC = () => {
                             </span>
                           </div>
                         </div>
-                        <button
-                          onClick={() => openAssignTeacherModal(cls)}
-                          className="px-2 py-1 rounded-lg bg-white hover:bg-emerald-900 hover:text-white border border-slate-200 text-slate-700 font-bold text-[10px] transition-all shrink-0 cursor-pointer shadow-2xs"
-                        >
-                          {hasTeacher ? 'Change' : 'Assign'}
-                        </button>
+                        {!isTeacher && (
+                          <button
+                            onClick={() => openAssignTeacherModal(cls)}
+                            className="px-2 py-1 rounded-lg bg-white hover:bg-emerald-900 hover:text-white border border-slate-200 text-slate-700 font-bold text-[10px] transition-all shrink-0 cursor-pointer shadow-2xs"
+                          >
+                            {hasTeacher ? 'Change' : 'Assign'}
+                          </button>
+                        )}
                       </div>
 
                       {/* Room Number */}
@@ -611,7 +676,7 @@ export const ClassManagement: React.FC = () => {
                     </div>
 
                     {/* Card Actions */}
-                    <div className="grid grid-cols-3 gap-1.5 pt-1">
+                    <div className={`grid ${isTeacher ? 'grid-cols-2' : 'grid-cols-3'} gap-1.5 pt-1`}>
                       <button
                         onClick={() => setSelectedClass(cls)}
                         className="py-1.5 px-2 rounded-xl bg-slate-50 hover:bg-emerald-900 hover:text-white text-slate-700 font-bold text-[11px] transition-all flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
@@ -631,14 +696,16 @@ export const ClassManagement: React.FC = () => {
                         <CalendarDays className="w-3.5 h-3.5" />
                         Timetable
                       </button>
-                      <button
-                        onClick={() => openAssignTeacherModal(cls)}
-                        className="py-1.5 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-800 hover:text-white text-emerald-900 font-bold text-[11px] transition-all flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
-                        title="Assign Class Teacher"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        Teacher
-                      </button>
+                      {!isTeacher && (
+                        <button
+                          onClick={() => openAssignTeacherModal(cls)}
+                          className="py-1.5 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-800 hover:text-white text-emerald-900 font-bold text-[11px] transition-all flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                          title="Assign Class Teacher"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          Teacher
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -651,7 +718,7 @@ export const ClassManagement: React.FC = () => {
       {/* ========================================================================= */}
       {/* 1. MODAL: CREATE NEW CLASS                                               */}
       {/* ========================================================================= */}
-      {isAddModalOpen && (
+      {!isTeacher && isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -812,7 +879,7 @@ export const ClassManagement: React.FC = () => {
       {/* ========================================================================= */}
       {/* 2. MODAL: EDIT CLASS                                                     */}
       {/* ========================================================================= */}
-      {isEditModalOpen && editingClass && (
+      {!isTeacher && isEditModalOpen && editingClass && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -955,10 +1022,12 @@ export const ClassManagement: React.FC = () => {
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Building className="w-5 h-5 text-emerald-800" />
-                  Active Classes Desk Capacity Manager
+                  {isTeacher ? 'Classroom Desk Capacity Adjustment' : 'Active Classes Desk Capacity Manager'}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Enter desk capacity figures for each active classroom and adjust total school seating threshold
+                  {isTeacher
+                    ? 'Adjust the desk capacity figure for your designated classroom'
+                    : 'Enter desk capacity figures for each active classroom and adjust total school seating threshold'}
                 </p>
               </div>
               <button
@@ -969,29 +1038,31 @@ export const ClassManagement: React.FC = () => {
               </button>
             </div>
 
-            {/* Quick Universal Desk Setter */}
-            <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200/60 my-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <span className="text-xs font-bold text-emerald-950 block">Set Universal Desk Capacity</span>
-                <span className="text-[11px] text-emerald-800">Quickly apply standard desk count to all {classes.length} active classes</span>
+            {/* Quick Universal Desk Setter - Administrators only */}
+            {!isTeacher && (
+              <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200/60 my-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-emerald-950 block">Set Universal Desk Capacity</span>
+                  <span className="text-[11px] text-emerald-800">Quickly apply standard desk count to all {classes.length} active classes</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="150"
+                    value={universalCapacity}
+                    onChange={(e) => setUniversalCapacity(Math.max(1, parseInt(e.target.value) || 0))}
+                    className="w-20 bg-white border border-emerald-300 rounded-xl px-3 py-1.5 text-xs font-bold text-emerald-950 text-center"
+                  />
+                  <button
+                    onClick={handleApplyUniversalCapacity}
+                    className="px-3 py-1.5 bg-emerald-900 hover:bg-emerald-950 text-white rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    Apply to All
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min="1"
-                  max="150"
-                  value={universalCapacity}
-                  onChange={(e) => setUniversalCapacity(Math.max(1, parseInt(e.target.value) || 0))}
-                  className="w-20 bg-white border border-emerald-300 rounded-xl px-3 py-1.5 text-xs font-bold text-emerald-950 text-center"
-                />
-                <button
-                  onClick={handleApplyUniversalCapacity}
-                  className="px-3 py-1.5 bg-emerald-900 hover:bg-emerald-950 text-white rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
-                >
-                  Apply to All
-                </button>
-              </div>
-            </div>
+            )}
 
             {/* Active Classes Desk Figures Table */}
             <div className="overflow-y-auto flex-1 space-y-2 pr-1">
@@ -1005,7 +1076,7 @@ export const ClassManagement: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {classes.map((cls) => {
+                  {scopedClasses.map((cls) => {
                     const currentVal = bulkCapacities[cls.id] ?? cls.capacity;
                     const enrolled = students.filter((s) => s.className?.toLowerCase().includes(cls.name.toLowerCase()) || s.classId === cls.id).length;
 
@@ -1094,7 +1165,7 @@ export const ClassManagement: React.FC = () => {
       {/* ========================================================================= */}
       {/* 4. MODAL: ASSIGN TEACHER TO A SINGLE CLASS                               */}
       {/* ========================================================================= */}
-      {isAssignTeacherModalOpen && targetClassForTeacher && (
+      {!isTeacher && isAssignTeacherModalOpen && targetClassForTeacher && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -1194,7 +1265,7 @@ export const ClassManagement: React.FC = () => {
       {/* ========================================================================= */}
       {/* 5. MODAL: TEACHER ASSIGNMENT MATRIX (BULK ASSIGN)                         */}
       {/* ========================================================================= */}
-      {isTeacherMatrixModalOpen && (
+      {!isTeacher && isTeacherMatrixModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 max-w-3xl w-full shadow-2xl border border-slate-200 max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
