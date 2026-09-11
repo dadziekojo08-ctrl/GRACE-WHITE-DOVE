@@ -3,6 +3,7 @@ import { useSchool } from '../../context/SchoolContext';
 import { SchoolLogo } from '../common/SchoolLogo';
 import { printReportSheet } from '../../utils/printUtils';
 import { Student } from '../../types';
+import { QuickPhotoUploadModal } from './QuickPhotoUploadModal';
 import {
   CreditCard,
   Printer,
@@ -27,11 +28,14 @@ import {
   School,
   FileSpreadsheet,
   Download,
-  AlertCircle
+  AlertCircle,
+  Camera
 } from 'lucide-react';
 
 interface DigitalIdCardGeneratorProps {
   initialStudent?: Student | null;
+  initialClass?: string;
+  initialMode?: 'single' | 'batch';
   isOpen: boolean;
   onClose: () => void;
 }
@@ -42,26 +46,31 @@ type CardSide = 'front' | 'back' | 'both';
 
 export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
   initialStudent,
+  initialClass,
+  initialMode = 'single',
   isOpen,
   onClose
 }) => {
   const { students, classes, academicYear, currentTerm } = useSchool();
 
   // Mode: Single student card or Bulk class sheet
-  const [activeMode, setActiveMode] = useState<'single' | 'batch'>('single');
+  const [activeMode, setActiveMode] = useState<'single' | 'batch'>(initialMode);
 
   // Currently selected student in single mode
   const [selectedStudentId, setSelectedStudentId] = useState<string>(
     initialStudent ? initialStudent.id : (students[0]?.id || '')
   );
 
+  // Quick Photo upload state
+  const [quickPhotoStudent, setQuickPhotoStudent] = useState<Student | null>(null);
+
   // Filter in single mode student picker
   const [studentSearch, setStudentSearch] = useState('');
-  const [classFilter, setClassFilter] = useState('all');
+  const [classFilter, setClassFilter] = useState(initialClass || 'all');
 
   // Batch mode class selector and selected students set
   const [batchClass, setBatchClass] = useState<string>(
-    initialStudent ? initialStudent.className : (classes[0]?.name || 'Primary 1 (Grade 1)')
+    initialStudent ? initialStudent.className : (initialClass || classes[0]?.name || 'Primary 1 (Grade 1)')
   );
   const [selectedBatchStudentIds, setSelectedBatchStudentIds] = useState<string[]>([]);
 
@@ -869,8 +878,22 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
                   )}
                 </div>
 
+                {/* Update Photo for ID Card Action */}
+                {activeStudent && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuickPhotoStudent(activeStudent)}
+                      className="px-3.5 py-1.5 bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 hover:border-emerald-500 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-emerald-700" />
+                      Upload / Change Student Photo
+                    </button>
+                  </div>
+                )}
+
                 {/* Print Hint */}
-                <span className="text-[11px] text-slate-500 mt-4 flex items-center gap-1 font-medium">
+                <span className="text-[11px] text-slate-500 mt-2 flex items-center gap-1 font-medium">
                   <Shield className="w-3.5 h-3.5 text-emerald-800" />
                   Precision 300 DPI layout compliant with CR80 ID standard badge holders & PVC laminators.
                 </span>
@@ -1174,6 +1197,15 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
             </div>
           )}
         </div>
+
+        {/* Quick Photo Upload Modal from ID Card Generator */}
+        {quickPhotoStudent && (
+          <QuickPhotoUploadModal
+            student={quickPhotoStudent}
+            isOpen={!!quickPhotoStudent}
+            onClose={() => setQuickPhotoStudent(null)}
+          />
+        )}
       </div>
     </div>
   );

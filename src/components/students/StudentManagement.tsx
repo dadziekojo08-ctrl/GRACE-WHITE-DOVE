@@ -35,11 +35,14 @@ import {
   Layers,
   ShieldCheck,
   CheckSquare,
-  Square
+  Square,
+  Camera
 } from 'lucide-react';
 import { DigitalIdCardGenerator } from './DigitalIdCardGenerator';
 import { AcademicProgressChart } from '../academic/AcademicProgressChart';
 import { getAllowedClassesForTeacher, normalizeClassKey } from '../../utils/classAccess';
+import { StudentPhotoUpload } from './StudentPhotoUpload';
+import { QuickPhotoUploadModal } from './QuickPhotoUploadModal';
 
 export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: Student) => void }> = ({
   onOpenPaystackForStudent
@@ -109,6 +112,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
   // Digital ID Card Generator State
   const [isIdGeneratorOpen, setIsIdGeneratorOpen] = useState<boolean>(false);
   const [selectedIdCardStudent, setSelectedIdCardStudent] = useState<Student | null>(null);
+  const [quickPhotoStudent, setQuickPhotoStudent] = useState<Student | null>(null);
 
   // Form State
   const [formData, setFormData] = useState<{
@@ -192,9 +196,10 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
   };
 
   const handleOpenAdd = () => {
-    if (isTeacher) return; // Teachers should not have access to enroll new students
     setEditingStudent(null);
-    const initialClass = classes[0]?.name || 'Primary 1 (Grade 1)';
+    const initialClass = (isTeacher && teacherAllowedClasses.length > 0)
+      ? teacherAllowedClasses[0].name
+      : (classes[0]?.name || 'Primary 1 (Grade 1)');
     const suggested = suggestTeacherForClass(initialClass);
     setFormData({
       admissionNo: '',
@@ -203,7 +208,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       gender: 'Male',
       dateOfBirth: '',
       className: initialClass,
-      classTeacher: suggested ? suggested.teacherName : '',
+      classTeacher: suggested ? suggested.teacherName : (isTeacher ? (currentUser?.name || '') : ''),
       enrollmentDate: new Date().toISOString().split('T')[0],
       section: 'A',
       rollNo: '',
@@ -281,7 +286,6 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       });
       setEditingStudent(null);
     } else {
-      if (isTeacher) return; // Teachers should not have access to enroll new students
       addStudent({
         admissionNo: formData.admissionNo.trim() || undefined,
         firstName: formData.firstName,
@@ -290,7 +294,7 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
         dateOfBirth: formData.dateOfBirth,
         classId: `cls-${formData.className.toLowerCase().replace(/\s+/g, '-')}`,
         className: formData.className,
-        classTeacher: formData.classTeacher,
+        classTeacher: formData.classTeacher || (isTeacher ? (currentUser?.name || '') : ''),
         enrollmentDate: formData.enrollmentDate,
         section: formData.section,
         rollNo: formData.rollNo,
@@ -487,19 +491,17 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
               Auto-Sync Teachers
             </button>
           )}
-          {!isTeacher && (
-            <button
-              onClick={() => {
-                setSelectedIdCardStudent(null);
-                setIsIdGeneratorOpen(true);
-              }}
-              className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-              title="Open Digital ID Card Generator for single student or bulk class batch"
-            >
-              <CreditCard className="w-4 h-4 text-amber-600" />
-              Digital ID Generator
-            </button>
-          )}
+          <button
+            onClick={() => {
+              setSelectedIdCardStudent(null);
+              setIsIdGeneratorOpen(true);
+            }}
+            className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+            title="Open Digital ID Card Generator for single student or bulk class batch"
+          >
+            <CreditCard className="w-4 h-4 text-amber-600" />
+            Digital ID Generator
+          </button>
           <button
             onClick={handleExportCSV}
             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -507,15 +509,13 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
             <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
             Export CSV
           </button>
-          {!isTeacher && (
-            <button
-              onClick={handleOpenAdd}
-              className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-            >
-              <UserPlus className="w-4 h-4 text-amber-300" />
-              Enroll New Student
-            </button>
-          )}
+          <button
+            onClick={handleOpenAdd}
+            className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4 text-amber-300" />
+            Enroll New Student
+          </button>
         </div>
       </div>
 
@@ -683,12 +683,21 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                   {/* 1. Student Name */}
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={std.photoUrl}
-                        alt={std.firstName}
-                        className="w-9 h-9 rounded-full object-cover ring-2 ring-emerald-600/20"
-                        referrerPolicy="no-referrer"
-                      />
+                      <div
+                        className="relative group/avatar cursor-pointer shrink-0"
+                        onClick={() => setQuickPhotoStudent(std)}
+                        title="Upload/change ID card photo"
+                      >
+                        <img
+                          src={std.photoUrl}
+                          alt={std.firstName}
+                          className="w-9 h-9 rounded-full object-cover ring-2 ring-emerald-600/20 group-hover/avatar:ring-emerald-700 transition-all"
+                          referrerPolicy="no-referrer"
+                        />
+                        <span className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center text-white opacity-0 group-hover/avatar:opacity-100 transition-opacity">
+                          <Camera className="w-4 h-4" />
+                        </span>
+                      </div>
                       <div>
                         <span className="font-bold text-slate-900 block group-hover:text-emerald-900">
                           {std.firstName} {std.lastName}
@@ -792,18 +801,23 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                           <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-800" />
                         </button>
                       )}
-                      {!isTeacher && (
-                        <button
-                          onClick={() => {
-                            setSelectedIdCardStudent(std);
-                            setIsIdGeneratorOpen(true);
-                          }}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                          title="Generate Digital ID Card"
-                        >
-                          <CreditCard className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setQuickPhotoStudent(std)}
+                        className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 transition-colors cursor-pointer"
+                        title="Upload/Capture Student Photo (for ID Card)"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-emerald-700" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedIdCardStudent(std);
+                          setIsIdGeneratorOpen(true);
+                        }}
+                        className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-colors cursor-pointer"
+                        title="Generate & Print Digital ID Card"
+                      >
+                        <CreditCard className="w-3.5 h-3.5 text-amber-700" />
+                      </button>
                       <button
                         onClick={() => {
                           window.open(
@@ -867,13 +881,22 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
               </button>
 
               <div className="flex items-center gap-4">
-                <img
-                  src={activeStudentProfile.photoUrl}
-                  alt={activeStudentProfile.firstName}
-                  className="w-16 h-16 rounded-2xl object-cover ring-4 ring-amber-400"
-                  referrerPolicy="no-referrer"
-                />
-                <div>
+                <div
+                  className="relative group/profphoto cursor-pointer shrink-0"
+                  onClick={() => setQuickPhotoStudent(activeStudentProfile)}
+                  title="Click to change or capture ID card photo"
+                >
+                  <img
+                    src={activeStudentProfile.photoUrl}
+                    alt={activeStudentProfile.firstName}
+                    className="w-16 h-16 rounded-2xl object-cover ring-4 ring-amber-400 group-hover/profphoto:ring-white transition-all"
+                    referrerPolicy="no-referrer"
+                  />
+                  <span className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center text-white opacity-0 group-hover/profphoto:opacity-100 transition-opacity">
+                    <Camera className="w-5 h-5" />
+                  </span>
+                </div>
+                <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="text-xl font-bold text-white font-['Outfit']">
                       {activeStudentProfile.firstName} {activeStudentProfile.lastName}
@@ -885,6 +908,27 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
                   <p className="text-xs text-emerald-200">
                     {activeStudentProfile.admissionNo} • {activeStudentProfile.className} (Sec {activeStudentProfile.section})
                   </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuickPhotoStudent(activeStudentProfile)}
+                      className="text-[11px] font-bold bg-white/15 hover:bg-white/25 text-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-amber-300" />
+                      Update ID Photo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedIdCardStudent(activeStudentProfile);
+                        setIsIdGeneratorOpen(true);
+                      }}
+                      className="text-[11px] font-bold bg-amber-400 hover:bg-amber-300 text-emerald-950 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <CreditCard className="w-3.5 h-3.5" />
+                      Digital ID Card
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1186,6 +1230,17 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
             </div>
 
             <form onSubmit={handleSaveStudent} className="p-6 space-y-4 text-xs">
+              {/* Student Passport Photo Upload */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <StudentPhotoUpload
+                  currentPhotoUrl={formData.photoUrl}
+                  studentName={`${formData.firstName} ${formData.lastName}`.trim() || 'Pupil'}
+                  onPhotoChange={(url) => setFormData((prev) => ({ ...prev, photoUrl: url }))}
+                  label="Student Passport Photo (for ID Card Printing)"
+                  helperText="Upload or snap pupil photo with device camera. Formatted to high-resolution badge standards."
+                />
+              </div>
+
               <div className="bg-emerald-50/70 p-3.5 rounded-xl border border-emerald-200">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="font-bold text-emerald-950 flex items-center gap-1.5">
@@ -1618,13 +1673,27 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
       )}
 
       {/* Digital ID Card Generator Modal */}
-      {!isTeacher && isIdGeneratorOpen && (
+      {isIdGeneratorOpen && (
         <DigitalIdCardGenerator
           isOpen={isIdGeneratorOpen}
           initialStudent={selectedIdCardStudent}
+          initialClass={isTeacher && teacherAllowedClasses[0] ? teacherAllowedClasses[0].name : undefined}
           onClose={() => {
             setIsIdGeneratorOpen(false);
             setSelectedIdCardStudent(null);
+          }}
+        />
+      )}
+
+      {/* Quick Photo Upload Modal */}
+      {quickPhotoStudent && (
+        <QuickPhotoUploadModal
+          student={quickPhotoStudent}
+          isOpen={!!quickPhotoStudent}
+          onClose={() => setQuickPhotoStudent(null)}
+          onOpenIdCard={(std) => {
+            setSelectedIdCardStudent(std);
+            setIsIdGeneratorOpen(true);
           }}
         />
       )}

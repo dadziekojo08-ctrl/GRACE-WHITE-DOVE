@@ -52,6 +52,18 @@ export const POPULAR_GHANA_SUBJECTS = [
 ];
 
 /**
+ * Normalize time string to strictly 2-digit HH:mm format (e.g. "8:00" -> "08:00")
+ */
+export function normalizeTimeString(timeStr: string): string {
+  if (!timeStr) return '08:00';
+  const match = timeStr.trim().match(/(\d{1,2}):(\d{2})/);
+  if (!match) return '08:00';
+  const h = match[1].padStart(2, '0');
+  const m = match[2];
+  return `${h}:${m}`;
+}
+
+/**
  * Parse a string slot like "08:00 - 08:50" or "8:00 AM - 8:50 AM" into standard 24h format
  */
 export function parseTimeSlot(slot: string): ParsedTimeSlot {
@@ -64,20 +76,8 @@ export function parseTimeSlot(slot: string): ParsedTimeSlot {
   let endTime = '08:50';
 
   if (parts.length >= 2) {
-    const rawStart = parts[0];
-    const rawEnd = parts[1];
-
-    // Extract HH:mm from raw start
-    const startMatch = rawStart.match(/(\d{1,2}):(\d{2})/);
-    if (startMatch) {
-      startTime = `${startMatch[1].padStart(2, '0')}:${startMatch[2]}`;
-    }
-
-    // Extract HH:mm from raw end
-    const endMatch = rawEnd.match(/(\d{1,2}):(\d{2})/);
-    if (endMatch) {
-      endTime = `${endMatch[1].padStart(2, '0')}:${endMatch[2]}`;
-    }
+    startTime = normalizeTimeString(parts[0]);
+    endTime = normalizeTimeString(parts[1]);
   }
 
   const durationMinutes = calculateDurationMinutes(startTime, endTime);
@@ -118,8 +118,8 @@ export function addMinutesToTime(timeStr: string, minutes: number): string {
  * Format start and end time into standard slot string "08:00 - 08:50"
  */
 export function formatTimeSlot(startTime: string, endTime: string): string {
-  const cleanStart = (startTime || '08:00').trim();
-  const cleanEnd = (endTime || '08:50').trim();
+  const cleanStart = normalizeTimeString(startTime || '08:00');
+  const cleanEnd = normalizeTimeString(endTime || '08:50');
   return `${cleanStart} - ${cleanEnd}`;
 }
 
