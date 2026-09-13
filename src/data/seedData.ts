@@ -75,6 +75,22 @@ export const initialTimetable: TimetableEntry[] = [];
 // ==========================================
 export const initialStaff: StaffMember[] = [
   {
+    id: 'stf-000',
+    staffCode: 'STF-SAD-01',
+    name: 'Bernard Dadzie',
+    role: 'Super Admin',
+    isSuperAdmin: true,
+    department: 'Executive Administration (BenDaz IT Consult)',
+    email: 'dadziebernard@gmail.com',
+    phone: '+233 24 000 1122',
+    designation: 'Executive Director & Super Admin',
+    basicSalary: 9500,
+    joinedDate: '2023-01-01',
+    status: 'Active',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    qualification: 'M.Sc. Information Technology & Software Systems'
+  },
+  {
     id: 'stf-001',
     staffCode: 'STF-ADM-01',
     name: 'Diana Adu-Boahen',
@@ -221,6 +237,20 @@ export const initialAuditLogs: AuditLog[] = [
 // 15. AUTHENTICATION & USERS
 // ==========================================
 export const initialAuthUsers: AuthUser[] = [
+  {
+    id: 'usr-super-admin-01',
+    name: 'Bernard Dadzie',
+    username: 'bernard',
+    password: 'bendaz',
+    email: 'dadziebernard@gmail.com',
+    role: 'Super Admin',
+    isSuperAdmin: true,
+    designation: 'Executive Director & Super Admin (BenDaz IT Consult)',
+    phone: '+233 24 000 1122',
+    staffCode: 'STF-SAD-01',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    lastLogin: new Date().toISOString()
+  },
   {
     id: 'usr-admin-01',
     name: 'Diana Adu-Boahen',

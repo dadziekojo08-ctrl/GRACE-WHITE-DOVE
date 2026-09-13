@@ -68,7 +68,8 @@ export const StudentManagement: React.FC<{ onOpenPaystackForStudent?: (student: 
     bulkReassignStudentsClass
   } = useSchool();
 
-  const isTeacher = activeRole === 'Teacher' || currentUser?.role === 'Teacher';
+  const isSuperAdmin = activeRole === 'Super Admin' || currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin;
+  const isTeacher = !isSuperAdmin && (activeRole === 'Teacher' || currentUser?.role === 'Teacher');
 
   // Teacher class access resolution: "Remove the class from teachers portal and give them the class they only teach."
   const teacherAllowedClasses = React.useMemo(() => {

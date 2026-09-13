@@ -12,11 +12,12 @@ import {
   AlertTriangle,
   RotateCcw,
   UserCheck,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 
 export const LibraryManagement: React.FC = () => {
-  const { books, addBook, updateBook, bookIssues, issueBook, returnBook, students, staff } = useSchool();
+  const { books, addBook, updateBook, deleteBook, bookIssues, issueBook, returnBook, students, staff } = useSchool();
 
   const [activeTab, setActiveTab] = useState<'catalog' | 'issued'>('catalog');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -190,17 +191,29 @@ export const LibraryManagement: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100">
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2">
                   <button
                     onClick={() => {
                       setTargetBookToIssue(bk);
                       setIsIssueModalOpen(true);
                     }}
                     disabled={bk.copiesAvailable <= 0}
-                    className="w-full py-2 bg-emerald-800 hover:bg-emerald-900 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    className="flex-1 py-2 bg-emerald-800 hover:bg-emerald-900 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <UserCheck className="w-3.5 h-3.5" />
                     Issue Book
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to delete "${bk.title}" from the library inventory?`)) {
+                        deleteBook(bk.id);
+                      }
+                    }}
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-700 transition-colors cursor-pointer"
+                    title="Delete Book"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>

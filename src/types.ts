@@ -1,4 +1,4 @@
-export type Role = 'Admin' | 'Teacher' | 'Accountant' | 'Librarian' | 'Transport' | 'Parent' | 'Driver' | 'System';
+export type Role = 'Super Admin' | 'Admin' | 'Teacher' | 'Accountant' | 'Librarian' | 'Transport' | 'Parent' | 'Driver' | 'System';
 
 export interface AuthUser {
   id: string;
@@ -7,12 +7,14 @@ export interface AuthUser {
   password?: string;
   email: string;
   role: Role;
+  isSuperAdmin?: boolean;
   avatarUrl?: string;
   photoUrl?: string;
   phone?: string;
   staffCode?: string;
   studentId?: string;
   assignedClass?: string;
+  designation?: string;
   lastLogin?: string;
 }
 
@@ -318,13 +320,15 @@ export interface StaffMember {
   name: string;
   email: string;
   phone: string;
-  role: 'Teacher' | 'Admin' | 'Accountant' | 'Librarian' | 'Transport' | 'Driver';
+  role: 'Super Admin' | 'Teacher' | 'Admin' | 'Accountant' | 'Librarian' | 'Transport' | 'Driver';
   department: string;
   designation: string;
   qualification: string;
   joinedDate: string;
   basicSalary: number;
   status: 'Active' | 'On Leave' | 'Terminated';
+  username?: string;
+  isSuperAdmin?: boolean;
   assignedClass?: string;
   photoUrl?: string;
   avatarUrl?: string;

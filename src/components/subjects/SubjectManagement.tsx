@@ -14,11 +14,12 @@ import {
   BarChart,
   UserCheck,
   TrendingUp,
-  Award
+  Award,
+  Trash2
 } from 'lucide-react';
 
 export const SubjectManagement: React.FC = () => {
-  const { subjects, addSubject, updateSubject, classes } = useSchool();
+  const { subjects, addSubject, updateSubject, deleteSubject, classes } = useSchool();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -218,8 +219,22 @@ export const SubjectManagement: React.FC = () => {
                       {subj.name}
                     </h3>
                   </div>
-                  <div className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-emerald-800">
-                    <BookOpen className="w-4 h-4" />
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to delete subject "${subj.name}" (${subj.code})?`)) {
+                          deleteSubject(subj.id);
+                        }
+                      }}
+                      className="p-2 rounded-xl bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-700 transition-colors cursor-pointer"
+                      title="Delete Subject"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <div className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-emerald-800">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
                   </div>
                 </div>
 

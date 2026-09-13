@@ -147,9 +147,10 @@ export const Sidebar: React.FC<{
     }));
   };
 
-  const isTeacherRole = activeRole === 'Teacher';
-  const isParentRole = activeRole === 'Parent';
-  const isAccountantRole = activeRole === 'Accountant';
+  const isSuperAdmin = activeRole === 'Super Admin' || currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin;
+  const isTeacherRole = !isSuperAdmin && activeRole === 'Teacher';
+  const isParentRole = !isSuperAdmin && activeRole === 'Parent';
+  const isAccountantRole = !isSuperAdmin && activeRole === 'Accountant';
   const categories = ['Core Academic', 'Financial & Admin', 'Logistics & Comms', 'System & Reports'] as const;
 
   return (
@@ -169,6 +170,23 @@ export const Sidebar: React.FC<{
       >
         {/* Navigation list */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+          {isSuperAdmin && (
+            <div className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/10 to-transparent border border-amber-400/40 text-amber-200 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-black text-xs text-amber-300 font-['Outfit']">
+                  <span>👑</span>
+                  <span>Super Admin Master</span>
+                </div>
+                <span className="text-[9px] bg-amber-400 text-emerald-950 font-black px-1.5 py-0.2 rounded-full uppercase">
+                  All Depts
+                </span>
+              </div>
+              <p className="text-[10.5px] text-emerald-100/80 mt-1 leading-snug">
+                Unrestricted institutional authority: delete, edit, override & configure all operations.
+              </p>
+            </div>
+          )}
+
           {isParentRole ? (
             /* Parent Portal Menu Layout */
             <div className="space-y-1">

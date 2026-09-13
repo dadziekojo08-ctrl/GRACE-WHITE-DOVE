@@ -54,7 +54,10 @@ export const Header: React.FC<{ onOpenMobileSidebar?: () => void; onOpenPaystack
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [tempPhotoUrl, setTempPhotoUrl] = useState('');
 
-  const roles: Role[] = ['Admin', 'Teacher', 'Accountant', 'Librarian', 'Transport', 'Parent'];
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin || activeRole === 'Super Admin';
+  const roles: Role[] = isSuperAdmin
+    ? ['Super Admin', 'Admin', 'Teacher', 'Accountant', 'Librarian', 'Transport', 'Parent']
+    : ['Admin', 'Teacher', 'Accountant', 'Librarian', 'Transport', 'Parent'];
 
   return (
     <header className="bg-emerald-900 border-b border-emerald-800 text-white sticky top-0 z-30 shadow-md">
@@ -289,7 +292,7 @@ export const Header: React.FC<{ onOpenMobileSidebar?: () => void; onOpenPaystack
                   {currentUser?.name || `${activeRole} User`}
                 </span>
                 <span className="text-[10px] text-amber-300 font-semibold leading-none block">
-                  {activeRole}
+                  {activeRole === 'Super Admin' ? '👑 Super Admin' : activeRole}
                 </span>
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-emerald-300" />
@@ -321,8 +324,12 @@ export const Header: React.FC<{ onOpenMobileSidebar?: () => void; onOpenPaystack
                       <p className="text-[11px] text-slate-500 truncate">
                         {currentUser?.email || `${activeRole.toLowerCase()}@educore.edu.gh`}
                       </p>
-                      <span className="inline-block mt-0.5 text-[9px] font-extrabold uppercase bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
-                        {activeRole}
+                      <span className={`inline-block mt-0.5 text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                        activeRole === 'Super Admin'
+                          ? 'bg-amber-400 text-emerald-950 shadow-xs'
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {activeRole === 'Super Admin' ? '👑 Super Admin' : activeRole}
                       </span>
                     </div>
                   </div>
@@ -347,11 +354,11 @@ export const Header: React.FC<{ onOpenMobileSidebar?: () => void; onOpenPaystack
                   </button>
                 </div>
 
-                {/* Role Switcher in Menu (Only available for Admin accounts) */}
-                {currentUser?.role === 'Admin' ? (
+                {/* Role Switcher in Menu (Available for Admin and Super Admin accounts) */}
+                {currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin ? (
                   <div className="p-2 border-b border-slate-100">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block px-2 pb-1">
-                      Switch Active Role (Admin Control)
+                      {isSuperAdmin ? '👑 Department Master Switch' : 'Switch Active Role (Admin Control)'}
                     </span>
                     <div className="grid grid-cols-2 gap-1">
                       {roles.map((r) => (
@@ -367,7 +374,7 @@ export const Header: React.FC<{ onOpenMobileSidebar?: () => void; onOpenPaystack
                               : 'text-slate-700 hover:bg-slate-100'
                           }`}
                         >
-                          {r}
+                          {r === 'Super Admin' ? '👑 Super Admin' : r}
                         </button>
                       ))}
                     </div>

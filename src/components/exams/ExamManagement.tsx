@@ -22,7 +22,8 @@ import {
   TrendingUp,
   FileText,
   Lock,
-  Shield
+  Shield,
+  Trash2
 } from 'lucide-react';
 import {
   JHS_GRADING_SCHEME,
@@ -46,6 +47,7 @@ export const ExamManagement: React.FC = () => {
   const {
     exams,
     addExam,
+    deleteExam,
     examSchedules,
     marks,
     bulkRecordMarks,
@@ -57,7 +59,8 @@ export const ExamManagement: React.FC = () => {
     classes
   } = useSchool();
 
-  const isAdmin = activeRole === 'Admin' || currentUser?.role === 'Admin';
+  const isSuperAdmin = activeRole === 'Super Admin' || currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin;
+  const isAdmin = isSuperAdmin || activeRole === 'Admin' || currentUser?.role === 'Admin';
   const isTeacher = !isAdmin && (activeRole === 'Teacher' || currentUser?.role === 'Teacher');
 
   // Allowed classes computed strictly based on teacher scope:
@@ -1296,9 +1299,25 @@ export const ExamManagement: React.FC = () => {
                   <h3 className="font-bold text-sm text-slate-900">{sch.subject} Paper</h3>
                   <span className="text-xs text-emerald-700 font-semibold">{sch.className}</span>
                 </div>
-                <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded">
-                  Max Marks: {sch.maxMarks || 100}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded">
+                    Max Marks: {sch.maxMarks || 100}
+                  </span>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to remove the exam paper schedule for ${sch.subject} (${sch.className})?`)) {
+                          deleteExam(sch.id);
+                        }
+                      }}
+                      className="p-1 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-700 transition-colors cursor-pointer"
+                      title="Delete Examination Paper Schedule"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1 text-xs">
                 <div className="flex justify-between text-slate-600">

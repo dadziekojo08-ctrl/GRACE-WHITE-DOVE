@@ -12,11 +12,12 @@ import {
   Clock,
   Compass,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 
 export const TransportManagement: React.FC = () => {
-  const { vehicles, routes, updateVehicle, addRoute } = useSchool();
+  const { vehicles, routes, updateVehicle, addRoute, deleteVehicle, deleteRoute } = useSchool();
 
   const [activeTab, setActiveTab] = useState<'routes' | 'fleet' | 'gps'>('routes');
   const [selectedRoute, setSelectedRoute] = useState<TransportRoute>(routes[0] || {} as TransportRoute);
@@ -100,9 +101,23 @@ export const TransportManagement: React.FC = () => {
                   <h3 className="font-bold text-sm text-slate-900">{rt.routeName}</h3>
                   <span className="text-xs text-emerald-700 font-semibold">{rt.vehicleNo}</span>
                 </div>
-                <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">
-                  {rt.studentsAssigned} Students Assigned
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">
+                    {rt.studentsAssigned} Students Assigned
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to delete route "${rt.routeName}"?`)) {
+                        deleteRoute(rt.id);
+                      }
+                    }}
+                    className="p-1 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-700 transition-colors cursor-pointer"
+                    title="Delete Transport Route"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               {/* Driver & Attendant */}
@@ -160,9 +175,23 @@ export const TransportManagement: React.FC = () => {
                     <p className="text-xs text-slate-500">{vh.vehicleModel || vh.model || 'School Bus'}</p>
                   </div>
                 </div>
-                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  {vh.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    {vh.status}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to delete vehicle "${vh.vehicleNumber}"?`)) {
+                        deleteVehicle(vh.id);
+                      }
+                    }}
+                    className="p-1 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-700 transition-colors cursor-pointer"
+                    title="Delete Vehicle"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs space-y-1.5">

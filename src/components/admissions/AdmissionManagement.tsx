@@ -24,7 +24,8 @@ import {
   GraduationCap,
   Hash,
   Download,
-  BadgeCheck
+  BadgeCheck,
+  Trash2
 } from 'lucide-react';
 
 const ALL_CLASSES = [
@@ -45,7 +46,7 @@ const ALL_CLASSES = [
 ];
 
 export const AdmissionManagement: React.FC = () => {
-  const { admissions, addAdmission, updateAdmissionStatus, generateNextStudentNumber, suggestTeacherForClass } = useSchool();
+  const { admissions, addAdmission, updateAdmissionStatus, deleteAdmission, generateNextStudentNumber, suggestTeacherForClass } = useSchool();
 
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
@@ -401,6 +402,18 @@ export const AdmissionManagement: React.FC = () => {
                         title="View Application Details"
                       >
                         <FileText className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete the admission application for "${adm.applicantName}"?`)) {
+                            deleteAdmission(adm.id);
+                            showToast('Application Deleted', `Admission record for ${adm.applicantName} was removed.`, 'info');
+                          }
+                        }}
+                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-700 transition-colors cursor-pointer"
+                        title="Delete Admission Application"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </td>

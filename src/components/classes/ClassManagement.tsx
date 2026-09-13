@@ -24,9 +24,15 @@ import {
   ArrowRight,
   UserPlus,
   Grid,
-  Shield
+  Shield,
+  Camera,
+  CreditCard,
+  Printer
 } from 'lucide-react';
 import { getAllowedClassesForTeacher, normalizeClassKey } from '../../utils/classAccess';
+import { Student } from '../../types';
+import { QuickPhotoUploadModal } from '../students/QuickPhotoUploadModal';
+import { DigitalIdCardGenerator } from '../students/DigitalIdCardGenerator';
 
 export const ClassManagement: React.FC = () => {
   const {
@@ -57,6 +63,11 @@ export const ClassManagement: React.FC = () => {
   const [selectedClass, setSelectedClass] = useState<ClassRoom | null>(null);
   const [targetClassForTeacher, setTargetClassForTeacher] = useState<ClassRoom | null>(null);
   const [editingClass, setEditingClass] = useState<ClassRoom | null>(null);
+  
+  // Quick Photo & ID Card Generator State for Class Roster
+  const [quickPhotoStudent, setQuickPhotoStudent] = useState<Student | null>(null);
+  const [isIdGeneratorOpen, setIsIdGeneratorOpen] = useState<boolean>(false);
+  const [selectedIdCardStudent, setSelectedIdCardStudent] = useState<Student | null>(null);
   
   // Inline desk capacity editing
   const [inlineEditingClassId, setInlineEditingClassId] = useState<string | null>(null);
@@ -99,7 +110,8 @@ export const ClassManagement: React.FC = () => {
     (s) => s.role === 'Teacher' || s.department.toLowerCase().includes('academic') || s.designation.toLowerCase().includes('teacher')
   );
 
-  const isTeacher = activeRole === 'Teacher' || currentUser?.role === 'Teacher';
+  const isSuperAdmin = activeRole === 'Super Admin' || currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin;
+  const isTeacher = !isSuperAdmin && (activeRole === 'Teacher' || currentUser?.role === 'Teacher');
 
   // Teacher class access resolution: "Remove the class from teachers portal and give them the class they only teach."
   const teacherAllowedClasses = React.useMemo(() => {
@@ -1399,15 +1411,59 @@ export const ClassManagement: React.FC = () => {
                         (s.classId && s.classId === selectedClass.id)
                     )
                     .map((std) => (
-                      <div key={std.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-3">
-                        <img
-                          src={std.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(std.firstName)}`}
-                          alt=""
-                          className="w-9 h-9 rounded-full object-cover bg-slate-200"
-                        />
-                        <div className="text-xs truncate">
-                          <span className="font-bold text-slate-900 block truncate">{std.firstName} {std.lastName}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">Roll #{std.rollNo || '1'} • {std.admissionNo}</span>
+                      <div key={std.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-emerald-300 flex items-center justify-between gap-2 transition-all">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className="relative cursor-pointer shrink-0 group/photo"
+                            onClick={() => setQuickPhotoStudent(std)}
+                            title="Click to snap or upload student ID photo"
+                          >
+                            <img
+                              src={std.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(std.firstName)}`}
+                              alt=""
+                              className="w-10 h-10 rounded-xl object-cover bg-slate-200 border border-slate-300 group-hover/photo:border-emerald-600 transition-colors"
+                            />
+                            <span className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center text-white opacity-0 group-hover/photo:opacity-100 transition-opacity">
+                              <Camera className="w-3.5 h-3.5" />
+                            </span>
+                          </div>
+                          <div className="text-xs truncate">
+                            <span className="font-bold text-slate-900 block truncate">{std.firstName} {std.lastName}</span>
+                            <span className="text-[10px] text-slate-400 font-mono block">Roll #{std.rollNo || '1'} • {std.admissionNo}</span>
+                            {std.photoUrl ? (
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded mt-0.5">
+                                <CheckCircle className="w-2.5 h-2.5" /> Photo on file
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-700 bg-amber-50 px-1 py-0.2 rounded mt-0.5">
+                                No ID Photo
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setQuickPhotoStudent(std)}
+                            className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200/80 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                            title="Upload or snap student photo for ID Card"
+                          >
+                            <Camera className="w-3 h-3 text-emerald-700" />
+                            <span>Photo</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedIdCardStudent(std);
+                              setIsIdGeneratorOpen(true);
+                            }}
+                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                            title="Generate & print student ID Card"
+                          >
+                            <CreditCard className="w-3 h-3 text-amber-700" />
+                            <span>ID Card</span>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1415,18 +1471,32 @@ export const ClassManagement: React.FC = () => {
               )}
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-              <button
-                onClick={() => {
-                  setSelectedTimetableClass(selectedClass.name);
-                  setSelectedClass(null);
-                  setActiveTab('timetable');
-                }}
-                className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-              >
-                <CalendarDays className="w-3.5 h-3.5 text-amber-700" />
-                Administer {selectedClass.name} Timetable
-              </button>
+            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedIdCardStudent(null);
+                    setIsIdGeneratorOpen(true);
+                  }}
+                  className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-emerald-950 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  title="Print all ID Cards for this class"
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>Print Class ID Cards</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedTimetableClass(selectedClass.name);
+                    setSelectedClass(null);
+                    setActiveTab('timetable');
+                  }}
+                  className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <CalendarDays className="w-3.5 h-3.5 text-amber-700" />
+                  Administer {selectedClass.name} Timetable
+                </button>
+              </div>
               <button
                 onClick={() => setSelectedClass(null)}
                 className="px-4 py-2 bg-emerald-900 text-white rounded-xl text-xs font-bold hover:bg-emerald-950 cursor-pointer"
@@ -1436,6 +1506,27 @@ export const ClassManagement: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Quick Photo Upload Modal from Class Roster */}
+      {quickPhotoStudent && (
+        <QuickPhotoUploadModal
+          student={quickPhotoStudent}
+          isOpen={!!quickPhotoStudent}
+          onClose={() => setQuickPhotoStudent(null)}
+        />
+      )}
+
+      {/* Digital ID Card Generator Modal from Class Roster */}
+      {isIdGeneratorOpen && (
+        <DigitalIdCardGenerator
+          initialStudent={selectedIdCardStudent || undefined}
+          initialClass={selectedClass?.name}
+          onClose={() => {
+            setIsIdGeneratorOpen(false);
+            setSelectedIdCardStudent(null);
+          }}
+        />
       )}
     </div>
   );

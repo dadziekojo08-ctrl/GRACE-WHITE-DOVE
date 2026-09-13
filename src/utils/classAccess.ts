@@ -79,7 +79,7 @@ export const getAllowedClassesForTeacher = (
   }
 
   // 1. Admin Override (Full school oversight)
-  if (isAdminOverride || teacher?.role === 'Admin') {
+  if (isAdminOverride || teacher?.role === 'Admin' || teacher?.role === 'Super Admin' || (teacher as any)?.isSuperAdmin) {
     return allClasses;
   }
 

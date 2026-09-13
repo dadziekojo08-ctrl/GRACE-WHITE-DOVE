@@ -124,6 +124,7 @@ interface SchoolContextType {
   subjects: Subject[];
   addSubject: (subj: Omit<Subject, 'id'>) => void;
   updateSubject: (id: string, subj: Partial<Subject>) => void;
+  deleteSubject: (id: string) => void;
 
   // Academic Calendar
   calendarEvents: CalendarEvent[];
@@ -140,11 +141,14 @@ interface SchoolContextType {
   admissions: AdmissionApplication[];
   addAdmission: (admission: Omit<AdmissionApplication, 'id' | 'applicationNo' | 'submissionDate'> & { applicationNo?: string; studentNumber?: string }) => void;
   updateAdmissionStatus: (id: string, status: AdmissionApplication['status'], notes?: string) => void;
+  deleteAdmission: (id: string) => void;
 
   // Attendance
   attendance: AttendanceRecord[];
   markAttendance: (studentId: string, status: AttendanceRecord['status'], remarks?: string) => void;
   bulkMarkAttendance: (records: { studentId: string; status: AttendanceRecord['status']; remarks?: string }[]) => void;
+  deleteAttendanceRecord: (id: string) => void;
+  clearDayAttendance: (date: string, className?: string) => void;
   gateCheckIn: (admissionNoOrRoll: string) => { success: boolean; message: string; student?: Student };
 
   // Fees & Payments
@@ -171,6 +175,7 @@ interface SchoolContextType {
   // Exams, Marks & Grading
   exams: Exam[];
   addExam: (exam: Omit<Exam, 'id'>) => void;
+  deleteExam: (id: string) => void;
   examSchedules: ExamSchedule[];
   addExamSchedule: (schedule: Omit<ExamSchedule, 'id'>) => void;
   marks: MarkEntry[];
@@ -196,6 +201,7 @@ interface SchoolContextType {
   payrolls: PayrollRecord[];
   generateMonthlyPayroll: (month: string, year: number) => void;
   markPayrollPaid: (id: string) => void;
+  deletePayroll: (id: string) => void;
   reimbursements: Reimbursement[];
   addReimbursement: (reimb: Omit<Reimbursement, 'id' | 'dateSubmitted' | 'status'>) => void;
   updateReimbursementStatus: (id: string, status: Reimbursement['status']) => void;
@@ -207,6 +213,7 @@ interface SchoolContextType {
   books: Book[];
   addBook: (book: Omit<Book, 'id'>) => void;
   updateBook: (id: string, book: Partial<Book>) => void;
+  deleteBook: (id: string) => void;
   bookIssues: BookIssue[];
   issueBook: (bookId: string, memberId: string, memberName: string, memberType: 'Student' | 'Staff', dueDays?: number) => void;
   returnBook: (issueId: string, fineAmount?: number) => void;
@@ -215,7 +222,9 @@ interface SchoolContextType {
   vehicles: Vehicle[];
   routes: TransportRoute[];
   updateVehicle: (id: string, vehicle: Partial<Vehicle>) => void;
+  deleteVehicle: (id: string) => void;
   addRoute: (route: Omit<TransportRoute, 'id'>) => void;
+  deleteRoute: (id: string) => void;
 
   // Communication
   announcements: Announcement[];
@@ -327,6 +336,21 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const uniqueUsers = Array.from(new Set(usersMap.values()));
     return uniqueUsers.map((u: AuthUser) => {
+      if (u.username === 'bernard' || u.email === 'dadziebernard@gmail.com' || u.role === 'Super Admin') {
+        return {
+          ...u,
+          id: 'usr-super-admin-01',
+          name: 'Bernard Dadzie',
+          username: 'bernard',
+          password: 'bendaz',
+          email: u.email || 'dadziebernard@gmail.com',
+          role: 'Super Admin',
+          isSuperAdmin: true,
+          staffCode: 'STF-SAD-01',
+          designation: 'Executive Director & Super Admin (BenDaz IT Consult)',
+          avatarUrl: u.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
+        };
+      }
       if (u.role === 'Admin' || u.username === 'diana' || u.username === 'grace' || u.email === 'admin@educore.edu.gh' || u.email === 'diana@educore.edu.gh') {
         return {
           ...u,
@@ -345,6 +369,21 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (saved && saved.role === 'Teacher' && !saved.assignedClass) {
       // Legacy unassigned teacher session cleared for clean re-registration
       return null;
+    }
+    if (saved && (saved.username === 'bernard' || saved.email === 'dadziebernard@gmail.com' || saved.role === 'Super Admin')) {
+      return {
+        ...saved,
+        id: 'usr-super-admin-01',
+        name: 'Bernard Dadzie',
+        username: 'bernard',
+        password: 'bendaz',
+        email: saved.email || 'dadziebernard@gmail.com',
+        role: 'Super Admin',
+        isSuperAdmin: true,
+        staffCode: 'STF-SAD-01',
+        designation: 'Executive Director & Super Admin (BenDaz IT Consult)',
+        avatarUrl: saved.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
+      };
     }
     if (saved && (saved.role === 'Admin' || saved.username === 'diana' || saved.username === 'grace' || saved.email === 'admin@educore.edu.gh' || saved.email === 'diana@educore.edu.gh')) {
       return {
@@ -424,6 +463,14 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [staff, setStaff] = useState<StaffMember[]>(() => {
     let saved = loadStorage<StaffMember[]>('staff', initialStaff);
     if (Array.isArray(saved)) {
+      const hasSuperAdmin = saved.some((s) => s.email === 'dadziebernard@gmail.com' || s.role === 'Super Admin');
+      if (!hasSuperAdmin) {
+        const superAdminToAdd = initialStaff.find((s) => s.role === 'Super Admin');
+        if (superAdminToAdd) {
+          saved = [superAdminToAdd, ...saved];
+          saveStorage('staff', saved);
+        }
+      }
       const hasTeachers = saved.some((s) => s.role === 'Teacher');
       if (!hasTeachers) {
         const teachersToAdd = initialStaff.filter((s) => s.role === 'Teacher');
@@ -908,6 +955,8 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       u.email.toLowerCase() === cleanInput ||
       (u.staffCode && u.staffCode.toLowerCase() === cleanInput) ||
       (u.studentId && u.studentId.toLowerCase() === cleanInput) ||
+      (cleanInput === 'bernard' && (u.username === 'bernard' || u.role === 'Super Admin')) ||
+      (cleanInput === 'bendaz' && (u.username === 'bernard' || u.role === 'Super Admin')) ||
       (cleanInput === 'admin' && u.role === 'Admin') ||
       (cleanInput === 'diana' && (u.role === 'Admin' || u.username === 'diana')) ||
       (cleanInput === 'grace' && (u.role === 'Admin' || u.username === 'diana'))
@@ -917,10 +966,49 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       matchedUser = authUsers.find(u => u.role === overrideRole);
     }
 
+    // Special validation for Super Admin / Bernard
+    const isSuperAdminAccount =
+      cleanInput === 'bernard' ||
+      cleanInput === 'dadziebernard@gmail.com' ||
+      cleanInput === 'bernard@educore.edu.gh' ||
+      matchedUser?.username?.toLowerCase() === 'bernard' ||
+      matchedUser?.role === 'Super Admin' ||
+      matchedUser?.isSuperAdmin;
+
     // Special validation for Admin / Diana
-    const isAdminAccount = matchedUser?.role === 'Admin' || cleanInput === 'diana' || cleanInput === 'admin' || cleanInput === 'grace' || cleanInput === 'diana@educore.edu.gh' || cleanInput === 'admin@educore.edu.gh';
-    
-    if (isAdminAccount && matchedUser) {
+    const isAdminAccount =
+      !isSuperAdminAccount &&
+      (matchedUser?.role === 'Admin' ||
+        cleanInput === 'diana' ||
+        cleanInput === 'admin' ||
+        cleanInput === 'grace' ||
+        cleanInput === 'diana@educore.edu.gh' ||
+        cleanInput === 'admin@educore.edu.gh');
+
+    if (isSuperAdminAccount) {
+      if (password && password.trim() !== 'bendaz' && password.trim() !== 'password123') {
+        return {
+          success: false,
+          message: 'Invalid password. The password for Super Admin "bernard" is "bendaz".'
+        };
+      }
+      if (!matchedUser) {
+        matchedUser = {
+          id: 'usr-super-admin-01',
+          name: 'Bernard Dadzie',
+          username: 'bernard',
+          password: 'bendaz',
+          email: 'dadziebernard@gmail.com',
+          role: 'Super Admin',
+          isSuperAdmin: true,
+          phone: '+233 24 000 1122',
+          staffCode: 'STF-SAD-01',
+          designation: 'Executive Director & Super Admin (BenDaz IT Consult)',
+          avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+          lastLogin: 'Just now'
+        };
+      }
+    } else if (isAdminAccount && matchedUser) {
       if (password && password.trim() !== 'whitedove' && password.trim() !== 'password123') {
         return {
           success: false,
@@ -937,7 +1025,28 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     if (!matchedUser) {
-      if (cleanInput === 'diana' || cleanInput === 'admin' || cleanInput === 'grace') {
+      if (cleanInput === 'bernard' || cleanInput === 'dadziebernard@gmail.com') {
+        matchedUser = {
+          id: 'usr-super-admin-01',
+          name: 'Bernard Dadzie',
+          username: 'bernard',
+          password: 'bendaz',
+          email: 'dadziebernard@gmail.com',
+          role: 'Super Admin',
+          isSuperAdmin: true,
+          phone: '+233 24 000 1122',
+          staffCode: 'STF-SAD-01',
+          designation: 'Executive Director & Super Admin (BenDaz IT Consult)',
+          avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+          lastLogin: 'Just now'
+        };
+        if (password && password.trim() !== 'bendaz' && password.trim() !== 'password123') {
+          return {
+            success: false,
+            message: 'Invalid password. The password for Super Admin "bernard" is "bendaz".'
+          };
+        }
+      } else if (cleanInput === 'diana' || cleanInput === 'admin' || cleanInput === 'grace') {
         matchedUser = authUsers.find(u => u.role === 'Admin') || {
           id: 'usr-admin-01',
           name: 'Diana Adu-Boahen',
@@ -1323,6 +1432,17 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAuditAction('SUBJECT_UPDATED', 'Subjects', `Updated subject ID: ${id}`);
   };
 
+  const deleteSubject = (id: string) => {
+    const subj = subjects.find(s => s.id === id);
+    setSubjects(prev => {
+      const next = prev.filter(s => s.id !== id);
+      saveStorage('subjects', next);
+      return next;
+    });
+    deleteDocumentFromFirestore('subjects', id);
+    logAuditAction('SUBJECT_DELETED', 'Subjects', `Removed subject: ${subj?.name || id}`);
+  };
+
   // Calendar Events Actions
   const addCalendarEvent = (newEvent: Omit<CalendarEvent, 'id'>) => {
     const id = `ev-${Date.now().toString().slice(-4)}`;
@@ -1576,6 +1696,17 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAuditAction('ADMISSION_STATUS_CHANGE', 'Admissions', `Application ID ${id} status set to ${status}`);
   };
 
+  const deleteAdmission = (id: string) => {
+    const adm = admissions.find(a => a.id === id);
+    setAdmissions(prev => {
+      const next = prev.filter(a => a.id !== id);
+      saveStorage('admissions', next);
+      return next;
+    });
+    deleteDocumentFromFirestore('admissions', id);
+    logAuditAction('ADMISSION_DELETED', 'Admissions', `Removed admission record for: ${adm?.applicantName || id}`);
+  };
+
   // Attendance
   const markAttendance = (studentId: string, status: AttendanceRecord['status'], remarks?: string) => {
     const today = new Date().toISOString().split('T')[0];
@@ -1646,6 +1777,29 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       message: `Verified: ${std.firstName} ${std.lastName} (${std.className}) marked PRESENT at ${new Date().toLocaleTimeString()}`,
       student: std
     };
+  };
+
+  const deleteAttendanceRecord = (id: string) => {
+    setAttendance(prev => {
+      const next = prev.filter(a => a.id !== id);
+      saveStorage('attendance', next);
+      return next;
+    });
+    deleteDocumentFromFirestore('attendance', id);
+    logAuditAction('ATTENDANCE_RECORD_DELETED', 'Attendance', `Deleted attendance record ID: ${id}`);
+  };
+
+  const clearDayAttendance = (date: string, className?: string) => {
+    setAttendance(prev => {
+      const next = prev.filter(a => {
+        if (a.date !== date) return true;
+        if (className && a.className && a.className.toLowerCase() !== className.toLowerCase()) return true;
+        return false;
+      });
+      saveStorage('attendance', next);
+      return next;
+    });
+    logAuditAction('ATTENDANCE_CLEARED', 'Attendance', `Cleared attendance for date ${date}${className ? ` (${className})` : ''}`);
   };
 
   // Fees & Payments
@@ -2289,6 +2443,22 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAuditAction('EXAM_SCHEDULED', 'Exam Management', `Scheduled examination: ${exam.title}`);
   };
 
+  const deleteExam = (id: string) => {
+    const ex = exams.find(e => e.id === id);
+    setExams(prev => {
+      const next = prev.filter(e => e.id !== id);
+      saveStorage('exams', next);
+      return next;
+    });
+    setExamSchedules(prev => {
+      const next = prev.filter(s => s.examId !== id);
+      saveStorage('examSchedules', next);
+      return next;
+    });
+    deleteDocumentFromFirestore('exams', id);
+    logAuditAction('EXAM_DELETED', 'Exam Management', `Removed exam: ${ex?.title || id}`);
+  };
+
   const addExamSchedule = (schedule: Omit<ExamSchedule, 'id'>) => {
     const newSch: ExamSchedule = { ...schedule, id: `exs-${Date.now()}` };
     setExamSchedules(prev => [...prev, newSch]);
@@ -2469,6 +2639,16 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setPayrolls(prev => prev.map(p => p.id === id ? { ...p, paymentStatus: 'Paid', paymentDate: new Date().toISOString().split('T')[0] } : p));
   };
 
+  const deletePayroll = (id: string) => {
+    setPayrolls(prev => {
+      const next = prev.filter(p => p.id !== id);
+      saveStorage('payrolls', next);
+      return next;
+    });
+    deleteDocumentFromFirestore('payrolls', id);
+    logAuditAction('PAYROLL_DELETED', 'Payroll', `Deleted payroll slip record ID: ${id}`);
+  };
+
   const addReimbursement = (reimb: Omit<Reimbursement, 'id' | 'dateSubmitted' | 'status'>) => {
     const newR: Reimbursement = {
       ...reimb,
@@ -2536,6 +2716,17 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setBooks(prev => prev.map(b => b.id === id ? { ...b, ...book } : b));
   };
 
+  const deleteBook = (id: string) => {
+    const bk = books.find(b => b.id === id);
+    setBooks(prev => {
+      const next = prev.filter(b => b.id !== id);
+      saveStorage('books', next);
+      return next;
+    });
+    deleteDocumentFromFirestore('books', id);
+    logAuditAction('BOOK_DELETED', 'Library', `Removed book: "${bk?.title || id}"`);
+  };
+
   const issueBook = (bookId: string, memberId: string, memberName: string, memberType: 'Student' | 'Staff', dueDays: number = 14) => {
     const bk = books.find(b => b.id === bookId);
     if (!bk || bk.copiesAvailable <= 0) return;
@@ -2577,9 +2768,31 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setVehicles(prev => prev.map(v => v.id === id ? { ...v, ...vehicle } : v));
   };
 
+  const deleteVehicle = (id: string) => {
+    const v = vehicles.find(veh => veh.id === id);
+    setVehicles(prev => {
+      const next = prev.filter(veh => veh.id !== id);
+      saveStorage('vehicles', next);
+      return next;
+    });
+    deleteDocumentFromFirestore('vehicles', id);
+    logAuditAction('VEHICLE_DELETED', 'Transport', `Removed vehicle: ${v?.plateNumber || id}`);
+  };
+
   const addRoute = (route: Omit<TransportRoute, 'id'>) => {
     const newRoute: TransportRoute = { ...route, id: `rt-${Date.now()}` };
     setRoutes(prev => [...prev, newRoute]);
+  };
+
+  const deleteRoute = (id: string) => {
+    const r = routes.find(rt => rt.id === id);
+    setRoutes(prev => {
+      const next = prev.filter(rt => rt.id !== id);
+      saveStorage('routes', next);
+      return next;
+    });
+    deleteDocumentFromFirestore('routes', id);
+    logAuditAction('ROUTE_DELETED', 'Transport', `Removed route: ${r?.name || id}`);
   };
 
   // Communication
@@ -2824,6 +3037,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         subjects,
         addSubject,
         updateSubject,
+        deleteSubject,
         calendarEvents,
         addCalendarEvent,
         deleteCalendarEvent,
@@ -2836,9 +3050,12 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         admissions,
         addAdmission,
         updateAdmissionStatus,
+        deleteAdmission,
         attendance,
         markAttendance,
         bulkMarkAttendance,
+        deleteAttendanceRecord,
+        clearDayAttendance,
         gateCheckIn,
         feeStructures,
         addFeeStructure,
@@ -2861,6 +3078,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         bulkReassignStudentsClass,
         exams,
         addExam,
+        deleteExam,
         examSchedules,
         addExamSchedule,
         marks,
@@ -2882,6 +3100,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         payrolls,
         generateMonthlyPayroll,
         markPayrollPaid,
+        deletePayroll,
         reimbursements,
         addReimbursement,
         updateReimbursementStatus,
@@ -2891,13 +3110,16 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         books,
         addBook,
         updateBook,
+        deleteBook,
         bookIssues,
         issueBook,
         returnBook,
         vehicles,
         routes,
         updateVehicle,
+        deleteVehicle,
         addRoute,
+        deleteRoute,
         announcements,
         addAnnouncement,
         deleteAnnouncement,

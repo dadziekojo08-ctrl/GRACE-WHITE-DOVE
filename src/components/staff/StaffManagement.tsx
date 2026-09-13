@@ -190,6 +190,11 @@ export const StaffManagement: React.FC = () => {
   };
 
   const handleDeleteStaff = (stf: StaffMember) => {
+    if (stf.isSuperAdmin || stf.username?.toLowerCase() === 'bernard' || stf.email?.toLowerCase() === 'dadziebernard@gmail.com') {
+      alert('The Super Admin master account (Bernard Dadzie) is protected and cannot be deleted.');
+      setDeleteCandidate(null);
+      return;
+    }
     deleteStaff(stf.id);
     setDeleteCandidate(null);
     alert(`Staff record for ${stf.name} has been removed.`);
@@ -474,9 +479,15 @@ export const StaffManagement: React.FC = () => {
                         <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded">
                           {stf.staffCode}
                         </span>
-                        <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded">
-                          {stf.role}
-                        </span>
+                        {stf.isSuperAdmin ? (
+                          <span className="text-[10px] font-extrabold text-amber-900 bg-amber-200 border border-amber-300 px-1.5 py-0.2 rounded flex items-center gap-1">
+                            👑 Super Admin
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded">
+                            {stf.role}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
