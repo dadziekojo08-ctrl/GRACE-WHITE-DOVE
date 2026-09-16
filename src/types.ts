@@ -23,6 +23,7 @@ export type AuthMode = 'login' | 'register' | 'forgot-password' | 'reset-passwor
 export type NavigationTab =
   | 'dashboard'
   | 'my-child'
+  | 'payment-history'
   | 'students'
   | 'classes'
   | 'subjects'
@@ -202,6 +203,7 @@ export interface FeeStructure {
 }
 
 export interface InvoiceItem {
+  id?: string;
   description: string;
   amount: number;
   category?: 'term_fees' | 'books' | 'accessories' | 'arrears' | 'other';
@@ -248,7 +250,9 @@ export interface Payment {
   payerPhone?: string;
   channel?: string;
   receivedBy?: string;
+  recordedBy?: string;
   remarks?: string;
+  notes?: string;
   feeCategory?: 'Fees' | 'Books' | 'Accessories' | 'Arrears' | 'Combined' | 'Other';
   breakdown?: {
     fees?: number;
@@ -256,6 +260,10 @@ export interface Payment {
     accessories?: number;
     arrears?: number;
   };
+  previousBalance?: number;
+  balanceAfterPayment?: number;
+  className?: string;
+  admissionNo?: string;
 }
 
 export interface Exam {

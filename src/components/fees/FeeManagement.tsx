@@ -36,6 +36,8 @@ import {
   Save,
   Edit2
 } from 'lucide-react';
+import { SchoolFeePaymentModal } from './SchoolFeePaymentModal';
+import { OfficialPaymentReceiptModal } from './OfficialPaymentReceiptModal';
 
 interface FeeManagementProps {
   onOpenPaystack?: (invoice?: Invoice, customAmount?: number, studentName?: string, studentId?: string) => void;
@@ -68,6 +70,12 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
     updateStudentArrears,
     setActiveTab: setGlobalActiveTab
   } = useSchool();
+
+  // Payment Desk States
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [studentForPayment, setStudentForPayment] = useState<Student | null>(null);
+  const [invoiceForPayment, setInvoiceForPayment] = useState<Invoice | null>(null);
+  const [selectedReceiptForView, setSelectedReceiptForView] = useState<Payment | null>(null);
 
   // Active Main Tab
   const [activeTab, setActiveTab] = useState<'invoices' | 'structures' | 'summary'>('invoices');
@@ -842,6 +850,21 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
 
         {/* Primary Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Action 0: Collect / Record Payment */}
+          <button
+            onClick={() => {
+              setStudentForPayment(null);
+              setInvoiceForPayment(null);
+              setIsPaymentModalOpen(true);
+            }}
+            id="btn-collect-fee-payment"
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer hover:scale-[1.02]"
+            title="Record payment for school fees, books, accessories, or arrears"
+          >
+            <Banknote className="w-4 h-4 text-amber-300 stroke-[2.5]" />
+            <span>Collect Payment</span>
+          </button>
+
           {/* Action 1: Bill Student */}
           <button
             onClick={() => setIsBillStudentOpen(true)}
@@ -1141,6 +1164,21 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {inv.balance > 0 && (
+                              <button
+                                onClick={() => {
+                                  const std = students.find((s) => s.id === inv.studentId);
+                                  setStudentForPayment(std || null);
+                                  setInvoiceForPayment(inv);
+                                  setIsPaymentModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] shadow-xs cursor-pointer flex items-center gap-1 transition-colors"
+                                title="Collect & Record payment for fees, books, accessories, or arrears"
+                              >
+                                <Banknote className="w-3 h-3 text-amber-200" />
+                                <span>Collect Payment</span>
+                              </button>
+                            )}
                             {inv.balance > 0 && (
                               <button
                                 onClick={() => handleOpenReminderForInvoice(inv)}
@@ -2791,6 +2829,26 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
           </div>
         </div>
       )}
+
+      {/* Cashier Payment Desk Modal */}
+      <SchoolFeePaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setStudentForPayment(null);
+          setInvoiceForPayment(null);
+        }}
+        preselectedStudent={studentForPayment}
+        preselectedInvoice={invoiceForPayment}
+        onOpenPaystack={onOpenPaystack}
+      />
+
+      {/* Official Payment Receipt Modal */}
+      <OfficialPaymentReceiptModal
+        isOpen={!!selectedReceiptForView}
+        onClose={() => setSelectedReceiptForView(null)}
+        payment={selectedReceiptForView}
+      />
     </div>
   );
 };

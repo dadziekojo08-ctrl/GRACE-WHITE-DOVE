@@ -30,6 +30,9 @@ import {
 import { PaystackModal } from '../paystack/PaystackModal';
 import { Payment, Student } from '../../types';
 import { calculateGradeForClass, isLowerPrimaryOrPreschool } from '../../utils/jhsGrading';
+import { getInvoiceFinancialBreakdown } from '../../utils/feeBreakdown';
+import { OfficialPaymentReceiptModal } from '../fees/OfficialPaymentReceiptModal';
+import { downloadPaymentReceiptPdf } from '../../utils/receiptPdfGenerator';
 
 export const ParentDashboard: React.FC = () => {
   const {
@@ -84,9 +87,15 @@ export const ParentDashboard: React.FC = () => {
   const [selectedReceipt, setSelectedReceipt] = useState<Payment | null>(null);
 
   const ward = students.find((s) => s.id === selectedStudentId) || defaultStudent || fallbackWard;
+  const wardFullName = `${ward.firstName} ${ward.lastName}`.toLowerCase().trim();
 
-  // Ward Invoices & Payments from live state
-  const wardInvoices = invoices.filter((inv) => inv.studentId === ward.id);
+  // Ward Invoices & Payments from live state with broad synchronization
+  const wardInvoices = invoices.filter(
+    (inv) =>
+      inv.studentId === ward.id ||
+      inv.studentId === ward.admissionNo ||
+      (inv.studentName && inv.studentName.toLowerCase().trim() === wardFullName)
+  );
   const rawInvoice = wardInvoices[0];
   const currentInvoice = rawInvoice || {
     id: `inv-${ward.id}`,
@@ -99,14 +108,35 @@ export const ParentDashboard: React.FC = () => {
     issueDate: new Date().toISOString().slice(0, 10),
     dueDate: '',
     items: [],
-    totalAmount: 0,
+    totalAmount: ward.balanceDue > 0 ? ward.balanceDue : 0,
     paidAmount: 0,
-    balance: 0,
-    status: 'Paid' as const
+    balance: ward.balanceDue > 0 ? ward.balanceDue : 0,
+    status: (ward.balanceDue === 0 ? 'Paid' : 'Unpaid') as 'Paid' | 'Unpaid'
   };
 
-  const wardPayments = payments.filter((p) => p.studentId === ward.id);
+  const wardPayments = payments
+    .filter(
+      (p) =>
+        p.studentId === ward.id ||
+        p.studentId === ward.admissionNo ||
+        (p.studentName && p.studentName.toLowerCase().trim() === wardFullName)
+    )
+    .sort((a, b) => new Date(b.paymentDate || b.date || '').getTime() - new Date(a.paymentDate || a.date || '').getTime());
+
   const displayPayments: Payment[] = wardPayments;
+  const latestReceipt = displayPayments[0] || null;
+
+  const handleDownloadReceipt = (p: Payment) => {
+    downloadPaymentReceiptPdf({
+      payment: p,
+      student: ward,
+      academicYear,
+      term: currentTerm
+    });
+  };
+
+  // Real-time categorized financial breakdown
+  const invBreakdown = getInvoiceFinancialBreakdown(currentInvoice);
 
   // Dynamic Ward Marks
   const wardMarks = marks.filter((m) => m.studentId === ward.id);
@@ -454,6 +484,36 @@ export const ParentDashboard: React.FC = () => {
 
         {/* RIGHT COLUMN: SCHOOL FEES & PAYSTACK INITIATION & PAYMENT HISTORY (5 cols) */}
         <div className="lg:col-span-5 space-y-6">
+          {/* Card 0: Immediate Latest Receipt Notice (if payments have occurred) */}
+          {latestReceipt && (
+            <div className="bg-gradient-to-r from-emerald-950 via-emerald-900 to-emerald-800 text-white rounded-2xl p-4 shadow-sm border border-emerald-700/60 flex items-center justify-between gap-3 animate-in fade-in duration-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-800 text-amber-300 flex items-center justify-center shrink-0 border border-emerald-600/60 shadow-xs">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white">Latest Verified Payment Receipt</span>
+                    <span className="text-[9px] font-black uppercase bg-amber-400 text-emerald-950 px-2 py-0.5 rounded font-mono">
+                      #{latestReceipt.paymentRef || latestReceipt.receiptNo || latestReceipt.id}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-200 mt-0.5">
+                    GHS {Number(latestReceipt.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })} credited via {latestReceipt.channel || latestReceipt.paymentMethod} on {latestReceipt.paymentDate || latestReceipt.date}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedReceipt(latestReceipt)}
+                className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-emerald-950 text-xs font-black rounded-xl shrink-0 cursor-pointer shadow-sm transition-all hover:scale-105 flex items-center gap-1.5"
+                title="View & Print Official Signed Receipt Voucher"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>View Receipt</span>
+              </button>
+            </div>
+          )}
+
           {/* Card: Paystack School Fees Callout */}
           <div className="bg-gradient-to-br from-[#0ba4db]/10 via-white to-emerald-50/30 rounded-2xl p-5 border border-[#0ba4db]/30 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
@@ -472,41 +532,87 @@ export const ParentDashboard: React.FC = () => {
                 <span className="text-3xl font-black text-slate-900 font-['Outfit']">
                   GHS {currentInvoice.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </span>
+                {currentInvoice.balance === 0 && (
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    Fully Cleared
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-600 mt-1">
                 For {currentInvoice.term}, {currentInvoice.academicYear} {currentInvoice.dueDate ? `• Due Date: ${currentInvoice.dueDate}` : ''}
               </p>
             </div>
 
-            {/* Fee Itemized Breakdown */}
-            <div className="bg-white/80 backdrop-blur-xs rounded-xl p-3.5 border border-slate-200 text-xs space-y-2">
-              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Fee Invoice Summary ({currentInvoice.invoiceNo})
+            {/* Itemized Fee Deduction & Breakdown Cards */}
+            <div className="bg-white/90 backdrop-blur-xs rounded-xl p-3.5 border border-slate-200 text-xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Itemized Fee Breakdown ({currentInvoice.invoiceNo})
+                </span>
+                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  Live Ledger Sync
+                </span>
               </div>
-              {(currentInvoice.items || []).map((item, idx) => (
-                <div key={idx} className="flex justify-between text-slate-600 text-[11px]">
-                  <span className="truncate pr-2">{item.description}</span>
-                  <span className="font-semibold text-slate-800 font-mono">GHS {item.amount}</span>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                  <span className="text-[10px] text-slate-500 block">Tuition / Term Fees</span>
+                  <span className="font-bold text-slate-900 font-mono text-xs">
+                    GHS {invBreakdown.termFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
                 </div>
-              ))}
-              <div className="pt-2 border-t border-slate-100 flex justify-between font-bold text-slate-900">
-                <span>Total Term Fee</span>
-                <span className="font-mono">GHS {currentInvoice.totalAmount.toLocaleString()}</span>
+                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                  <span className="text-[10px] text-slate-500 block">Books & Stationery</span>
+                  <span className="font-bold text-slate-900 font-mono text-xs">
+                    GHS {invBreakdown.books.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                  <span className="text-[10px] text-slate-500 block">Uniform & Accessories</span>
+                  <span className="font-bold text-slate-900 font-mono text-xs">
+                    GHS {invBreakdown.accessories.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="p-2 bg-amber-50 rounded-lg border border-amber-200">
+                  <span className="text-[10px] text-amber-800 block font-semibold">Arrears (Past Debt)</span>
+                  <span className="font-bold text-amber-950 font-mono text-xs">
+                    GHS {invBreakdown.arrears.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between text-emerald-700 font-semibold text-[11px]">
-                <span>Total Paid</span>
-                <span className="font-mono">- GHS {currentInvoice.paidAmount.toLocaleString()}</span>
+
+              {/* Total and deductions */}
+              <div className="pt-2 border-t border-slate-100 space-y-1">
+                <div className="flex justify-between font-semibold text-slate-700 text-[11px]">
+                  <span>Total Billed:</span>
+                  <span className="font-mono">GHS {invBreakdown.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between font-bold text-emerald-700 text-[11px]">
+                  <span>Less Total Payments Deducted:</span>
+                  <span className="font-mono">- GHS {invBreakdown.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between font-black text-slate-900 text-xs pt-1 border-t border-slate-200">
+                  <span>Net Outstanding Payable:</span>
+                  <span className="font-mono text-emerald-950">GHS {invBreakdown.balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
               </div>
             </div>
 
             {/* Big Paystack Button */}
-            <button
-              onClick={() => setIsPaystackOpen(true)}
-              className="w-full bg-[#0ba4db] hover:bg-[#088bbb] text-white font-extrabold py-3.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-[#0ba4db]/30 transition-all hover:scale-[1.01] cursor-pointer"
-            >
-              <CreditCard className="w-4 h-4" />
-              <span>Initiate Payment with Paystack (GHS {currentInvoice.balance})</span>
-            </button>
+            {currentInvoice.balance > 0 ? (
+              <button
+                onClick={() => setIsPaystackOpen(true)}
+                className="w-full bg-[#0ba4db] hover:bg-[#088bbb] text-white font-extrabold py-3.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-[#0ba4db]/30 transition-all hover:scale-[1.01] cursor-pointer"
+              >
+                <CreditCard className="w-4 h-4" />
+                <span>Initiate Online Payment (GHS {currentInvoice.balance.toLocaleString()})</span>
+              </button>
+            ) : (
+              <div className="w-full bg-emerald-50 border border-emerald-300 text-emerald-800 font-bold py-2.5 px-4 rounded-xl text-xs text-center flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>All school fees, books, accessories, and arrears are fully cleared!</span>
+              </div>
+            )}
 
             <div className="flex items-center justify-center gap-3 text-[10px] text-slate-400 font-medium pt-1">
               <span>✓ MTN MoMo</span>
@@ -526,9 +632,16 @@ export const ParentDashboard: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-bold text-sm text-slate-900">Fee Payment History</h3>
-                  <p className="text-xs text-slate-400">Verified transactions & payment receipts</p>
+                  <p className="text-xs text-slate-400">Official cashier receipts & digital vouchers</p>
                 </div>
               </div>
+              <button
+                onClick={() => setActiveTab('payment-history')}
+                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <span>View All History</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             {displayPayments.length > 0 ? (
@@ -548,14 +661,24 @@ export const ParentDashboard: React.FC = () => {
                         </div>
                         <p className="text-[11px] text-slate-500 mt-0.5">{p.channel || p.paymentMethod}</p>
                       </div>
-                      <button
-                        onClick={() => handlePrintReceipt(p)}
-                        className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-emerald-800 hover:border-emerald-700 transition-colors cursor-pointer text-[10px] font-bold flex items-center gap-1"
-                        title="Print Official Digital Receipt"
-                      >
-                        <Receipt className="w-3.5 h-3.5" />
-                        <span>Receipt</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleDownloadReceipt(p)}
+                          className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-950 transition-all cursor-pointer text-[10px] font-bold flex items-center gap-1 shadow-2xs hover:scale-105"
+                          title="Download Official PDF Receipt"
+                        >
+                          <Download className="w-3 h-3 text-emerald-700" />
+                          <span>PDF</span>
+                        </button>
+                        <button
+                          onClick={() => handlePrintReceipt(p)}
+                          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer text-[10px] font-bold flex items-center gap-1"
+                          title="View & Print Official Digital Receipt"
+                        >
+                          <Receipt className="w-3 h-3" />
+                          <span>Slip</span>
+                        </button>
+                      </div>
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-200/60 font-mono">
                       <span>Ref: {p.reference || p.paymentRef || p.id}</span>
@@ -586,83 +709,12 @@ export const ParentDashboard: React.FC = () => {
       />
 
       {/* Official Payment Receipt Modal */}
-      {selectedReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
-            <div className="bg-emerald-950 text-white p-6 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold font-['Outfit'] flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-amber-300" />
-                  Official Payment Receipt
-                </h3>
-                <p className="text-xs text-emerald-200">Receipt Ref #{selectedReceipt.reference || selectedReceipt.paymentRef || selectedReceipt.id}</p>
-              </div>
-              <button
-                onClick={() => setSelectedReceipt(null)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 text-xs">
-              <div className="text-center pb-2 border-b border-slate-200">
-                <SchoolLogo
-                  alt="Grace White Dove"
-                  className="w-10 h-10 rounded-xl object-contain mx-auto mb-1.5 bg-white p-0.5 border border-amber-400/60"
-                />
-                <h4 className="font-bold text-base text-slate-900 font-['Outfit']">Grace White Dove School Complex</h4>
-                <p className="text-[11px] text-slate-500 font-medium">Student Tuition & Fee Payment Voucher • Cape Coast, Ghana</p>
-                <p className="text-[11px] text-emerald-900 font-medium mt-0.5">
-                  Email: <span className="font-semibold">gracewhitedoveschool@gmail.com</span> • Phone: <span className="font-semibold font-mono">0244403541</span>
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Student Name:</span>
-                  <span className="font-bold text-slate-900">{selectedReceipt.studentName || `${ward.firstName} ${ward.lastName}`}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Payment Date:</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedReceipt.paymentDate || selectedReceipt.date}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Payment Channel:</span>
-                  <span className="font-bold text-emerald-800">{selectedReceipt.channel || selectedReceipt.paymentMethod}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Ward ID / Class:</span>
-                  <span className="font-bold text-slate-700">{ward.admissionNo} • {ward.className}</span>
-                </div>
-              </div>
-
-              <div className="bg-emerald-950 text-white p-4 rounded-xl text-center space-y-1">
-                <span className="text-[11px] text-amber-300 uppercase tracking-wider font-semibold">Amount Paid</span>
-                <div className="text-2xl font-black font-mono text-white">
-                  GHS {selectedReceipt.amount.toLocaleString()}
-                </div>
-                <span className="text-[10px] text-emerald-300 block">Status: Verified & Processed</span>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3">
-                <button
-                  onClick={() => setSelectedReceipt(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer className="w-4 h-4" /> Print Official Slip
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <OfficialPaymentReceiptModal
+        isOpen={!!selectedReceipt}
+        onClose={() => setSelectedReceipt(null)}
+        payment={selectedReceipt}
+        ward={ward}
+      />
     </div>
   );
 };

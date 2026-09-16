@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CreditCard,
   Search,
@@ -23,6 +23,8 @@ import { SchoolLogo } from '../common/SchoolLogo';
 interface SchoolFeePaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
+  preselectedStudent?: Student | null;
+  preselectedInvoice?: Invoice | null;
   onOpenPaystack?: (
     invoice?: Invoice,
     customAmount?: number,
@@ -34,6 +36,8 @@ interface SchoolFeePaymentModalProps {
 export const SchoolFeePaymentModal: React.FC<SchoolFeePaymentModalProps> = ({
   isOpen,
   onClose,
+  preselectedStudent,
+  preselectedInvoice,
   onOpenPaystack
 }) => {
   const {
@@ -64,6 +68,29 @@ export const SchoolFeePaymentModal: React.FC<SchoolFeePaymentModalProps> = ({
   const [previousBalance, setPreviousBalance] = useState<number>(0);
   const [newBalance, setNewBalance] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sync preselected student when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (preselectedStudent) {
+        setSelectedStudent(preselectedStudent);
+        const bal = preselectedInvoice?.balance ?? preselectedStudent.balanceDue;
+        setPaymentAmount(bal > 0 ? bal.toString() : '500');
+        if (preselectedInvoice && (preselectedInvoice.arrears || 0) > 0 && bal === preselectedInvoice.arrears) {
+          setFeeCategory('Arrears');
+        } else {
+          setFeeCategory('Fees');
+        }
+      } else {
+        setSelectedStudent(null);
+        setPaymentAmount('');
+        setFeeCategory('Fees');
+      }
+      setCompletedPayment(null);
+      setIsSubmitting(false);
+      setReferenceNote('');
+    }
+  }, [isOpen, preselectedStudent, preselectedInvoice]);
 
   // Filter students
   const filteredStudents = useMemo(() => {

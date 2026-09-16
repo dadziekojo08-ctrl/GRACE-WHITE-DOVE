@@ -25,7 +25,8 @@ import {
   BookmarkCheck,
   Megaphone,
   Calendar as CalendarIcon,
-  Layers
+  Layers,
+  Receipt
 } from 'lucide-react';
 
 interface SubNavItem {
@@ -58,6 +59,12 @@ const parentNavItems: NavItem[] = [
     label: 'My Child',
     icon: GraduationCap,
     subText: 'Academic Report • School Fees'
+  },
+  {
+    id: 'payment-history',
+    label: 'Payment History',
+    icon: Receipt,
+    subText: 'Past Transactions • PDF Receipts'
   }
 ];
 

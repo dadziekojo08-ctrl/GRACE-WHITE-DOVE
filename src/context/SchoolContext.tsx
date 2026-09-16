@@ -2168,30 +2168,48 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const target = payments.find(p => p.id === id);
     if (!target) return;
 
-    setPayments(prev => prev.filter(p => p.id !== id));
+    setPayments(prev => {
+      const next = prev.filter(p => p.id !== id);
+      saveStorage('payments', next);
+      return next;
+    });
     deleteDocumentFromFirestore('payments', id);
 
-    setInvoices(prev => prev.map(inv => {
-      if (inv.id === target.invoiceId) {
-        const newPaid = Math.max(0, inv.paidAmount - target.amount);
-        const grandTotal = inv.grandTotal || (inv.currentTermAmount || inv.totalAmount) + (inv.arrears || 0);
-        const newBalance = Math.max(0, grandTotal - newPaid);
-        const status = newBalance === 0 ? 'Paid' : newPaid > 0 ? 'Partial' : 'Unpaid';
-        const updatedInv = { ...inv, paidAmount: newPaid, balance: newBalance, status };
-        saveDocumentToFirestore('invoices', updatedInv);
-        return updatedInv;
-      }
-      return inv;
-    }));
+    setInvoices(prev => {
+      const next = prev.map(inv => {
+        if (inv.id === target.invoiceId || inv.studentId === target.studentId) {
+          const newPaid = Math.max(0, inv.paidAmount - target.amount);
+          const bk = getInvoiceFinancialBreakdown(inv);
+          const grandTotal = bk.grandTotal || (inv.currentTermAmount || inv.totalAmount) + (inv.arrears || 0);
+          const newBalance = Math.max(0, grandTotal - newPaid);
+          const status = newBalance === 0 ? 'Paid' : newPaid > 0 ? 'Partial' : 'Unpaid';
+          const updatedInv = { ...inv, paidAmount: newPaid, balance: newBalance, status };
+          saveDocumentToFirestore('invoices', updatedInv);
+          return updatedInv;
+        }
+        return inv;
+      });
+      saveStorage('invoices', next);
+      return next;
+    });
 
-    setStudents(prev => prev.map(s => {
-      if (s.id === target.studentId) {
-        const updatedStd = { ...s, balanceDue: (s.balanceDue || 0) + target.amount };
-        saveDocumentToFirestore('students', updatedStd);
-        return updatedStd;
-      }
-      return s;
-    }));
+    setStudents(prev => {
+      const next = prev.map(s => {
+        if (s.id === target.studentId || s.admissionNo === target.studentId) {
+          const restoredArrears = (target.breakdown?.arrears || 0);
+          const updatedStd = { 
+            ...s, 
+            balanceDue: (s.balanceDue || 0) + target.amount,
+            manualArrears: (s.manualArrears || 0) + restoredArrears
+          };
+          saveDocumentToFirestore('students', updatedStd);
+          return updatedStd;
+        }
+        return s;
+      });
+      saveStorage('students', next);
+      return next;
+    });
 
     logAuditAction('PAYMENT_DELETED', 'Fee Management', `Voided/Deleted payment ${target.paymentRef} of GHS ${target.amount}`);
   };
@@ -2366,73 +2384,191 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ? `PSTK_${new Date().toISOString().slice(0,10).replace(/-/g,'')}_${Math.floor(100000 + Math.random()*900000)}`
       : `REC-2026-${Math.floor(1000 + Math.random()*9000)}`;
     
+    // Find target student accurately
+    const std = students.find(s => 
+      s.id === pay.studentId || 
+      s.admissionNo === pay.studentId || 
+      (pay.studentName && `${s.firstName} ${s.lastName}`.toLowerCase().trim() === pay.studentName.toLowerCase().trim())
+    );
+    const resolvedStudentId = std ? std.id : pay.studentId;
+    const resolvedAdmissionNo = std?.admissionNo || pay.admissionNo || pay.studentId;
+    const resolvedStudentName = pay.studentName || (std ? `${std.firstName} ${std.lastName}` : 'Student');
+    const resolvedClassName = std?.className || pay.className || 'General';
+
+    // Find invoice if already exists
+    const existingInv = invoices.find(i => 
+      i.id === pay.invoiceId || 
+      i.studentId === resolvedStudentId || 
+      i.studentId === resolvedAdmissionNo ||
+      i.studentId === pay.studentId
+    );
+
     // Determine arrears component of this payment
     let paidArrears = 0;
     if (typeof pay.breakdown?.arrears === 'number') {
       paidArrears = Number(pay.breakdown.arrears) || 0;
     } else if (pay.feeCategory === 'Arrears' || (pay.remarks || '').toLowerCase().includes('arrear')) {
       paidArrears = pay.amount;
-    } else {
-      const inv = invoices.find(i => i.id === pay.invoiceId || i.studentId === pay.studentId);
-      const std = students.find(s => s.id === pay.studentId);
-      if (inv && (inv.arrears || 0) > 0) {
-        const bk = getInvoiceFinancialBreakdown(inv);
-        if (bk.grandTotal > 0) {
-          paidArrears = Math.round(pay.amount * (bk.arrears / bk.grandTotal));
-        }
-      } else if (std && (std.manualArrears || 0) > 0 && (std.balanceDue || 0) <= (std.manualArrears || 0)) {
-        paidArrears = Math.min(pay.amount, std.manualArrears || 0);
+    } else if (existingInv && (existingInv.arrears || 0) > 0) {
+      const bk = getInvoiceFinancialBreakdown(existingInv);
+      if (bk.grandTotal > 0 && bk.arrears > 0) {
+        paidArrears = Math.min(pay.amount, bk.arrears);
       }
+    } else if (std && (std.manualArrears || 0) > 0) {
+      paidArrears = Math.min(pay.amount, std.manualArrears || 0);
     }
 
-    const calculatedBreakdown = pay.breakdown || (paidArrears > 0 ? {
-      fees: pay.feeCategory === 'Fees' ? pay.amount : 0,
-      books: pay.feeCategory === 'Books' ? pay.amount : 0,
-      accessories: pay.feeCategory === 'Accessories' ? pay.amount : 0,
+    // Determine books & accessories components
+    let paidBooks = 0;
+    if (typeof pay.breakdown?.books === 'number') {
+      paidBooks = Number(pay.breakdown.books) || 0;
+    } else if (pay.feeCategory === 'Books') {
+      paidBooks = pay.amount;
+    }
+
+    let paidAccessories = 0;
+    if (typeof pay.breakdown?.accessories === 'number') {
+      paidAccessories = Number(pay.breakdown.accessories) || 0;
+    } else if (pay.feeCategory === 'Accessories') {
+      paidAccessories = pay.amount;
+    }
+
+    let paidFees = 0;
+    if (typeof pay.breakdown?.fees === 'number') {
+      paidFees = Number(pay.breakdown.fees) || 0;
+    } else if (pay.feeCategory === 'Fees') {
+      paidFees = pay.amount;
+    } else {
+      paidFees = Math.max(0, pay.amount - paidArrears - paidBooks - paidAccessories);
+    }
+
+    const calculatedBreakdown = pay.breakdown || {
+      fees: paidFees,
+      books: paidBooks,
+      accessories: paidAccessories,
       arrears: paidArrears
-    } : (pay.feeCategory === 'Fees' ? { fees: pay.amount, books: 0, accessories: 0, arrears: 0 } :
-         pay.feeCategory === 'Books' ? { fees: 0, books: pay.amount, accessories: 0, arrears: 0 } :
-         pay.feeCategory === 'Accessories' ? { fees: 0, books: 0, accessories: pay.amount, arrears: 0 } : undefined));
+    };
+
+    // Calculate previous balance and balance after payment
+    const prevBalance = typeof existingInv?.balance === 'number'
+      ? existingInv.balance
+      : (std?.balanceDue ?? pay.amount);
+    const nextBalance = Math.max(0, prevBalance - pay.amount);
 
     const newPayment: Payment = {
       ...pay,
       id: `pay-${Date.now()}`,
       paymentRef,
+      receiptNo: paymentRef,
       date: new Date().toLocaleString(),
-      breakdown: calculatedBreakdown
+      paymentDate: new Date().toISOString().slice(0, 10),
+      studentId: resolvedStudentId,
+      studentName: resolvedStudentName,
+      admissionNo: resolvedAdmissionNo,
+      className: resolvedClassName,
+      status: 'Success',
+      receivedBy: pay.receivedBy || currentUser?.name || 'Accounts Office',
+      breakdown: calculatedBreakdown,
+      previousBalance: prevBalance,
+      balanceAfterPayment: nextBalance
     };
 
     localStorage.removeItem('gwd_payments_cleared_at');
-    setPayments(prev => [newPayment, ...prev]);
+
+    setPayments(prev => {
+      const updated = [newPayment, ...prev];
+      saveStorage('payments', updated);
+      return updated;
+    });
     saveDocumentToFirestore('payments', newPayment);
 
     // Update invoice & student balance + deduct paid arrears from total arrears
-    setInvoices(prev => prev.map(inv => {
-      if (inv.id === pay.invoiceId || inv.studentId === pay.studentId) {
-        const newPaid = (inv.paidAmount || 0) + pay.amount;
-        const newInvArrears = Math.max(0, (inv.arrears || 0) - paidArrears);
-        const grandTotal = (inv.currentTermAmount || inv.totalAmount) + newInvArrears;
-        const newBalance = Math.max(0, grandTotal - newPaid);
-        const status = newBalance === 0 ? 'Paid' : newPaid > 0 ? 'Partial' : 'Unpaid';
-        const updatedInv = { ...inv, arrears: newInvArrears, grandTotal, paidAmount: newPaid, balance: newBalance, status };
-        saveDocumentToFirestore('invoices', updatedInv);
-        return updatedInv;
-      }
-      return inv;
-    }));
+    setInvoices(prev => {
+      let found = false;
+      const updatedInvoices = prev.map(inv => {
+        if (
+          inv.id === pay.invoiceId || 
+          inv.studentId === resolvedStudentId || 
+          inv.studentId === resolvedAdmissionNo ||
+          inv.studentId === pay.studentId
+        ) {
+          found = true;
+          const bk = getInvoiceFinancialBreakdown(inv);
+          const newPaid = (inv.paidAmount || 0) + pay.amount;
+          const newInvArrears = Math.max(0, (bk.arrears || 0) - paidArrears);
+          const grandTotal = bk.currentTermAmount + newInvArrears;
+          const calculatedBal = Math.max(0, grandTotal - newPaid);
+          const status = calculatedBal === 0 ? 'Paid' : newPaid > 0 ? 'Partial' : 'Unpaid';
+          const updatedInv: Invoice = { 
+            ...inv, 
+            arrears: newInvArrears, 
+            grandTotal, 
+            paidAmount: newPaid, 
+            balance: calculatedBal, 
+            status 
+          };
+          saveDocumentToFirestore('invoices', updatedInv);
+          return updatedInv;
+        }
+        return inv;
+      });
 
-    setStudents(prev => prev.map(s => {
-      if (s.id === pay.studentId) {
-        const newArrears = Math.max(0, (s.manualArrears || 0) - paidArrears);
-        const newBal = Math.max(0, (s.balanceDue || 0) - pay.amount);
-        const updatedStd = { ...s, manualArrears: newArrears, balanceDue: newBal };
-        saveDocumentToFirestore('students', updatedStd);
-        return updatedStd;
+      // If no invoice existed for this student, synthesize and register one immediately
+      if (!found) {
+        const studentBilled = Math.max(pay.amount, std?.balanceDue || pay.amount);
+        const synthArrears = Math.max(0, (std?.manualArrears || 0) - paidArrears);
+        const synthBalance = Math.max(0, studentBilled - pay.amount);
+        const synthInv: Invoice = {
+          id: pay.invoiceId || `inv-${resolvedStudentId}`,
+          invoiceNo: `INV-${academicYear.slice(0, 4)}-${std?.rollNo || Math.floor(100 + Math.random() * 900)}`,
+          studentId: resolvedStudentId,
+          studentName: resolvedStudentName,
+          className: resolvedClassName,
+          academicYear,
+          term: currentTerm,
+          issueDate: new Date().toISOString().slice(0, 10),
+          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+          termFees: paidFees > 0 ? paidFees : Math.max(0, studentBilled - paidBooks - paidAccessories - paidArrears),
+          books: paidBooks,
+          accessories: paidAccessories,
+          arrears: synthArrears,
+          currentTermAmount: studentBilled - (std?.manualArrears || 0),
+          totalAmount: studentBilled,
+          grandTotal: studentBilled,
+          paidAmount: pay.amount,
+          balance: synthBalance,
+          status: synthBalance === 0 ? 'Paid' : 'Partial',
+          items: [
+            ...(paidFees > 0 ? [{ id: `it-f-${Date.now()}`, description: 'Tuition & School Term Fees', amount: paidFees }] : []),
+            ...(paidBooks > 0 ? [{ id: `it-b-${Date.now()}`, description: 'Textbooks & Stationery', amount: paidBooks }] : []),
+            ...(paidAccessories > 0 ? [{ id: `it-a-${Date.now()}`, description: 'School Uniform & Accessories', amount: paidAccessories }] : []),
+            ...(paidArrears > 0 ? [{ id: `it-arr-${Date.now()}`, description: 'Previous Term Arrears', amount: paidArrears }] : [])
+          ]
+        };
+        saveDocumentToFirestore('invoices', synthInv);
+        updatedInvoices.unshift(synthInv);
       }
-      return s;
-    }));
 
-    logAuditAction('PAYMENT_RECORDED', 'Fee Management', `Recorded ${pay.paymentMethod} payment ${paymentRef} of GHS ${pay.amount} for ${pay.studentName}${paidArrears > 0 ? ` (Arrears portion: GHS ${paidArrears} deducted from arrears)` : ''}`);
+      saveStorage('invoices', updatedInvoices);
+      return updatedInvoices;
+    });
+
+    setStudents(prev => {
+      const updatedStudents = prev.map(s => {
+        if (s.id === resolvedStudentId || s.admissionNo === resolvedAdmissionNo || s.id === pay.studentId) {
+          const newArrears = Math.max(0, (s.manualArrears || 0) - paidArrears);
+          const newBal = Math.max(0, (s.balanceDue || 0) - pay.amount);
+          const updatedStd = { ...s, manualArrears: newArrears, balanceDue: newBal };
+          saveDocumentToFirestore('students', updatedStd);
+          return updatedStd;
+        }
+        return s;
+      });
+      saveStorage('students', updatedStudents);
+      return updatedStudents;
+    });
+
+    logAuditAction('PAYMENT_RECORDED', 'Fee Management', `Recorded ${pay.paymentMethod} payment ${paymentRef} of GHS ${pay.amount} for ${resolvedStudentName}${paidArrears > 0 ? ` (Arrears portion: GHS ${paidArrears} deducted from arrears)` : ''}`);
     return newPayment;
   };
 

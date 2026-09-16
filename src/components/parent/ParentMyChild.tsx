@@ -28,6 +28,9 @@ import {
 } from 'lucide-react';
 import { PaystackModal } from '../paystack/PaystackModal';
 import { Payment, Student } from '../../types';
+import { getInvoiceFinancialBreakdown } from '../../utils/feeBreakdown';
+import { OfficialPaymentReceiptModal } from '../fees/OfficialPaymentReceiptModal';
+import { downloadPaymentReceiptPdf } from '../../utils/receiptPdfGenerator';
 import {
   calculateGradeForClass,
   calculateJHSGPA,
@@ -49,7 +52,8 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
     marks,
     attendance,
     academicYear,
-    currentTerm
+    currentTerm,
+    setActiveTab
   } = useSchool();
 
   const [currentTab, setCurrentTab] = useState<ChildTab>(initialTab);
@@ -91,9 +95,15 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
     fallbackWard;
 
   const ward = defaultStudent || fallbackWard;
+  const wardFullName = `${ward.firstName} ${ward.lastName}`.toLowerCase().trim();
 
-  // Ward Invoice & Payments from live state
-  const wardInvoices = invoices.filter((inv) => inv.studentId === ward.id);
+  // Ward Invoice & Payments from live state with broad synchronization
+  const wardInvoices = invoices.filter(
+    (inv) =>
+      inv.studentId === ward.id ||
+      inv.studentId === ward.admissionNo ||
+      (inv.studentName && inv.studentName.toLowerCase().trim() === wardFullName)
+  );
   const rawInvoice = wardInvoices[0];
   const currentInvoice = rawInvoice || {
     id: `inv-${ward.id}`,
@@ -106,14 +116,35 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
     issueDate: new Date().toISOString().slice(0, 10),
     dueDate: '',
     items: [],
-    totalAmount: 0,
+    totalAmount: ward.balanceDue > 0 ? ward.balanceDue : 0,
     paidAmount: 0,
-    balance: 0,
-    status: 'Paid' as const
+    balance: ward.balanceDue > 0 ? ward.balanceDue : 0,
+    status: (ward.balanceDue === 0 ? 'Paid' : 'Unpaid') as 'Paid' | 'Unpaid'
   };
 
-  const wardPayments = payments.filter((p) => p.studentId === ward.id);
+  const wardPayments = payments
+    .filter(
+      (p) =>
+        p.studentId === ward.id ||
+        p.studentId === ward.admissionNo ||
+        (p.studentName && p.studentName.toLowerCase().trim() === wardFullName)
+    )
+    .sort((a, b) => new Date(b.paymentDate || b.date || '').getTime() - new Date(a.paymentDate || a.date || '').getTime());
+
   const displayPayments: Payment[] = wardPayments;
+  const latestReceipt = displayPayments[0] || null;
+
+  const handleDownloadReceipt = (p: Payment) => {
+    downloadPaymentReceiptPdf({
+      payment: p,
+      student: ward,
+      academicYear,
+      term: currentTerm
+    });
+  };
+
+  // Categorized breakdown (fees, books, accessories, arrears)
+  const invBreakdown = getInvoiceFinancialBreakdown(currentInvoice);
 
   // Real Ward Marks from system
   const wardMarks = marks.filter((m) => m.studentId === ward.id);
@@ -468,48 +499,73 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                 </p>
               </div>
 
-              {/* Itemized Term Bill */}
+              {/* Itemized Term Bill with Category Breakdown */}
               <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div>
-                    <h3 className="font-bold text-sm text-slate-900">Term Official Invoice Statement</h3>
+                    <h3 className="font-bold text-sm text-slate-900">Official Fee Statement & Category Allocation</h3>
                     <p className="text-xs text-slate-400">Invoice Number: <strong className="text-slate-700">{currentInvoice.invoiceNo}</strong></p>
                   </div>
                   <span className={`text-xs font-bold px-3 py-1 rounded-full ${currentInvoice.balance === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
-                    {currentInvoice.balance === 0 ? 'Cleared' : currentInvoice.status}
+                    {currentInvoice.balance === 0 ? 'Fully Cleared' : currentInvoice.status}
                   </span>
                 </div>
 
-                {currentInvoice.items && currentInvoice.items.length > 0 ? (
-                  <div className="divide-y divide-slate-100 text-xs">
+                {/* 4 Categorized Financial Blocks */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Tuition / Fees</span>
+                    <span className="text-sm font-black text-slate-900 font-mono mt-0.5 block">
+                      GHS {invBreakdown.termFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Textbooks</span>
+                    <span className="text-sm font-black text-slate-900 font-mono mt-0.5 block">
+                      GHS {invBreakdown.books.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Accessories</span>
+                    <span className="text-sm font-black text-slate-900 font-mono mt-0.5 block">
+                      GHS {invBreakdown.accessories.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
+                    <span className="text-[10px] text-amber-800 block uppercase font-bold">Arrears</span>
+                    <span className="text-sm font-black text-amber-950 font-mono mt-0.5 block">
+                      GHS {invBreakdown.arrears.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Individual Line Items if present */}
+                {currentInvoice.items && currentInvoice.items.length > 0 && (
+                  <div className="divide-y divide-slate-100 text-xs pt-1">
                     {currentInvoice.items.map((item, idx) => (
-                      <div key={idx} className="py-3 flex items-center justify-between">
+                      <div key={idx} className="py-2.5 flex items-center justify-between">
                         <div>
                           <span className="font-semibold text-slate-800">{item.description}</span>
                           <span className="block text-[11px] text-slate-400">Term Assessment</span>
                         </div>
-                        <span className="font-mono font-bold text-slate-900 text-sm">GHS {item.amount.toLocaleString()}</span>
+                        <span className="font-mono font-bold text-slate-900 text-xs">GHS {item.amount.toLocaleString()}</span>
                       </div>
                     ))}
-                  </div>
-                ) : (
-                  <div className="py-6 text-center text-xs text-slate-500">
-                    No fee line items billed for this account yet.
                   </div>
                 )}
 
                 <div className="pt-4 border-t-2 border-slate-200 space-y-2 text-xs">
                   <div className="flex justify-between text-slate-600">
-                    <span>Total Term Fees:</span>
-                    <span className="font-mono font-bold text-slate-900">GHS {currentInvoice.totalAmount.toLocaleString()}</span>
+                    <span>Total Billed Amount:</span>
+                    <span className="font-mono font-bold text-slate-900">GHS {invBreakdown.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between text-emerald-700 font-semibold">
-                    <span>Amount Paid:</span>
-                    <span className="font-mono">- GHS {currentInvoice.paidAmount.toLocaleString()}</span>
+                    <span>Total Paid & Credited:</span>
+                    <span className="font-mono">- GHS {invBreakdown.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-slate-100">
                     <span>Net Balance Payable:</span>
-                    <span className="font-mono text-emerald-900">GHS {currentInvoice.balance.toLocaleString()}</span>
+                    <span className="font-mono text-emerald-900">GHS {invBreakdown.balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               </div>
@@ -517,6 +573,46 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
 
             {/* RIGHT COLUMN: FEE PAYMENT HISTORY & RECEIPTS (5 cols) */}
             <div className="lg:col-span-5 space-y-6">
+              {/* Latest Receipt Banner */}
+              {latestReceipt && (
+                <div className="bg-gradient-to-r from-emerald-950 via-emerald-900 to-emerald-800 text-white rounded-2xl p-4 shadow-sm border border-emerald-700/60 flex items-center justify-between gap-3 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-800 text-amber-300 flex items-center justify-center shrink-0 border border-emerald-600/60">
+                      <Receipt className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white">Latest Verified Payment Receipt</span>
+                        <span className="text-[9px] font-black uppercase bg-amber-400 text-emerald-950 px-2 py-0.5 rounded font-mono">
+                          #{latestReceipt.paymentRef || latestReceipt.receiptNo || latestReceipt.id}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-emerald-200 mt-0.5">
+                        GHS {Number(latestReceipt.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })} credited via {latestReceipt.channel || latestReceipt.paymentMethod} on {latestReceipt.paymentDate || latestReceipt.date}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDownloadReceipt(latestReceipt)}
+                      className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-emerald-950 text-xs font-black rounded-xl shrink-0 cursor-pointer shadow-sm transition-all hover:scale-105 flex items-center gap-1.5"
+                      title="Download official signed PDF receipt file"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download PDF</span>
+                    </button>
+                    <button
+                      onClick={() => setSelectedReceipt(latestReceipt)}
+                      className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl shrink-0 cursor-pointer shadow-sm transition-all flex items-center gap-1.5"
+                      title="View & Print Official Signed Receipt Voucher"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-amber-300" />
+                      <span>View Voucher</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -528,6 +624,13 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                       <p className="text-xs text-slate-400">Transactions for {ward.firstName} {ward.lastName}</p>
                     </div>
                   </div>
+                  <button
+                    onClick={() => setActiveTab('payment-history')}
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <span>View All History</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 {displayPayments.length > 0 ? (
@@ -545,13 +648,23 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                             </span>
                             <p className="text-xs text-slate-600 mt-1">{p.channel || p.paymentMethod}</p>
                           </div>
-                          <button
-                            onClick={() => setSelectedReceipt(p)}
-                            className="p-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:text-emerald-800 hover:border-emerald-600 transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                          >
-                            <Receipt className="w-3.5 h-3.5 text-emerald-700" />
-                            <span>Receipt</span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleDownloadReceipt(p)}
+                              className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-900 transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs hover:scale-105"
+                              title="Download official PDF receipt file"
+                            >
+                              <Download className="w-3.5 h-3.5 text-emerald-700" />
+                              <span>PDF Receipt</span>
+                            </button>
+                            <button
+                              onClick={() => setSelectedReceipt(p)}
+                              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors text-xs font-bold flex items-center gap-1 cursor-pointer"
+                              title="View & Print Official Voucher"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
 
                         <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400 font-mono">
@@ -571,10 +684,10 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
 
                 <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-950 space-y-1">
                   <span className="font-bold flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-700" /> Paystack Automated Reconciliation
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700" /> Automated Bursar Ledger Reconciliation
                   </span>
                   <p className="text-[11px] text-emerald-800/90 leading-relaxed">
-                    All online payments are immediately credited to the school bursar ledger and update clearance status in real time.
+                    All cashier payments made at the accounts office (fees, books, accessories, or arrears) immediately deduct from the balance and reflect here in real-time.
                   </p>
                 </div>
               </div>
@@ -594,83 +707,12 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
       />
 
       {/* Official Payment Receipt Modal */}
-      {selectedReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
-            <div className="bg-emerald-950 text-white p-6 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold font-['Outfit'] flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-amber-300" />
-                  Official Payment Receipt
-                </h3>
-                <p className="text-xs text-emerald-200">Receipt Ref #{selectedReceipt.paymentRef || selectedReceipt.reference || selectedReceipt.id}</p>
-              </div>
-              <button
-                onClick={() => setSelectedReceipt(null)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 text-xs">
-              <div className="text-center pb-2 border-b border-slate-200">
-                <SchoolLogo
-                  alt="Grace White Dove"
-                  className="w-10 h-10 rounded-xl object-contain mx-auto mb-1.5 bg-white p-0.5 border border-amber-400/60"
-                />
-                <h4 className="font-bold text-base text-slate-900 font-['Outfit']">Grace White Dove School Complex</h4>
-                <p className="text-[11px] text-slate-500 font-medium">Student Tuition & Fee Payment Voucher • Cape Coast, Ghana</p>
-                <p className="text-[11px] text-emerald-900 font-medium mt-0.5">
-                  Email: <span className="font-semibold">gracewhitedoveschool@gmail.com</span> • Phone: <span className="font-semibold font-mono">0244403541</span>
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Student Name:</span>
-                  <span className="font-bold text-slate-900">{selectedReceipt.studentName || `${ward.firstName} ${ward.lastName}`}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Payment Date:</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedReceipt.paymentDate || selectedReceipt.date}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Payment Channel:</span>
-                  <span className="font-bold text-emerald-800">{selectedReceipt.channel || selectedReceipt.paymentMethod}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Ward ID / Class:</span>
-                  <span className="font-bold text-slate-700">{ward.admissionNo} • {ward.className}</span>
-                </div>
-              </div>
-
-              <div className="bg-emerald-950 text-white p-4 rounded-xl text-center space-y-1">
-                <span className="text-[11px] text-amber-300 uppercase tracking-wider font-semibold">Amount Paid</span>
-                <div className="text-2xl font-black font-mono text-white">
-                  GHS {selectedReceipt.amount.toLocaleString()}
-                </div>
-                <span className="text-[10px] text-emerald-300 block">Status: Verified & Processed</span>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3">
-                <button
-                  onClick={() => setSelectedReceipt(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer className="w-4 h-4" /> Print Official Slip
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <OfficialPaymentReceiptModal
+        isOpen={!!selectedReceipt}
+        onClose={() => setSelectedReceipt(null)}
+        payment={selectedReceipt}
+        ward={ward}
+      />
     </div>
   );
 };

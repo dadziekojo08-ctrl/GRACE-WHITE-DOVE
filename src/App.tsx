@@ -7,6 +7,7 @@ import { TeacherDashboard } from './components/dashboard/TeacherDashboard';
 import { AccountantDashboard } from './components/dashboard/AccountantDashboard';
 import { ParentDashboard } from './components/dashboard/ParentDashboard';
 import { ParentMyChild } from './components/parent/ParentMyChild';
+import { ParentPaymentHistory } from './components/parent/ParentPaymentHistory';
 import { StudentManagement } from './components/students/StudentManagement';
 import { ClassManagement } from './components/classes/ClassManagement';
 import { SubjectManagement } from './components/subjects/SubjectManagement';
@@ -86,6 +87,8 @@ const MainContent: React.FC = () => {
               }
             />
           );
+        case 'payment-history':
+          return <ParentPaymentHistory onOpenPaystack={handleOpenPaystack} />;
         case 'dashboard':
         default:
           return <ParentDashboard onOpenPaystack={handleOpenPaystack} />;
@@ -159,6 +162,8 @@ const MainContent: React.FC = () => {
             }
           />
         );
+      case 'payment-history':
+        return <ParentPaymentHistory onOpenPaystack={handleOpenPaystack} />;
       case 'students':
         return (
           <StudentManagement
