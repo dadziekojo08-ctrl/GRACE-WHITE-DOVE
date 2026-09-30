@@ -145,7 +145,7 @@ export const OfficialPaymentReceiptModal: React.FC<OfficialPaymentReceiptModalPr
                 Excellence in Knowledge & Character • Cape Coast, Central Region, Ghana
               </p>
               <p className="text-[10px] text-slate-500">
-                Tel: +233 (0) 24 440 3541 • Email: gracewhitedoveschool@gmail.com
+                Tel: +233 (0) 24 440 3541 • Email: whitedovesch2014@gmail.com
               </p>
             </div>
 

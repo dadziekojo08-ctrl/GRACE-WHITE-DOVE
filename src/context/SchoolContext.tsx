@@ -246,6 +246,12 @@ interface SchoolContextType {
   exportDatabaseBackup: () => string;
   importDatabaseBackup: (jsonData: string) => boolean;
   resetToDefaults: () => void;
+
+  // Settings & Payment Gateway Configuration
+  paystackPublicKey: string;
+  setPaystackPublicKey: (key: string) => void;
+  schoolEmail: string;
+  setSchoolEmail: (email: string) => void;
 }
 
 const SchoolContext = createContext<SchoolContextType | undefined>(undefined);
@@ -3138,9 +3144,45 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return importDatabaseJson(jsonData);
   };
 
+  // Payment Gateway & School System Settings
+  const defaultPaystackKey = ((import.meta as any).env?.VITE_PAYSTACK_PUBLIC_KEY as string) || 'pk_live_849cd38d9ec8716e68e0b08da43f1570f89fb3a2';
+  const [paystackPublicKey, setPaystackPublicKeyState] = useState<string>(() => {
+    const saved = loadStorage<string>('paystack_public_key', defaultPaystackKey);
+    if (!saved || saved.includes('xxxx') || saved === '') {
+      return defaultPaystackKey;
+    }
+    return saved;
+  });
+
+  const setPaystackPublicKey = (newKey: string) => {
+    const trimmed = newKey.trim();
+    setPaystackPublicKeyState(trimmed);
+    saveStorage('paystack_public_key', trimmed);
+    logAuditAction(
+      'CONFIG_PAYSTACK_KEY',
+      'Finance',
+      `Updated Paystack Public Key (${trimmed ? (trimmed.startsWith('pk_live_') ? 'Live Production Key' : 'Test/Sandbox Key') : 'Cleared'})`
+    );
+  };
+
+  const [schoolEmail, setSchoolEmailState] = useState<string>(() => {
+    return loadStorage<string>('school_email', 'whitedovesch2014@gmail.com');
+  });
+
+  const setSchoolEmail = (newEmail: string) => {
+    const trimmed = newEmail.trim();
+    setSchoolEmailState(trimmed);
+    saveStorage('school_email', trimmed);
+    logAuditAction('CONFIG_SCHOOL_EMAIL', 'Settings', `Updated school contact email to ${trimmed}`);
+  };
+
   return (
     <SchoolContext.Provider
       value={{
+        paystackPublicKey,
+        setPaystackPublicKey,
+        schoolEmail,
+        setSchoolEmail,
         isSyncing,
         lastSyncedTime,
         syncToCloudNow,

@@ -86,7 +86,7 @@ export function downloadPaymentReceiptPdf({
 
   doc.setFontSize(8);
   doc.setTextColor(209, 250, 229); // Pale emerald
-  doc.text('Tel: +233 (0) 24 440 3541  |  Email: gracewhitedoveschool@gmail.com', pageWidth / 2, y + 22, {
+  doc.text('Tel: +233 (0) 24 440 3541  |  Email: whitedovesch2014@gmail.com', pageWidth / 2, y + 22, {
     align: 'center'
   });
 

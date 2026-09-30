@@ -265,7 +265,7 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                     Official Terminal Student Evaluation & Continuous Assessment Report
                   </p>
                   <p className="text-[10px] print:text-[8.5pt] text-slate-500 font-mono mt-0.5">
-                    Cape Coast, Ghana • Tel: 0244403541 • Email: gracewhitedoveschool@gmail.com
+                    Cape Coast, Ghana • Tel: 0244403541 • Email: whitedovesch2014@gmail.com
                   </p>
                 </div>
               </div>

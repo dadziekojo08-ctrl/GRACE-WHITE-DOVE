@@ -34,10 +34,12 @@ import {
   Phone,
   MessageSquare,
   Save,
-  Edit2
+  Edit2,
+  KeyRound
 } from 'lucide-react';
 import { SchoolFeePaymentModal } from './SchoolFeePaymentModal';
 import { OfficialPaymentReceiptModal } from './OfficialPaymentReceiptModal';
+import { PaystackConfigModal } from '../paystack/PaystackConfigModal';
 
 interface FeeManagementProps {
   onOpenPaystack?: (invoice?: Invoice, customAmount?: number, studentName?: string, studentId?: string) => void;
@@ -68,11 +70,13 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
     currentUser,
     sendBroadcast,
     updateStudentArrears,
+    paystackPublicKey,
     setActiveTab: setGlobalActiveTab
   } = useSchool();
 
   // Payment Desk States
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isPaystackConfigOpen, setIsPaystackConfigOpen] = useState(false);
   const [studentForPayment, setStudentForPayment] = useState<Student | null>(null);
   const [invoiceForPayment, setInvoiceForPayment] = useState<Invoice | null>(null);
   const [selectedReceiptForView, setSelectedReceiptForView] = useState<Payment | null>(null);
@@ -562,7 +566,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
     const studentName = inv.studentName;
     const balance = inv.balance > 0 ? inv.balance : (student?.balanceDue || 0);
 
-    const defaultMsg = `Dear ${guardianName}, this is a gentle reminder from Grace White Dove School Complex regarding the outstanding fee balance of GHS ${balance.toLocaleString()} for your ward ${studentName} (${inv.className}) for ${inv.term || currentTerm}. Invoice #${inv.invoiceNo} is due on ${inv.dueDate}. Kindly make payments via Mobile Money, Bank Deposit, or Online Paystack portal. For inquiries, email gracewhitedoveschool@gmail.com or call 0244403541. Thank you.`;
+    const defaultMsg = `Dear ${guardianName}, this is a gentle reminder from Grace White Dove School Complex regarding the outstanding fee balance of GHS ${balance.toLocaleString()} for your ward ${studentName} (${inv.className}) for ${inv.term || currentTerm}. Invoice #${inv.invoiceNo} is due on ${inv.dueDate}. Kindly make payments via Mobile Money, Bank Deposit, or Online Paystack portal. For inquiries, email whitedovesch2014@gmail.com or call 0244403541. Thank you.`;
 
     setReminderTarget({
       studentId: inv.studentId,
@@ -600,7 +604,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
     const guardianPhone = student?.guardianPhone || '0244123456';
     const guardianEmail = student?.guardianEmail || 'parents@educore.edu.gh';
 
-    const defaultMsg = `Dear Parent/Guardian, this is a fee notice from Grace White Dove School Complex regarding the outstanding school fees for ${currentTerm} (${academicYear}). Kindly ensure all outstanding term fees, books, and accessories balances are cleared before the due date. For inquiries, contact gracewhitedoveschool@gmail.com or 0244403541. Thank you.`;
+    const defaultMsg = `Dear Parent/Guardian, this is a fee notice from Grace White Dove School Complex regarding the outstanding school fees for ${currentTerm} (${academicYear}). Kindly ensure all outstanding term fees, books, and accessories balances are cleared before the due date. For inquiries, contact whitedovesch2014@gmail.com or 0244403541. Thank you.`;
 
     setReminderTarget({
       studentId: 'bulk_all_debtors',
@@ -863,6 +867,22 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
           >
             <Banknote className="w-4 h-4 text-amber-300 stroke-[2.5]" />
             <span>Collect Payment</span>
+          </button>
+
+          {/* Action: Paystack Gateway Key Settings */}
+          <button
+            onClick={() => setIsPaystackConfigOpen(true)}
+            id="btn-paystack-config-modal"
+            className="px-3.5 py-2.5 bg-[#0ba4db]/10 hover:bg-[#0ba4db]/20 text-[#087ca8] font-bold text-xs rounded-xl flex items-center gap-1.5 border border-[#0ba4db]/30 transition-all cursor-pointer"
+            title="Configure or Change Paystack Public API Key"
+          >
+            <KeyRound className="w-4 h-4 text-[#0ba4db]" />
+            <span>Paystack Key</span>
+            {paystackPublicKey?.startsWith('pk_live_') ? (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5" title="Live Key Active" />
+            ) : paystackPublicKey?.startsWith('pk_test_') ? (
+              <span className="w-2 h-2 rounded-full bg-amber-500 ml-0.5" title="Test Key Active" />
+            ) : null}
           </button>
 
           {/* Action 1: Bill Student */}
@@ -2174,7 +2194,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                   />
                   <div>
                     <h1 className="text-2xl font-black text-emerald-950 font-['Outfit']">Grace White Dove School Complex</h1>
-                    <p className="text-xs text-slate-600 font-medium">Cape Coast, Ghana • Email: gracewhitedoveschool@gmail.com • Tel: 0244403541</p>
+                    <p className="text-xs text-slate-600 font-medium">Cape Coast, Ghana • Email: whitedovesch2014@gmail.com • Tel: 0244403541</p>
                     <p className="text-xs text-emerald-800 font-bold mt-0.5">OFFICIAL FINANCIAL & FEE RECOVERY AUDIT REPORT</p>
                   </div>
                 </div>
@@ -2560,7 +2580,7 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
                   onClick={() => {
                     setReminderForm(prev => ({
                       ...prev,
-                      message: `Dear ${reminderForm.recipientName || 'Parent'}, gentle reminder from Grace White Dove School Complex: Outstanding fee balance of GHS ${reminderTarget.balanceDue.toLocaleString()} for ${reminderTarget.studentName} is due. Please settle via Mobile Money or online via the Parent Portal. For inquiries: gracewhitedoveschool@gmail.com / 0244403541. Thank you.`
+                      message: `Dear ${reminderForm.recipientName || 'Parent'}, gentle reminder from Grace White Dove School Complex: Outstanding fee balance of GHS ${reminderTarget.balanceDue.toLocaleString()} for ${reminderTarget.studentName} is due. Please settle via Mobile Money or online via the Parent Portal. For inquiries: whitedovesch2014@gmail.com / 0244403541. Thank you.`
                     }));
                   }}
                   className="text-[10px] px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium cursor-pointer"
@@ -2848,6 +2868,12 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
         isOpen={!!selectedReceiptForView}
         onClose={() => setSelectedReceiptForView(null)}
         payment={selectedReceiptForView}
+      />
+
+      {/* Paystack Key Configuration Modal */}
+      <PaystackConfigModal
+        isOpen={isPaystackConfigOpen}
+        onClose={() => setIsPaystackConfigOpen(false)}
       />
     </div>
   );

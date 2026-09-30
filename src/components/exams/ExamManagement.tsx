@@ -1075,7 +1075,7 @@ export const ExamManagement: React.FC = () => {
                     Official Terminal Student Continuous Assessment & Evaluation Report
                   </p>
                   <p className="text-[11px] print:text-[8.5pt] text-slate-500 font-mono">
-                    Tel: 0244403541 | Email: gracewhitedoveschool@gmail.com | Cape Coast, Ghana
+                    Tel: 0244403541 | Email: whitedovesch2014@gmail.com | Cape Coast, Ghana
                   </p>
                 </div>
               </div>

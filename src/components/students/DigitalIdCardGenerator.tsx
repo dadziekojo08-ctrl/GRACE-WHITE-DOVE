@@ -86,7 +86,7 @@ export const DigitalIdCardGenerator: React.FC<DigitalIdCardGeneratorProps> = ({
     motto: 'Excellence, Integrity & Discipline',
     campus: 'Main Campus, Cape Coast',
     phone: '+233 24 412 3456 / +233 20 890 1234',
-    email: 'gracewhitedoveschool@gmail.com',
+    email: 'whitedovesch2014@gmail.com',
     academicYearDisplay: academicYear || '2025/2026',
     expiryDate: '31 JUL 2026',
     issueDate: '01 SEP 2025',
