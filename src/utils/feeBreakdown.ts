@@ -316,3 +316,214 @@ export function calculateAggregatedFinancials(
   };
 }
 
+export interface ReconciledWardFinancials {
+  currentInvoice: Invoice;
+  invBreakdown: InvoiceFinancialBreakdown & {
+    netTermFeesDue: number;
+    netBooksDue: number;
+    netAccessoriesDue: number;
+    netArrearsDue: number;
+    paidFees: number;
+    paidBooks: number;
+    paidAccessories: number;
+    paidArrears: number;
+  };
+  totalBilled: number;
+  totalPaid: number;
+  balanceDue: number;
+  isFullyCleared: boolean;
+}
+
+/**
+ * Reconciles a ward's financial ledger in real time for the Parent Portal.
+ * Ensures that EVERY payment (Cash desk, Paystack online, MoMo, Bank) immediately
+ * deducts from the outstanding balance and itemized fee categories.
+ */
+export function computeWardFinancials(
+  ward: Student,
+  invoices: Invoice[],
+  payments: Payment[],
+  academicYear: string,
+  currentTerm: string
+): ReconciledWardFinancials {
+  const wardFullName = `${ward.firstName} ${ward.lastName}`.toLowerCase().trim();
+
+  // 1. All payments for this student
+  const wardPayments = payments.filter((p) => {
+    if (p.studentId === ward.id || p.studentId === ward.admissionNo) return true;
+    if (p.admissionNo && p.admissionNo === ward.admissionNo) return true;
+    if (p.studentName && p.studentName.toLowerCase().trim() === wardFullName) return true;
+    return false;
+  });
+
+  const totalPaid = wardPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+  // Categorize payments collected
+  let paidFees = 0;
+  let paidBooks = 0;
+  let paidAccessories = 0;
+  let paidArrears = 0;
+
+  wardPayments.forEach((p) => {
+    const amt = Number(p.amount) || 0;
+    if (amt <= 0) return;
+    if (p.breakdown) {
+      paidFees += Number(p.breakdown.fees) || 0;
+      paidBooks += Number(p.breakdown.books) || 0;
+      paidAccessories += Number(p.breakdown.accessories) || 0;
+      paidArrears += Number(p.breakdown.arrears) || 0;
+    } else if (p.feeCategory === 'Arrears' || (p.remarks || '').toLowerCase().includes('arrear')) {
+      paidArrears += amt;
+    } else if (p.feeCategory === 'Books') {
+      paidBooks += amt;
+    } else if (p.feeCategory === 'Accessories') {
+      paidAccessories += amt;
+    } else {
+      paidFees += amt;
+    }
+  });
+
+  // 2. All invoices for this student
+  const wardInvoices = invoices.filter((inv) => {
+    if (inv.studentId === ward.id || inv.studentId === ward.admissionNo) return true;
+    if (inv.studentName && inv.studentName.toLowerCase().trim() === wardFullName) return true;
+    return false;
+  });
+
+  const rawInvoice = wardInvoices[0];
+
+  // Calculate gross bill components
+  let billedTermFees = 0;
+  let billedBooks = 0;
+  let billedAccessories = 0;
+  let billedArrears = 0;
+  const allItems: any[] = [];
+
+  if (wardInvoices.length > 0) {
+    wardInvoices.forEach((inv) => {
+      const bk = getInvoiceFinancialBreakdown(inv);
+      billedTermFees += bk.termFees;
+      billedBooks += bk.books;
+      billedAccessories += bk.accessories;
+      billedArrears += bk.arrears;
+      if (Array.isArray(inv.items)) {
+        allItems.push(...inv.items);
+      }
+    });
+  } else {
+    // Fallback if no explicit invoice: use student balanceDue or default
+    const base = ward.balanceDue > 0 ? ward.balanceDue : (totalPaid > 0 ? totalPaid : 0);
+    billedTermFees = Math.max(0, base - (ward.manualArrears || 0));
+    billedArrears = ward.manualArrears || 0;
+  }
+
+  const currentTermAmount = billedTermFees + billedBooks + billedAccessories;
+  const grandTotal = currentTermAmount + billedArrears;
+  const balanceDue = Math.max(0, grandTotal - totalPaid);
+  const isFullyCleared = balanceDue === 0;
+
+  // Calculate net category remainders after deducting payments
+  // Distribute general paid amounts if category breakdown wasn't completely itemized
+  let effectivePaidArrears = Math.min(billedArrears, paidArrears);
+  let effectivePaidBooks = Math.min(billedBooks, paidBooks);
+  let effectivePaidAccessories = Math.min(billedAccessories, paidAccessories);
+  let effectivePaidFees = Math.min(billedTermFees, paidFees);
+
+  const totalCategorizedPaid = effectivePaidArrears + effectivePaidBooks + effectivePaidAccessories + effectivePaidFees;
+  const unallocatedPaid = Math.max(0, totalPaid - totalCategorizedPaid);
+
+  if (unallocatedPaid > 0) {
+    // Apply unallocated to fees, then arrears, then books, then accessories
+    const feesRoom = Math.max(0, billedTermFees - effectivePaidFees);
+    const feesAdd = Math.min(unallocatedPaid, feesRoom);
+    effectivePaidFees += feesAdd;
+    const rem1 = unallocatedPaid - feesAdd;
+
+    const arrRoom = Math.max(0, billedArrears - effectivePaidArrears);
+    const arrAdd = Math.min(rem1, arrRoom);
+    effectivePaidArrears += arrAdd;
+    const rem2 = rem1 - arrAdd;
+
+    const booksRoom = Math.max(0, billedBooks - effectivePaidBooks);
+    const booksAdd = Math.min(rem2, booksRoom);
+    effectivePaidBooks += booksAdd;
+    const rem3 = rem2 - booksAdd;
+
+    const accRoom = Math.max(0, billedAccessories - effectivePaidAccessories);
+    effectivePaidAccessories += Math.min(rem3, accRoom);
+  }
+
+  const netArrearsDue = Math.max(0, billedArrears - effectivePaidArrears);
+  const netBooksDue = Math.max(0, billedBooks - effectivePaidBooks);
+  const netAccessoriesDue = Math.max(0, billedAccessories - effectivePaidAccessories);
+  const netTermFeesDue = Math.max(0, billedTermFees - effectivePaidFees);
+
+  const status: 'Paid' | 'Partial' | 'Unpaid' =
+    isFullyCleared ? 'Paid' : totalPaid > 0 ? 'Partial' : 'Unpaid';
+
+  const currentInvoice: Invoice = rawInvoice
+    ? {
+        ...rawInvoice,
+        termFees: billedTermFees,
+        books: billedBooks,
+        accessories: billedAccessories,
+        arrears: billedArrears,
+        currentTermAmount,
+        totalAmount: grandTotal,
+        grandTotal,
+        paidAmount: totalPaid,
+        balance: balanceDue,
+        status,
+        items: allItems.length > 0 ? allItems : rawInvoice.items
+      }
+    : {
+        id: `inv-${ward.id}`,
+        invoiceNo: `INV-${academicYear.slice(0, 4)}-${ward.rollNo || '00'}`,
+        studentId: ward.id,
+        studentName: `${ward.firstName} ${ward.lastName}`.trim(),
+        className: ward.className,
+        academicYear,
+        term: currentTerm,
+        issueDate: new Date().toISOString().slice(0, 10),
+        dueDate: '',
+        items: allItems,
+        termFees: billedTermFees,
+        books: billedBooks,
+        accessories: billedAccessories,
+        arrears: billedArrears,
+        currentTermAmount,
+        totalAmount: grandTotal,
+        grandTotal,
+        paidAmount: totalPaid,
+        balance: balanceDue,
+        status
+      };
+
+  return {
+    currentInvoice,
+    invBreakdown: {
+      termFees: billedTermFees,
+      books: billedBooks,
+      accessories: billedAccessories,
+      currentTermAmount,
+      arrears: billedArrears,
+      grandTotal,
+      paidAmount: totalPaid,
+      balanceDue,
+      netTermFeesDue,
+      netBooksDue,
+      netAccessoriesDue,
+      netArrearsDue,
+      paidFees: effectivePaidFees,
+      paidBooks: effectivePaidBooks,
+      paidAccessories: effectivePaidAccessories,
+      paidArrears: effectivePaidArrears
+    },
+    totalBilled: grandTotal,
+    totalPaid,
+    balanceDue,
+    isFullyCleared
+  };
+}
+
+

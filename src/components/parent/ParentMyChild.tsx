@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { SchoolLogo } from '../common/SchoolLogo';
 import { printReportSheet } from '../../utils/printUtils';
@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { PaystackModal } from '../paystack/PaystackModal';
 import { Payment, Student } from '../../types';
-import { getInvoiceFinancialBreakdown } from '../../utils/feeBreakdown';
+import { getInvoiceFinancialBreakdown, computeWardFinancials } from '../../utils/feeBreakdown';
 import { OfficialPaymentReceiptModal } from '../fees/OfficialPaymentReceiptModal';
 import { downloadPaymentReceiptPdf } from '../../utils/receiptPdfGenerator';
 import {
@@ -97,36 +97,24 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
   const ward = defaultStudent || fallbackWard;
   const wardFullName = `${ward.firstName} ${ward.lastName}`.toLowerCase().trim();
 
-  // Ward Invoice & Payments from live state with broad synchronization
-  const wardInvoices = invoices.filter(
-    (inv) =>
-      inv.studentId === ward.id ||
-      inv.studentId === ward.admissionNo ||
-      (inv.studentName && inv.studentName.toLowerCase().trim() === wardFullName)
-  );
-  const rawInvoice = wardInvoices[0];
-  const currentInvoice = rawInvoice || {
-    id: `inv-${ward.id}`,
-    invoiceNo: `INV-${academicYear.slice(0, 4)}-${ward.rollNo || '00'}`,
-    studentId: ward.id,
-    studentName: `${ward.firstName} ${ward.lastName}`.trim(),
-    className: ward.className,
-    academicYear,
-    term: currentTerm,
-    issueDate: new Date().toISOString().slice(0, 10),
-    dueDate: '',
-    items: [],
-    totalAmount: ward.balanceDue > 0 ? ward.balanceDue : 0,
-    paidAmount: 0,
-    balance: ward.balanceDue > 0 ? ward.balanceDue : 0,
-    status: (ward.balanceDue === 0 ? 'Paid' : 'Unpaid') as 'Paid' | 'Unpaid'
-  };
+  // Reconciled Ward Financials (instantly deducts all Cash Desk, MoMo, Paystack, Bank payments)
+  const {
+    currentInvoice,
+    invBreakdown,
+    totalBilled,
+    totalPaid,
+    balanceDue,
+    isFullyCleared
+  } = useMemo(() => {
+    return computeWardFinancials(ward, invoices, payments, academicYear, currentTerm);
+  }, [ward, invoices, payments, academicYear, currentTerm]);
 
   const wardPayments = payments
     .filter(
       (p) =>
         p.studentId === ward.id ||
         p.studentId === ward.admissionNo ||
+        (p.admissionNo && p.admissionNo === ward.admissionNo) ||
         (p.studentName && p.studentName.toLowerCase().trim() === wardFullName)
     )
     .sort((a, b) => new Date(b.paymentDate || b.date || '').getTime() - new Date(a.paymentDate || a.date || '').getTime());
@@ -142,9 +130,6 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
       term: currentTerm
     });
   };
-
-  // Categorized breakdown (fees, books, accessories, arrears)
-  const invBreakdown = getInvoiceFinancialBreakdown(currentInvoice);
 
   // Real Ward Marks from system
   const wardMarks = marks.filter((m) => m.studentId === ward.id);
@@ -238,7 +223,7 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
           }`}
         >
           <CreditCard className="w-4 h-4" />
-          School Fees ({currentInvoice.balance > 0 ? `Balance: GHS ${currentInvoice.balance}` : 'Fully Cleared'})
+          School Fees ({isFullyCleared ? 'Fully Cleared' : `Balance: GHS ${balanceDue.toLocaleString()}`})
         </button>
       </div>
 
@@ -482,16 +467,23 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                   <div>
                     <span className="text-xs font-semibold text-slate-500">Outstanding Balance:</span>
                     <div className="text-3xl font-black text-slate-900 font-['Outfit'] mt-0.5">
-                      GHS {currentInvoice.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      GHS {balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </div>
                   </div>
-                  <button
-                    onClick={() => setIsPaystackOpen(true)}
-                    className="bg-[#0ba4db] hover:bg-[#088bbb] text-white font-extrabold px-6 py-3.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#0ba4db]/30 transition-all hover:scale-[1.02] cursor-pointer"
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span>Pay with Paystack Now</span>
-                  </button>
+                  {balanceDue > 0 ? (
+                    <button
+                      onClick={() => setIsPaystackOpen(true)}
+                      className="bg-[#0ba4db] hover:bg-[#088bbb] text-white font-extrabold px-6 py-3.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#0ba4db]/30 transition-all hover:scale-[1.02] cursor-pointer"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span>Pay with Paystack Now</span>
+                    </button>
+                  ) : (
+                    <div className="bg-emerald-100 text-emerald-800 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>Fees Fully Cleared</span>
+                    </div>
+                  )}
                 </div>
 
                 <p className="text-xs text-slate-600 leading-relaxed">
@@ -506,8 +498,8 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                     <h3 className="font-bold text-sm text-slate-900">Official Fee Statement & Category Allocation</h3>
                     <p className="text-xs text-slate-400">Invoice Number: <strong className="text-slate-700">{currentInvoice.invoiceNo}</strong></p>
                   </div>
-                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${currentInvoice.balance === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
-                    {currentInvoice.balance === 0 ? 'Fully Cleared' : currentInvoice.status}
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${isFullyCleared ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
+                    {isFullyCleared ? 'Fully Cleared' : currentInvoice.status}
                   </span>
                 </div>
 
@@ -518,24 +510,44 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                     <span className="text-sm font-black text-slate-900 font-mono mt-0.5 block">
                       GHS {invBreakdown.termFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
+                    {invBreakdown.paidFees > 0 && (
+                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                        Paid: GHS {invBreakdown.paidFees.toLocaleString()} (Bal: GHS {invBreakdown.netTermFeesDue.toLocaleString()})
+                      </span>
+                    )}
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                     <span className="text-[10px] text-slate-500 block uppercase font-bold">Textbooks</span>
                     <span className="text-sm font-black text-slate-900 font-mono mt-0.5 block">
                       GHS {invBreakdown.books.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
+                    {invBreakdown.paidBooks > 0 && (
+                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                        Paid: GHS {invBreakdown.paidBooks.toLocaleString()} (Bal: GHS {invBreakdown.netBooksDue.toLocaleString()})
+                      </span>
+                    )}
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                     <span className="text-[10px] text-slate-500 block uppercase font-bold">Accessories</span>
                     <span className="text-sm font-black text-slate-900 font-mono mt-0.5 block">
                       GHS {invBreakdown.accessories.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
+                    {invBreakdown.paidAccessories > 0 && (
+                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                        Paid: GHS {invBreakdown.paidAccessories.toLocaleString()} (Bal: GHS {invBreakdown.netAccessoriesDue.toLocaleString()})
+                      </span>
+                    )}
                   </div>
                   <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
                     <span className="text-[10px] text-amber-800 block uppercase font-bold">Arrears</span>
                     <span className="text-sm font-black text-amber-950 font-mono mt-0.5 block">
                       GHS {invBreakdown.arrears.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
+                    {invBreakdown.paidArrears > 0 && (
+                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                        Paid: GHS {invBreakdown.paidArrears.toLocaleString()} (Bal: GHS {invBreakdown.netArrearsDue.toLocaleString()})
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -557,15 +569,17 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                 <div className="pt-4 border-t-2 border-slate-200 space-y-2 text-xs">
                   <div className="flex justify-between text-slate-600">
                     <span>Total Billed Amount:</span>
-                    <span className="font-mono font-bold text-slate-900">GHS {invBreakdown.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="font-mono font-bold text-slate-900">GHS {totalBilled.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between text-emerald-700 font-semibold">
-                    <span>Total Paid & Credited:</span>
-                    <span className="font-mono">- GHS {invBreakdown.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span>Total Paid & Deducted (Cash, MoMo & Online):</span>
+                    <span className="font-mono">- GHS {totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-slate-100">
                     <span>Net Balance Payable:</span>
-                    <span className="font-mono text-emerald-900">GHS {invBreakdown.balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className={`font-mono ${isFullyCleared ? 'text-emerald-700' : 'text-emerald-900'}`}>
+                      GHS {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -701,7 +715,7 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
         isOpen={isPaystackOpen}
         onClose={() => setIsPaystackOpen(false)}
         invoice={currentInvoice.totalAmount > 0 ? currentInvoice : undefined}
-        customAmount={currentInvoice.balance > 0 ? currentInvoice.balance : 500}
+        customAmount={balanceDue > 0 ? balanceDue : 500}
         studentName={`${ward.firstName} ${ward.lastName}`}
         studentId={ward.id}
       />

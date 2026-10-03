@@ -2492,12 +2492,14 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setInvoices(prev => {
       let found = false;
       const updatedInvoices = prev.map(inv => {
-        if (
+        const matchesStudent =
           inv.id === pay.invoiceId || 
           inv.studentId === resolvedStudentId || 
           inv.studentId === resolvedAdmissionNo ||
-          inv.studentId === pay.studentId
-        ) {
+          inv.studentId === pay.studentId ||
+          (inv.studentName && inv.studentName.toLowerCase().trim() === resolvedStudentName.toLowerCase().trim());
+
+        if (matchesStudent) {
           found = true;
           const bk = getInvoiceFinancialBreakdown(inv);
           const newPaid = (inv.paidAmount || 0) + pay.amount;
@@ -2561,9 +2563,18 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setStudents(prev => {
       const updatedStudents = prev.map(s => {
-        if (s.id === resolvedStudentId || s.admissionNo === resolvedAdmissionNo || s.id === pay.studentId) {
+        const matchesStudent =
+          s.id === resolvedStudentId ||
+          s.admissionNo === resolvedAdmissionNo ||
+          s.id === pay.studentId ||
+          `${s.firstName} ${s.lastName}`.toLowerCase().trim() === resolvedStudentName.toLowerCase().trim();
+
+        if (matchesStudent) {
+          const currentBal = typeof s.balanceDue === 'number' && s.balanceDue > 0
+            ? s.balanceDue
+            : (existingInv?.balance ? existingInv.balance : pay.amount);
           const newArrears = Math.max(0, (s.manualArrears || 0) - paidArrears);
-          const newBal = Math.max(0, (s.balanceDue || 0) - pay.amount);
+          const newBal = Math.max(0, currentBal - pay.amount);
           const updatedStd = { ...s, manualArrears: newArrears, balanceDue: newBal };
           saveDocumentToFirestore('students', updatedStd);
           return updatedStd;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { SchoolLogo } from '../common/SchoolLogo';
 import {
@@ -30,7 +30,7 @@ import {
 import { PaystackModal } from '../paystack/PaystackModal';
 import { Payment, Student } from '../../types';
 import { calculateGradeForClass, isLowerPrimaryOrPreschool } from '../../utils/jhsGrading';
-import { getInvoiceFinancialBreakdown } from '../../utils/feeBreakdown';
+import { getInvoiceFinancialBreakdown, computeWardFinancials } from '../../utils/feeBreakdown';
 import { OfficialPaymentReceiptModal } from '../fees/OfficialPaymentReceiptModal';
 import { downloadPaymentReceiptPdf } from '../../utils/receiptPdfGenerator';
 
@@ -89,36 +89,24 @@ export const ParentDashboard: React.FC = () => {
   const ward = students.find((s) => s.id === selectedStudentId) || defaultStudent || fallbackWard;
   const wardFullName = `${ward.firstName} ${ward.lastName}`.toLowerCase().trim();
 
-  // Ward Invoices & Payments from live state with broad synchronization
-  const wardInvoices = invoices.filter(
-    (inv) =>
-      inv.studentId === ward.id ||
-      inv.studentId === ward.admissionNo ||
-      (inv.studentName && inv.studentName.toLowerCase().trim() === wardFullName)
-  );
-  const rawInvoice = wardInvoices[0];
-  const currentInvoice = rawInvoice || {
-    id: `inv-${ward.id}`,
-    invoiceNo: `INV-${academicYear.slice(0, 4)}-${ward.rollNo || '00'}`,
-    studentId: ward.id,
-    studentName: `${ward.firstName} ${ward.lastName}`.trim(),
-    className: ward.className,
-    academicYear,
-    term: currentTerm,
-    issueDate: new Date().toISOString().slice(0, 10),
-    dueDate: '',
-    items: [],
-    totalAmount: ward.balanceDue > 0 ? ward.balanceDue : 0,
-    paidAmount: 0,
-    balance: ward.balanceDue > 0 ? ward.balanceDue : 0,
-    status: (ward.balanceDue === 0 ? 'Paid' : 'Unpaid') as 'Paid' | 'Unpaid'
-  };
+  // Reconciled Ward Financials (instantly deducts all Cash Desk, MoMo, Paystack, Bank payments)
+  const {
+    currentInvoice,
+    invBreakdown,
+    totalBilled,
+    totalPaid,
+    balanceDue,
+    isFullyCleared
+  } = useMemo(() => {
+    return computeWardFinancials(ward, invoices, payments, academicYear, currentTerm);
+  }, [ward, invoices, payments, academicYear, currentTerm]);
 
   const wardPayments = payments
     .filter(
       (p) =>
         p.studentId === ward.id ||
         p.studentId === ward.admissionNo ||
+        (p.admissionNo && p.admissionNo === ward.admissionNo) ||
         (p.studentName && p.studentName.toLowerCase().trim() === wardFullName)
     )
     .sort((a, b) => new Date(b.paymentDate || b.date || '').getTime() - new Date(a.paymentDate || a.date || '').getTime());
@@ -134,9 +122,6 @@ export const ParentDashboard: React.FC = () => {
       term: currentTerm
     });
   };
-
-  // Real-time categorized financial breakdown
-  const invBreakdown = getInvoiceFinancialBreakdown(currentInvoice);
 
   // Dynamic Ward Marks
   const wardMarks = marks.filter((m) => m.studentId === ward.id);
@@ -223,22 +208,22 @@ export const ParentDashboard: React.FC = () => {
             </div>
             <div className="mt-3">
               <span className="text-2xl font-black text-slate-900 font-['Outfit']">
-                GHS {currentInvoice.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                GHS {balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </span>
               <p className="text-[11px] text-slate-500 mt-1">
-                Total Bill: GHS {currentInvoice.totalAmount.toLocaleString()} • Paid: GHS {currentInvoice.paidAmount.toLocaleString()}
+                Total Bill: GHS {totalBilled.toLocaleString()} • Paid & Deducted: GHS {totalPaid.toLocaleString()}
               </p>
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
             <span
               className={`text-[10px] font-extrabold px-2 py-0.5 rounded ${
-                currentInvoice.balance === 0
+                isFullyCleared
                   ? 'bg-emerald-100 text-emerald-800'
                   : 'bg-amber-100 text-amber-900'
               }`}
             >
-              {currentInvoice.balance === 0 ? 'Fully Cleared' : currentInvoice.status}
+              {isFullyCleared ? 'Fully Cleared' : currentInvoice.status}
             </span>
             <button
               onClick={() => setIsPaystackOpen(true)}
@@ -530,9 +515,9 @@ export const ParentDashboard: React.FC = () => {
               <span className="text-xs font-semibold text-slate-500">Current Outstanding Balance:</span>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-3xl font-black text-slate-900 font-['Outfit']">
-                  GHS {currentInvoice.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  GHS {balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </span>
-                {currentInvoice.balance === 0 && (
+                {isFullyCleared && (
                   <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
                     Fully Cleared
                   </span>
@@ -550,7 +535,7 @@ export const ParentDashboard: React.FC = () => {
                   Itemized Fee Breakdown ({currentInvoice.invoiceNo})
                 </span>
                 <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  Live Ledger Sync
+                  Live Ledger Deductions Active
                 </span>
               </div>
 
@@ -560,24 +545,44 @@ export const ParentDashboard: React.FC = () => {
                   <span className="font-bold text-slate-900 font-mono text-xs">
                     GHS {invBreakdown.termFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
+                  {invBreakdown.paidFees > 0 && (
+                    <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                      Paid: GHS {invBreakdown.paidFees.toLocaleString()} (Bal: GHS {invBreakdown.netTermFeesDue.toLocaleString()})
+                    </span>
+                  )}
                 </div>
                 <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
                   <span className="text-[10px] text-slate-500 block">Books & Stationery</span>
                   <span className="font-bold text-slate-900 font-mono text-xs">
                     GHS {invBreakdown.books.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
+                  {invBreakdown.paidBooks > 0 && (
+                    <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                      Paid: GHS {invBreakdown.paidBooks.toLocaleString()} (Bal: GHS {invBreakdown.netBooksDue.toLocaleString()})
+                    </span>
+                  )}
                 </div>
                 <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
                   <span className="text-[10px] text-slate-500 block">Uniform & Accessories</span>
                   <span className="font-bold text-slate-900 font-mono text-xs">
                     GHS {invBreakdown.accessories.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
+                  {invBreakdown.paidAccessories > 0 && (
+                    <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                      Paid: GHS {invBreakdown.paidAccessories.toLocaleString()} (Bal: GHS {invBreakdown.netAccessoriesDue.toLocaleString()})
+                    </span>
+                  )}
                 </div>
                 <div className="p-2 bg-amber-50 rounded-lg border border-amber-200">
                   <span className="text-[10px] text-amber-800 block font-semibold">Arrears (Past Debt)</span>
                   <span className="font-bold text-amber-950 font-mono text-xs">
                     GHS {invBreakdown.arrears.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
+                  {invBreakdown.paidArrears > 0 && (
+                    <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                      Paid: GHS {invBreakdown.paidArrears.toLocaleString()} (Bal: GHS {invBreakdown.netArrearsDue.toLocaleString()})
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -585,27 +590,29 @@ export const ParentDashboard: React.FC = () => {
               <div className="pt-2 border-t border-slate-100 space-y-1">
                 <div className="flex justify-between font-semibold text-slate-700 text-[11px]">
                   <span>Total Billed:</span>
-                  <span className="font-mono">GHS {invBreakdown.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span className="font-mono">GHS {totalBilled.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between font-bold text-emerald-700 text-[11px]">
-                  <span>Less Total Payments Deducted:</span>
-                  <span className="font-mono">- GHS {invBreakdown.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span>Less Total Payments Deducted (Cash, MoMo & Online):</span>
+                  <span className="font-mono">- GHS {totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between font-black text-slate-900 text-xs pt-1 border-t border-slate-200">
                   <span>Net Outstanding Payable:</span>
-                  <span className="font-mono text-emerald-950">GHS {invBreakdown.balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span className={`font-mono ${isFullyCleared ? 'text-emerald-700' : 'text-emerald-950'}`}>
+                    GHS {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* Big Paystack Button */}
-            {currentInvoice.balance > 0 ? (
+            {balanceDue > 0 ? (
               <button
                 onClick={() => setIsPaystackOpen(true)}
                 className="w-full bg-[#0ba4db] hover:bg-[#088bbb] text-white font-extrabold py-3.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-[#0ba4db]/30 transition-all hover:scale-[1.01] cursor-pointer"
               >
                 <CreditCard className="w-4 h-4" />
-                <span>Initiate Online Payment (GHS {currentInvoice.balance.toLocaleString()})</span>
+                <span>Initiate Online Payment (GHS {balanceDue.toLocaleString()})</span>
               </button>
             ) : (
               <div className="w-full bg-emerald-50 border border-emerald-300 text-emerald-800 font-bold py-2.5 px-4 rounded-xl text-xs text-center flex items-center justify-center gap-2">
@@ -703,7 +710,7 @@ export const ParentDashboard: React.FC = () => {
         isOpen={isPaystackOpen}
         onClose={() => setIsPaystackOpen(false)}
         invoice={currentInvoice.totalAmount > 0 ? currentInvoice : undefined}
-        customAmount={currentInvoice.balance > 0 ? currentInvoice.balance : 500}
+        customAmount={balanceDue > 0 ? balanceDue : 500}
         studentName={`${ward.firstName} ${ward.lastName}`}
         studentId={ward.id}
       />

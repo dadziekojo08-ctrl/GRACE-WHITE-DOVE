@@ -23,6 +23,7 @@ import { useSchool } from '../../context/SchoolContext';
 import { Payment, Student } from '../../types';
 import { downloadPaymentReceiptPdf } from '../../utils/receiptPdfGenerator';
 import { OfficialPaymentReceiptModal } from '../fees/OfficialPaymentReceiptModal';
+import { computeWardFinancials } from '../../utils/feeBreakdown';
 
 interface ParentPaymentHistoryProps {
   onOpenPaystack?: (invoice?: any, customAmount?: number, studentName?: string, studentId?: string) => void;
@@ -138,10 +139,14 @@ export const ParentPaymentHistory: React.FC<ParentPaymentHistoryProps> = ({ onOp
 
   const outstandingBalance = useMemo(() => {
     if (selectedStudentFilter === 'all') {
-      return parentWards.reduce((sum, w) => sum + (w.balanceDue || 0), 0);
+      return parentWards.reduce((sum, w) => {
+        const fin = computeWardFinancials(w, invoices, payments, academicYear, currentTerm);
+        return sum + fin.balanceDue;
+      }, 0);
     }
-    return activeWard?.balanceDue || 0;
-  }, [selectedStudentFilter, parentWards, activeWard]);
+    if (!activeWard) return 0;
+    return computeWardFinancials(activeWard, invoices, payments, academicYear, currentTerm).balanceDue;
+  }, [selectedStudentFilter, parentWards, activeWard, invoices, payments, academicYear, currentTerm]);
 
   // Handler to download single receipt
   const handleDownloadPdf = (payment: Payment) => {
