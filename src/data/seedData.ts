@@ -106,22 +106,6 @@ export const initialStaff: StaffMember[] = [
     qualification: 'M.Ed Educational Leadership & Administration'
   },
   {
-    id: 'stf-002',
-    staffCode: 'STF-TCH-01',
-    name: 'Mr. Kwesi Mensah',
-    role: 'Teacher',
-    department: 'Primary Department',
-    email: 'kwesi@educore.edu.gh',
-    phone: '+233 24 220 3040',
-    designation: 'Class 1 Teacher',
-    assignedClass: 'Primary 1 (Grade 1)',
-    basicSalary: 2850,
-    joinedDate: '2023-09-01',
-    status: 'Active',
-    avatarUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
-    qualification: 'B.Ed Basic Education'
-  },
-  {
     id: 'stf-003',
     staffCode: 'STF-TCH-02',
     name: 'Mrs. Akua Antwi',
@@ -152,22 +136,6 @@ export const initialStaff: StaffMember[] = [
     status: 'Active',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     qualification: 'Certificate in Early Childhood Education'
-  },
-  {
-    id: 'stf-005',
-    staffCode: 'STF-TCH-04',
-    name: 'Mr. Emmanuel Osei',
-    role: 'Teacher',
-    department: 'Junior High School (JHS)',
-    email: 'emmanuel@educore.edu.gh',
-    phone: '+233 24 550 6070',
-    designation: 'JHS Science & Mathematics Teacher',
-    assignedClass: 'JHS 2 (Grade 8)',
-    basicSalary: 3100,
-    joinedDate: '2022-08-15',
-    status: 'Active',
-    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    qualification: 'B.Sc Mathematics & Science Education'
   },
   {
     id: 'stf-006',
@@ -264,19 +232,6 @@ export const initialAuthUsers: AuthUser[] = [
     lastLogin: new Date().toISOString()
   },
   {
-    id: 'usr-tch-01',
-    name: 'Mr. Kwesi Mensah',
-    username: 'kwesi',
-    password: 'whitedove',
-    email: 'kwesi@educore.edu.gh',
-    role: 'Teacher',
-    phone: '+233 24 220 3040',
-    staffCode: 'STF-TCH-01',
-    assignedClass: 'Primary 1 (Grade 1)',
-    avatarUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
-    lastLogin: 'Today'
-  },
-  {
     id: 'usr-tch-02',
     name: 'Mrs. Akua Antwi',
     username: 'akua',
@@ -300,19 +255,6 @@ export const initialAuthUsers: AuthUser[] = [
     staffCode: 'STF-TCH-03',
     assignedClass: 'Creche',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    lastLogin: 'Today'
-  },
-  {
-    id: 'usr-tch-04',
-    name: 'Mr. Emmanuel Osei',
-    username: 'emmanuel',
-    password: 'whitedove',
-    email: 'emmanuel@educore.edu.gh',
-    role: 'Teacher',
-    phone: '+233 24 550 6070',
-    staffCode: 'STF-TCH-04',
-    assignedClass: 'JHS 2 (Grade 8)',
-    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
     lastLogin: 'Today'
   },
   {
@@ -409,7 +351,7 @@ export const initialClasses: ClassRoom[] = [
     name: 'Primary 1 (Grade 1)',
     level: 'Primary 1 (Grade 1)',
     stream: 'A',
-    classTeacher: 'Mr. Kwesi Mensah',
+    classTeacher: '',
     roomNumber: 'Block B - Room 101',
     capacity: 35,
     enrolledCount: 0,
@@ -507,7 +449,7 @@ export const initialClasses: ClassRoom[] = [
     name: 'JHS 2 (Grade 8)',
     level: 'JHS 2 (Grade 8)',
     stream: 'A',
-    classTeacher: 'Mr. Emmanuel Osei',
+    classTeacher: '',
     roomNumber: 'Block C - Room 302',
     capacity: 35,
     enrolledCount: 0,
@@ -521,7 +463,7 @@ export const initialClasses: ClassRoom[] = [
     name: 'JHS 3 (Grade 9)',
     level: 'JHS 3 (Grade 9)',
     stream: 'A',
-    classTeacher: 'Mr. Emmanuel Osei',
+    classTeacher: '',
     roomNumber: 'Block C - Room 303',
     capacity: 35,
     enrolledCount: 0,

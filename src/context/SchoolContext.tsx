@@ -340,7 +340,15 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     }
 
-    const uniqueUsers = Array.from(new Set(usersMap.values()));
+    const deletedStaffIds = loadStorage<string[]>('deleted_staff_ids', []);
+    const uniqueUsers = Array.from(new Set(usersMap.values())).filter((u: AuthUser) => {
+      const name = (u.name || '').toLowerCase();
+      if (name.includes('kwesi mensah') || name.includes('emmanuel osei')) return false;
+      if (u.id && deletedStaffIds.includes(u.id)) return false;
+      if (u.email && deletedStaffIds.includes(u.email.toLowerCase())) return false;
+      if (name && deletedStaffIds.includes(name)) return false;
+      return true;
+    });
     return uniqueUsers.map((u: AuthUser) => {
       if (u.username === 'bernard' || u.email === 'dadziebernard@gmail.com' || u.role === 'Super Admin') {
         return {
@@ -468,7 +476,19 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [selectedTimetableClass, setSelectedTimetableClass] = useState<string>('Creche');
   const [staff, setStaff] = useState<StaffMember[]>(() => {
     let saved = loadStorage<StaffMember[]>('staff', initialStaff);
+    const deletedStaffIds = loadStorage<string[]>('deleted_staff_ids', []);
     if (Array.isArray(saved)) {
+      // 1. Purge unwanted teachers and deleted staff records
+      saved = saved.filter(s => {
+        const name = (s.name || '').toLowerCase();
+        if (name.includes('kwesi mensah') || name.includes('emmanuel osei')) return false;
+        if (s.id && deletedStaffIds.includes(s.id)) return false;
+        if (s.email && deletedStaffIds.includes(s.email.toLowerCase())) return false;
+        if (name && deletedStaffIds.includes(name)) return false;
+        return true;
+      });
+      saveStorage('staff', saved);
+
       const hasSuperAdmin = saved.some((s) => s.email === 'dadziebernard@gmail.com' || s.role === 'Super Admin');
       if (!hasSuperAdmin) {
         const superAdminToAdd = initialStaff.find((s) => s.role === 'Super Admin');
@@ -476,12 +496,6 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           saved = [superAdminToAdd, ...saved];
           saveStorage('staff', saved);
         }
-      }
-      const hasTeachers = saved.some((s) => s.role === 'Teacher');
-      if (!hasTeachers) {
-        const teachersToAdd = initialStaff.filter((s) => s.role === 'Teacher');
-        saved = [...saved, ...teachersToAdd];
-        saveStorage('staff', saved);
       }
     }
     return saved;
@@ -501,6 +515,68 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
   const hasInitializedFromCloud = useRef<boolean>(false);
+
+  // Immediate purge of unwanted teachers: Mr. Kwesi Mensah & Mr. Emmanuel Osei
+  useEffect(() => {
+    const purgeNames = ['kwesi mensah', 'emmanuel osei'];
+
+    // 1. Purge from staff
+    setStaff(prev => {
+      const filtered = prev.filter(s => {
+        const n = (s.name || '').toLowerCase();
+        const matches = purgeNames.some(pn => n.includes(pn));
+        if (matches) {
+          deleteDocumentFromFirestore('staff', s.id);
+        }
+        return !matches;
+      });
+      if (filtered.length !== prev.length) {
+        saveStorage('staff', filtered);
+      }
+      return filtered;
+    });
+
+    // 2. Purge from authUsers
+    setAuthUsers(prev => {
+      const filtered = prev.filter(u => {
+        const n = (u.name || '').toLowerCase();
+        const matches = purgeNames.some(pn => n.includes(pn));
+        if (matches) {
+          deleteDocumentFromFirestore('authUsers', u.id);
+        }
+        return !matches;
+      });
+      if (filtered.length !== prev.length) {
+        saveStorage('authUsers', filtered);
+      }
+      return filtered;
+    });
+
+    // 3. Clear class teacher from classes
+    setClasses(prev => {
+      let changed = false;
+      const updated = prev.map(cls => {
+        if (cls.classTeacher && purgeNames.some(pn => cls.classTeacher.toLowerCase().includes(pn))) {
+          changed = true;
+          const uCls = { ...cls, classTeacher: '' };
+          saveDocumentToFirestore('classes', uCls);
+          return uCls;
+        }
+        return cls;
+      });
+      if (changed) {
+        saveStorage('classes', updated);
+      }
+      return updated;
+    });
+
+    // Add to deleted_staff_ids
+    const currentDeleted = loadStorage<string[]>('deleted_staff_ids', []);
+    purgeNames.forEach(pn => {
+      if (!currentDeleted.includes(pn)) currentDeleted.push(pn);
+    });
+    saveStorage('deleted_staff_ids', currentDeleted);
+  }, []);
 
   // Initial Cloud Load: probe and fetch collections if available on Firestore
   useEffect(() => {
@@ -674,7 +750,28 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         });
 
         setStaff(prev => {
-          const merged = mergeCollection(prev, cloudStaff);
+          const currentDeleted = loadStorage<string[]>('deleted_staff_ids', []);
+          const cleanCloud = cloudStaff.filter(s => {
+            const name = (s.name || '').toLowerCase();
+            if (name.includes('kwesi mensah') || name.includes('emmanuel osei')) {
+              deleteDocumentFromFirestore('staff', s.id);
+              return false;
+            }
+            if (s.id && currentDeleted.includes(s.id)) {
+              deleteDocumentFromFirestore('staff', s.id);
+              return false;
+            }
+            if (s.email && currentDeleted.includes(s.email.toLowerCase())) {
+              deleteDocumentFromFirestore('staff', s.id);
+              return false;
+            }
+            if (name && currentDeleted.includes(name)) {
+              deleteDocumentFromFirestore('staff', s.id);
+              return false;
+            }
+            return true;
+          });
+          const merged = mergeCollection(prev, cleanCloud);
           saveStorage('staff', merged);
           return merged;
         });
@@ -747,16 +844,41 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         if (cloudAuthUsers.length > 0) {
           setAuthUsers(prev => {
+            const currentDeleted = loadStorage<string[]>('deleted_staff_ids', []);
             const map = new Map<string, AuthUser>();
             prev.forEach(u => {
               if (u.email) map.set(u.email.toLowerCase(), u);
               if (u.username) map.set(u.username.toLowerCase(), u);
             });
             cloudAuthUsers.forEach(u => {
+              const name = (u.name || '').toLowerCase();
+              if (name.includes('kwesi mensah') || name.includes('emmanuel osei')) {
+                deleteDocumentFromFirestore('authUsers', u.id);
+                return;
+              }
+              if (u.id && currentDeleted.includes(u.id)) {
+                deleteDocumentFromFirestore('authUsers', u.id);
+                return;
+              }
+              if (u.email && currentDeleted.includes(u.email.toLowerCase())) {
+                deleteDocumentFromFirestore('authUsers', u.id);
+                return;
+              }
+              if (name && currentDeleted.includes(name)) {
+                deleteDocumentFromFirestore('authUsers', u.id);
+                return;
+              }
               if (u.email) map.set(u.email.toLowerCase(), u);
               if (u.username) map.set(u.username.toLowerCase(), u);
             });
-            const unified = Array.from(new Set(map.values()));
+            const unified = Array.from(new Set(map.values())).filter(u => {
+              const name = (u.name || '').toLowerCase();
+              if (name.includes('kwesi mensah') || name.includes('emmanuel osei')) return false;
+              if (u.id && currentDeleted.includes(u.id)) return false;
+              if (u.email && currentDeleted.includes(u.email.toLowerCase())) return false;
+              if (name && currentDeleted.includes(name)) return false;
+              return true;
+            });
             saveStorage('authUsers', unified);
             return unified;
           });
@@ -2497,14 +2619,16 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           inv.studentId === resolvedStudentId || 
           inv.studentId === resolvedAdmissionNo ||
           inv.studentId === pay.studentId ||
+          (pay.admissionNo && inv.studentId === pay.admissionNo) ||
           (inv.studentName && inv.studentName.toLowerCase().trim() === resolvedStudentName.toLowerCase().trim());
 
         if (matchesStudent) {
           found = true;
           const bk = getInvoiceFinancialBreakdown(inv);
-          const newPaid = (inv.paidAmount || 0) + pay.amount;
-          const newInvArrears = Math.max(0, (bk.arrears || 0) - paidArrears);
-          const grandTotal = bk.currentTermAmount + newInvArrears;
+          const newPaid = (Number(inv.paidAmount) || 0) + pay.amount;
+          const baseArrears = typeof inv.arrears === 'number' ? inv.arrears : (bk.arrears || 0);
+          const newInvArrears = Math.max(0, baseArrears - paidArrears);
+          const grandTotal = bk.currentTermAmount + baseArrears;
           const calculatedBal = Math.max(0, grandTotal - newPaid);
           const status = calculatedBal === 0 ? 'Paid' : newPaid > 0 ? 'Partial' : 'Unpaid';
           const updatedInv: Invoice = { 
@@ -2567,12 +2691,13 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           s.id === resolvedStudentId ||
           s.admissionNo === resolvedAdmissionNo ||
           s.id === pay.studentId ||
+          (pay.admissionNo && s.admissionNo === pay.admissionNo) ||
           `${s.firstName} ${s.lastName}`.toLowerCase().trim() === resolvedStudentName.toLowerCase().trim();
 
         if (matchesStudent) {
-          const currentBal = typeof s.balanceDue === 'number' && s.balanceDue > 0
+          const currentBal = typeof s.balanceDue === 'number'
             ? s.balanceDue
-            : (existingInv?.balance ? existingInv.balance : pay.amount);
+            : (typeof existingInv?.balance === 'number' ? existingInv.balance : pay.amount);
           const newArrears = Math.max(0, (s.manualArrears || 0) - paidArrears);
           const newBal = Math.max(0, currentBal - pay.amount);
           const updatedStd = { ...s, manualArrears: newArrears, balanceDue: newBal };
@@ -2749,9 +2874,62 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const deleteStaff = (id: string) => {
     const stf = staff.find(s => s.id === id);
-    setStaff(prev => prev.filter(s => s.id !== id));
+    const staffName = stf?.name || '';
+    const staffCode = stf?.staffCode || '';
+    const staffEmail = stf?.email?.toLowerCase() || '';
+
+    // 1. Remove from staff state & localStorage
+    setStaff(prev => {
+      const updated = prev.filter(s => s.id !== id);
+      saveStorage('staff', updated);
+      return updated;
+    });
+
+    // 2. Permanently delete from Firestore collection
+    deleteDocumentFromFirestore('staff', id);
+
+    // 3. Remove corresponding AuthUser account and delete from Firestore
+    setAuthUsers(prev => {
+      const updated = prev.filter(u => {
+        const matches =
+          u.id === id ||
+          (staffEmail && u.email?.toLowerCase() === staffEmail) ||
+          (staffCode && u.staffCode === staffCode) ||
+          (staffName && u.name.toLowerCase() === staffName.toLowerCase());
+        if (matches) {
+          deleteDocumentFromFirestore('authUsers', u.id);
+        }
+        return !matches;
+      });
+      saveStorage('authUsers', updated);
+      return updated;
+    });
+
+    // 4. Unassign class teacher from any classroom currently assigned to this teacher
+    if (staffName) {
+      setClasses(prev => {
+        const updated = prev.map(cls => {
+          if (cls.classTeacher && cls.classTeacher.toLowerCase() === staffName.toLowerCase()) {
+            const uCls = { ...cls, classTeacher: '' };
+            saveDocumentToFirestore('classes', uCls);
+            return uCls;
+          }
+          return cls;
+        });
+        saveStorage('classes', updated);
+        return updated;
+      });
+    }
+
+    // 5. Record tombstone in deleted_staff_ids so cloud sync or reload NEVER resurrects them
+    const currentDeleted = loadStorage<string[]>('deleted_staff_ids', []);
+    if (!currentDeleted.includes(id)) currentDeleted.push(id);
+    if (staffEmail && !currentDeleted.includes(staffEmail)) currentDeleted.push(staffEmail);
+    if (staffName && !currentDeleted.includes(staffName.toLowerCase())) currentDeleted.push(staffName.toLowerCase());
+    saveStorage('deleted_staff_ids', currentDeleted);
+
     if (stf) {
-      logAuditAction('STAFF_REMOVED', 'Staff Management', `Removed staff record: ${stf.name} (${stf.staffCode})`);
+      logAuditAction('STAFF_REMOVED', 'Staff Management', `Permanently removed staff record: ${stf.name} (${stf.staffCode || id})`);
     }
   };
 

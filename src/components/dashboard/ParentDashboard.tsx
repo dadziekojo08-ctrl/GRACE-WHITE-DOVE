@@ -541,46 +541,66 @@ export const ParentDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                  <span className="text-[10px] text-slate-500 block">Tuition / Term Fees</span>
-                  <span className="font-bold text-slate-900 font-mono text-xs">
-                    GHS {invBreakdown.termFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <span className="text-[10px] text-slate-500 block uppercase font-bold">Tuition / Fees Balance</span>
+                  <span className={`font-bold font-mono text-xs ${invBreakdown.netTermFeesDue === 0 && invBreakdown.termFees > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                    GHS {invBreakdown.netTermFeesDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
-                  {invBreakdown.paidFees > 0 && (
+                  {invBreakdown.paidFees > 0 ? (
                     <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                      Paid: GHS {invBreakdown.paidFees.toLocaleString()} (Bal: GHS {invBreakdown.netTermFeesDue.toLocaleString()})
+                      {invBreakdown.netTermFeesDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidFees.toLocaleString()}`}
+                      <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.termFees.toLocaleString()}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-slate-400 block mt-0.5">
+                      Billed: GHS {invBreakdown.termFees.toLocaleString()}
                     </span>
                   )}
                 </div>
                 <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                  <span className="text-[10px] text-slate-500 block">Books & Stationery</span>
-                  <span className="font-bold text-slate-900 font-mono text-xs">
-                    GHS {invBreakdown.books.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <span className="text-[10px] text-slate-500 block uppercase font-bold">Books Balance</span>
+                  <span className={`font-bold font-mono text-xs ${invBreakdown.netBooksDue === 0 && invBreakdown.books > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                    GHS {invBreakdown.netBooksDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
-                  {invBreakdown.paidBooks > 0 && (
+                  {invBreakdown.paidBooks > 0 ? (
                     <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                      Paid: GHS {invBreakdown.paidBooks.toLocaleString()} (Bal: GHS {invBreakdown.netBooksDue.toLocaleString()})
+                      {invBreakdown.netBooksDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidBooks.toLocaleString()}`}
+                      <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.books.toLocaleString()}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-slate-400 block mt-0.5">
+                      Billed: GHS {invBreakdown.books.toLocaleString()}
                     </span>
                   )}
                 </div>
                 <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                  <span className="text-[10px] text-slate-500 block">Uniform & Accessories</span>
-                  <span className="font-bold text-slate-900 font-mono text-xs">
-                    GHS {invBreakdown.accessories.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <span className="text-[10px] text-slate-500 block uppercase font-bold">Accessories Balance</span>
+                  <span className={`font-bold font-mono text-xs ${invBreakdown.netAccessoriesDue === 0 && invBreakdown.accessories > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                    GHS {invBreakdown.netAccessoriesDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
-                  {invBreakdown.paidAccessories > 0 && (
+                  {invBreakdown.paidAccessories > 0 ? (
                     <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                      Paid: GHS {invBreakdown.paidAccessories.toLocaleString()} (Bal: GHS {invBreakdown.netAccessoriesDue.toLocaleString()})
+                      {invBreakdown.netAccessoriesDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidAccessories.toLocaleString()}`}
+                      <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.accessories.toLocaleString()}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-slate-400 block mt-0.5">
+                      Billed: GHS {invBreakdown.accessories.toLocaleString()}
                     </span>
                   )}
                 </div>
                 <div className="p-2 bg-amber-50 rounded-lg border border-amber-200">
-                  <span className="text-[10px] text-amber-800 block font-semibold">Arrears (Past Debt)</span>
-                  <span className="font-bold text-amber-950 font-mono text-xs">
-                    GHS {invBreakdown.arrears.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <span className="text-[10px] text-amber-800 block uppercase font-bold">Arrears Balance</span>
+                  <span className={`font-bold font-mono text-xs ${invBreakdown.netArrearsDue === 0 && invBreakdown.arrears > 0 ? 'text-emerald-700' : 'text-amber-950'}`}>
+                    GHS {invBreakdown.netArrearsDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
-                  {invBreakdown.paidArrears > 0 && (
+                  {invBreakdown.paidArrears > 0 ? (
                     <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                      Paid: GHS {invBreakdown.paidArrears.toLocaleString()} (Bal: GHS {invBreakdown.netArrearsDue.toLocaleString()})
+                      {invBreakdown.netArrearsDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidArrears.toLocaleString()}`}
+                      <span className="text-amber-700/60 font-normal block">Prior: GHS {invBreakdown.arrears.toLocaleString()}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-amber-700/70 block mt-0.5">
+                      Past: GHS {invBreakdown.arrears.toLocaleString()}
                     </span>
                   )}
                 </div>

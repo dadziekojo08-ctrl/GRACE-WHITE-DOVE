@@ -242,6 +242,13 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
   // JHS teachers can switch between JHS 1, JHS 2, JHS 3 or All JHS
   const [jhsActiveFilter, setJhsActiveFilter] = useState<string>('All JHS');
 
+  const activeScopeBadge = useMemo(() => {
+    if (isTeacherJHS) {
+      return jhsActiveFilter === 'All JHS' ? 'JHS 1 – 3' : jhsActiveFilter;
+    }
+    return teacherAssignedClass || teacherAllowedClasses[0]?.name || 'Primary 1 (Grade 1)';
+  }, [isTeacherJHS, jhsActiveFilter, teacherAssignedClass, teacherAllowedClasses]);
+
   // Pupil Registration within Teacher Portal
   const [isAdmitModalOpen, setIsAdmitModalOpen] = useState(false);
   const [admitSuccessBanner, setAdmitSuccessBanner] = useState<string | null>(null);
@@ -754,7 +761,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
               </div>
               <div className="mt-3 flex items-baseline gap-2">
                 <span className="text-2xl font-black text-slate-900 font-['Outfit']">{displayStudents.length}</span>
-                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">JHS 2 (Stream A)</span>
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{activeScopeBadge}</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1">100% enrolled & verified</p>
             </div>
@@ -954,7 +961,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
             {/* Quick Grade Distribution */}
             <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col">
               <h3 className="font-bold text-sm text-slate-900 mb-1">Class Grade Distribution</h3>
-              <p className="text-xs text-slate-400 mb-4">JHS 2 Core Mathematics performance</p>
+              <p className="text-xs text-slate-400 mb-4">{activeScopeBadge} Academic Performance</p>
               <div className="h-56 w-full flex-1">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={gradeDistributionData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
@@ -996,7 +1003,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
           <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="font-bold text-sm text-slate-900">Class Student Directory • JHS 2 (Stream A)</h3>
+                <h3 className="font-bold text-sm text-slate-900">Class Student Directory • {activeScopeBadge}</h3>
                 <p className="text-xs text-slate-400">Manage enrolled pupils, parents contact, and performance records</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1150,7 +1157,7 @@ export const TeacherDashboard: React.FC<{ initialTab?: TeacherDashboardTab }> = 
                   </span>
                   <span className="text-xs text-slate-400">Date: {todayStr}</span>
                 </div>
-                <h3 className="font-bold text-sm text-slate-900 mt-1">Class Attendance Register • JHS 2</h3>
+                <h3 className="font-bold text-sm text-slate-900 mt-1">Class Attendance Register • {activeScopeBadge}</h3>
               </div>
               <div className="flex items-center gap-2">
                 <button

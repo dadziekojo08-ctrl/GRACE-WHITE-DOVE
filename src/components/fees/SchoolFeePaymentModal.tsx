@@ -179,6 +179,8 @@ export const SchoolFeePaymentModal: React.FC<SchoolFeePaymentModalProps> = ({
     const newPayment = recordPayment({
       invoiceId: invId,
       studentId: selectedStudent.id,
+      admissionNo: selectedStudent.admissionNo,
+      className: selectedStudent.className,
       studentName: `${selectedStudent.firstName} ${selectedStudent.lastName}`,
       amount: amountNum,
       paymentMethod: paymentMethod,

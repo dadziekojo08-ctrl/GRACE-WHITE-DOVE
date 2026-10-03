@@ -347,16 +347,49 @@ export function computeWardFinancials(
   currentTerm: string
 ): ReconciledWardFinancials {
   const wardFullName = `${ward.firstName} ${ward.lastName}`.toLowerCase().trim();
+  const wardAdm = (ward.admissionNo || '').toLowerCase().trim();
+  const wardId = ward.id;
 
-  // 1. All payments for this student
+  // 1. All payments for this student (comprehensive matching by ID, Admission No, and Full Name)
   const wardPayments = payments.filter((p) => {
-    if (p.studentId === ward.id || p.studentId === ward.admissionNo) return true;
-    if (p.admissionNo && p.admissionNo === ward.admissionNo) return true;
+    if (p.studentId === wardId) return true;
+    if (wardAdm && p.studentId && p.studentId.toLowerCase().trim() === wardAdm) return true;
+    if (wardAdm && p.admissionNo && p.admissionNo.toLowerCase().trim() === wardAdm) return true;
+    if (p.admissionNo && p.admissionNo === wardId) return true;
     if (p.studentName && p.studentName.toLowerCase().trim() === wardFullName) return true;
+    if (
+      p.studentName &&
+      ward.lastName &&
+      ward.firstName &&
+      p.studentName.toLowerCase().includes(ward.lastName.toLowerCase().trim()) &&
+      p.studentName.toLowerCase().includes(ward.firstName.toLowerCase().trim())
+    ) {
+      return true;
+    }
     return false;
   });
 
-  const totalPaid = wardPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const totalPaidFromPayments = wardPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+  // 2. All invoices for this student
+  const wardInvoices = invoices.filter((inv) => {
+    if (inv.studentId === wardId) return true;
+    if (wardAdm && inv.studentId && inv.studentId.toLowerCase().trim() === wardAdm) return true;
+    if (inv.studentName && inv.studentName.toLowerCase().trim() === wardFullName) return true;
+    if (
+      inv.studentName &&
+      ward.lastName &&
+      ward.firstName &&
+      inv.studentName.toLowerCase().includes(ward.lastName.toLowerCase().trim()) &&
+      inv.studentName.toLowerCase().includes(ward.firstName.toLowerCase().trim())
+    ) {
+      return true;
+    }
+    return false;
+  });
+
+  const totalPaidFromInvoices = wardInvoices.reduce((sum, inv) => sum + (Number(inv.paidAmount) || 0), 0);
+  const totalPaid = Math.max(totalPaidFromPayments, totalPaidFromInvoices);
 
   // Categorize payments collected
   let paidFees = 0;
@@ -383,12 +416,11 @@ export function computeWardFinancials(
     }
   });
 
-  // 2. All invoices for this student
-  const wardInvoices = invoices.filter((inv) => {
-    if (inv.studentId === ward.id || inv.studentId === ward.admissionNo) return true;
-    if (inv.studentName && inv.studentName.toLowerCase().trim() === wardFullName) return true;
-    return false;
-  });
+  // If invoice had paidAmount > totalPaidFromPayments, attribute the difference to paidFees
+  if (totalPaid > totalPaidFromPayments) {
+    const diff = totalPaid - totalPaidFromPayments;
+    paidFees += diff;
+  }
 
   const rawInvoice = wardInvoices[0];
 
