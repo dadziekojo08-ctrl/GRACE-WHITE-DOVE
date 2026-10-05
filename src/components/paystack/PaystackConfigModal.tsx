@@ -22,7 +22,13 @@ interface PaystackConfigModalProps {
 }
 
 export const PaystackConfigModal: React.FC<PaystackConfigModalProps> = ({ isOpen, onClose }) => {
-  const { paystackPublicKey, setPaystackPublicKey } = useSchool();
+  const { paystackPublicKey, setPaystackPublicKey, currentUser, activeRole } = useSchool();
+
+  const isSuperAdmin =
+    currentUser?.role === 'Super Admin' ||
+    Boolean(currentUser?.isSuperAdmin) ||
+    activeRole === 'Super Admin';
+
   const [inputKey, setInputKey] = useState(paystackPublicKey || 'pk_live_849cd38d9ec8716e68e0b08da43f1570f89fb3a2');
   const [showKey, setShowKey] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
@@ -40,7 +46,7 @@ export const PaystackConfigModal: React.FC<PaystackConfigModalProps> = ({ isOpen
     }
   }, [isOpen, paystackPublicKey]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !isSuperAdmin) return null;
 
   const trimmed = inputKey.trim();
   const isLive = trimmed.startsWith('pk_live_');
@@ -50,6 +56,7 @@ export const PaystackConfigModal: React.FC<PaystackConfigModalProps> = ({ isOpen
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSuperAdmin) return;
     if (isSecretKeyWarning) {
       setTestResult({
         status: 'error',

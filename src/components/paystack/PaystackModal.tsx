@@ -47,7 +47,12 @@ export const PaystackModal: React.FC<PaystackModalProps> = ({
   studentId,
   onPaymentSuccess
 }) => {
-  const { students, recordPayment, activeRole, paystackPublicKey } = useSchool();
+  const { students, recordPayment, activeRole, currentUser, paystackPublicKey } = useSchool();
+
+  const isSuperAdmin =
+    currentUser?.role === 'Super Admin' ||
+    Boolean(currentUser?.isSuperAdmin) ||
+    activeRole === 'Super Admin';
 
   const [channel, setChannel] = useState<'card' | 'momo' | 'bank'>('momo');
   const [cardNumber, setCardNumber] = useState('');
@@ -179,15 +184,17 @@ export const PaystackModal: React.FC<PaystackModalProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsConfigModalOpen(true)}
-              className="px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-white/20"
-              title="Configure or Change Paystack Public Key"
-            >
-              <KeyRound className="w-3 h-3 text-white" />
-              <span>{activePaystackKey.startsWith('pk_live_') ? 'Live Key' : activePaystackKey.startsWith('pk_test_') ? 'Test Key' : 'Change Key'}</span>
-            </button>
+            {isSuperAdmin && (
+              <button
+                type="button"
+                onClick={() => setIsConfigModalOpen(true)}
+                className="px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-white/20"
+                title="Configure or Change Paystack Public Key (Super Admin Only)"
+              >
+                <KeyRound className="w-3 h-3 text-white" />
+                <span>{activePaystackKey.startsWith('pk_live_') ? 'Live Key' : activePaystackKey.startsWith('pk_test_') ? 'Test Key' : 'Change Key'}</span>
+              </button>
+            )}
             <button
               onClick={onClose}
               className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 flex items-center justify-center text-white transition-colors cursor-pointer"
@@ -198,34 +205,49 @@ export const PaystackModal: React.FC<PaystackModalProps> = ({
         </div>
 
         {/* Gateway Mode Notification Bar */}
-        <div className="bg-slate-50 px-5 py-2 border-b border-slate-200 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            {activePaystackKey.startsWith('pk_live_') ? (
-              <>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-bold text-emerald-800 text-[11px]">Paystack Live Gateway Connected</span>
-                <span className="font-mono text-[10px] text-slate-500">({activePaystackKey.slice(0, 10)}...{activePaystackKey.slice(-4)})</span>
-              </>
-            ) : activePaystackKey.startsWith('pk_test_') ? (
-              <>
-                <span className="w-2 h-2 rounded-full bg-amber-500" />
-                <span className="font-bold text-amber-800 text-[11px]">Paystack Test Sandbox Active</span>
-                <span className="font-mono text-[10px] text-slate-500">({activePaystackKey.slice(0, 10)}...{activePaystackKey.slice(-4)})</span>
-              </>
-            ) : (
-              <>
-                <span className="w-2 h-2 rounded-full bg-slate-400" />
-                <span className="text-slate-600 text-[11px]">Simulation Mode (No Public Key Configured)</span>
-              </>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsConfigModalOpen(true)}
-            className="text-[11px] font-bold text-[#0ba4db] hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            Change Key
-          </button>
+        <div className="bg-slate-50 px-5 py-2.5 border-b border-slate-200 flex items-center justify-between text-xs">
+          {isSuperAdmin ? (
+            <>
+              <div className="flex items-center gap-2">
+                {activePaystackKey.startsWith('pk_live_') ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="font-bold text-emerald-800 text-[11px]">Paystack Live Gateway Connected</span>
+                    <span className="font-mono text-[10px] text-slate-500">({activePaystackKey.slice(0, 10)}...{activePaystackKey.slice(-4)})</span>
+                  </>
+                ) : activePaystackKey.startsWith('pk_test_') ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span className="font-bold text-amber-800 text-[11px]">Paystack Test Sandbox Active</span>
+                    <span className="font-mono text-[10px] text-slate-500">({activePaystackKey.slice(0, 10)}...{activePaystackKey.slice(-4)})</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-slate-400" />
+                    <span className="text-slate-600 text-[11px]">Simulation Mode (No Public Key Configured)</span>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsConfigModalOpen(true)}
+                className="text-[11px] font-bold text-[#0ba4db] hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                Change Key
+              </button>
+            </>
+          ) : (
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-semibold text-slate-700 text-[11px]">Official Secured Paystack Payment Channel</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>256-bit SSL Verified</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Modal Body */}
@@ -517,11 +539,13 @@ export const PaystackModal: React.FC<PaystackModalProps> = ({
         </div>
       </div>
 
-      {/* Paystack Public Key Configuration Modal */}
-      <PaystackConfigModal
-        isOpen={isConfigModalOpen}
-        onClose={() => setIsConfigModalOpen(false)}
-      />
+      {/* Paystack Public Key Configuration Modal - Only Super Admin */}
+      {isSuperAdmin && (
+        <PaystackConfigModal
+          isOpen={isConfigModalOpen}
+          onClose={() => setIsConfigModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

@@ -68,11 +68,17 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
     currentTerm,
     classes,
     currentUser,
+    activeRole,
     sendBroadcast,
     updateStudentArrears,
     paystackPublicKey,
     setActiveTab: setGlobalActiveTab
   } = useSchool();
+
+  const isSuperAdmin =
+    currentUser?.role === 'Super Admin' ||
+    Boolean(currentUser?.isSuperAdmin) ||
+    activeRole === 'Super Admin';
 
   // Payment Desk States
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -869,21 +875,23 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
             <span>Collect Payment</span>
           </button>
 
-          {/* Action: Paystack Gateway Key Settings */}
-          <button
-            onClick={() => setIsPaystackConfigOpen(true)}
-            id="btn-paystack-config-modal"
-            className="px-3.5 py-2.5 bg-[#0ba4db]/10 hover:bg-[#0ba4db]/20 text-[#087ca8] font-bold text-xs rounded-xl flex items-center gap-1.5 border border-[#0ba4db]/30 transition-all cursor-pointer"
-            title="Configure or Change Paystack Public API Key"
-          >
-            <KeyRound className="w-4 h-4 text-[#0ba4db]" />
-            <span>Paystack Key</span>
-            {paystackPublicKey?.startsWith('pk_live_') ? (
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5" title="Live Key Active" />
-            ) : paystackPublicKey?.startsWith('pk_test_') ? (
-              <span className="w-2 h-2 rounded-full bg-amber-500 ml-0.5" title="Test Key Active" />
-            ) : null}
-          </button>
+          {/* Action: Paystack Gateway Key Settings - Super Admin Only */}
+          {isSuperAdmin && (
+            <button
+              onClick={() => setIsPaystackConfigOpen(true)}
+              id="btn-paystack-config-modal"
+              className="px-3.5 py-2.5 bg-[#0ba4db]/10 hover:bg-[#0ba4db]/20 text-[#087ca8] font-bold text-xs rounded-xl flex items-center gap-1.5 border border-[#0ba4db]/30 transition-all cursor-pointer"
+              title="Configure or Change Paystack Public API Key (Super Admin Only)"
+            >
+              <KeyRound className="w-4 h-4 text-[#0ba4db]" />
+              <span>Paystack Key</span>
+              {paystackPublicKey?.startsWith('pk_live_') ? (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5" title="Live Key Active" />
+              ) : paystackPublicKey?.startsWith('pk_test_') ? (
+                <span className="w-2 h-2 rounded-full bg-amber-500 ml-0.5" title="Test Key Active" />
+              ) : null}
+            </button>
+          )}
 
           {/* Action 1: Bill Student */}
           <button
@@ -2870,11 +2878,13 @@ export const FeeManagement: React.FC<FeeManagementProps> = ({ onOpenPaystack }) 
         payment={selectedReceiptForView}
       />
 
-      {/* Paystack Key Configuration Modal */}
-      <PaystackConfigModal
-        isOpen={isPaystackConfigOpen}
-        onClose={() => setIsPaystackConfigOpen(false)}
-      />
+      {/* Paystack Key Configuration Modal - Super Admin Only */}
+      {isSuperAdmin && (
+        <PaystackConfigModal
+          isOpen={isPaystackConfigOpen}
+          onClose={() => setIsPaystackConfigOpen(false)}
+        />
+      )}
     </div>
   );
 };
