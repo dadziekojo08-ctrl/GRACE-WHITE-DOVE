@@ -26,7 +26,7 @@ import {
   X,
   CheckCircle
 } from 'lucide-react';
-import { PaystackModal } from '../paystack/PaystackModal';
+import { PaystackModal, FeePaymentCategory } from '../paystack/PaystackModal';
 import { Payment, Student } from '../../types';
 import { getInvoiceFinancialBreakdown, computeWardFinancials } from '../../utils/feeBreakdown';
 import { OfficialPaymentReceiptModal } from '../fees/OfficialPaymentReceiptModal';
@@ -57,8 +57,22 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
   } = useSchool();
 
   const [currentTab, setCurrentTab] = useState<ChildTab>(initialTab);
-  const [isPaystackOpen, setIsPaystackOpen] = useState(false);
+  const [paystackConfig, setPaystackConfig] = useState<{
+    isOpen: boolean;
+    customAmount?: number;
+    category?: FeePaymentCategory;
+  }>({
+    isOpen: false
+  });
   const [selectedReceipt, setSelectedReceipt] = useState<Payment | null>(null);
+
+  const openPaystackForCategory = (category?: FeePaymentCategory, amount?: number) => {
+    setPaystackConfig({
+      isOpen: true,
+      category,
+      customAmount: amount
+    });
+  };
 
   const fallbackWard: Student = {
     id: 'std-ward-01',
@@ -184,7 +198,7 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
 
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => setIsPaystackOpen(true)}
+              onClick={() => openPaystackForCategory('Combined', balanceDue)}
               className="bg-[#0ba4db] hover:bg-[#0895c8] text-white font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer"
             >
               <CreditCard className="w-4 h-4" />
@@ -478,7 +492,7 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                   </div>
                   {balanceDue > 0 ? (
                     <button
-                      onClick={() => setIsPaystackOpen(true)}
+                      onClick={() => openPaystackForCategory('Combined', balanceDue)}
                       className="bg-[#0ba4db] hover:bg-[#088bbb] text-white font-extrabold px-6 py-3.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#0ba4db]/30 transition-all hover:scale-[1.02] cursor-pointer"
                     >
                       <CreditCard className="w-4 h-4" />
@@ -511,68 +525,112 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
 
                 {/* 4 Categorized Financial Blocks - Reflects Deductions Immediately */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Tuition / Fees Balance</span>
-                    <span className={`text-sm font-black font-mono mt-0.5 block ${invBreakdown.netTermFeesDue === 0 && invBreakdown.termFees > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
-                      GHS {invBreakdown.netTermFeesDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
-                    {invBreakdown.paidFees > 0 ? (
-                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                        {invBreakdown.netTermFeesDue === 0 ? '✓ Fully Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidFees.toLocaleString()}`}
-                        <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.termFees.toLocaleString()}</span>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase font-bold">Tuition / Fees Balance</span>
+                      <span className={`text-sm font-black font-mono mt-0.5 block ${invBreakdown.netTermFeesDue === 0 && invBreakdown.termFees > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                        GHS {invBreakdown.netTermFeesDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
-                    ) : (
-                      <span className="text-[9px] text-slate-400 block mt-0.5">
-                        Billed: GHS {invBreakdown.termFees.toLocaleString()}
-                      </span>
+                      {invBreakdown.paidFees > 0 ? (
+                        <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                          {invBreakdown.netTermFeesDue === 0 ? '✓ Fully Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidFees.toLocaleString()}`}
+                          <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.termFees.toLocaleString()}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[9px] text-slate-400 block mt-0.5">
+                          Billed: GHS {invBreakdown.termFees.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    {invBreakdown.netTermFeesDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => openPaystackForCategory('Fees', invBreakdown.netTermFeesDue)}
+                        className="mt-2 text-[10px] text-[#0ba4db] hover:underline font-bold text-left cursor-pointer"
+                      >
+                        Pay Tuition &rarr;
+                      </button>
                     )}
                   </div>
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Textbooks Balance</span>
-                    <span className={`text-sm font-black font-mono mt-0.5 block ${invBreakdown.netBooksDue === 0 && invBreakdown.books > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
-                      GHS {invBreakdown.netBooksDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
-                    {invBreakdown.paidBooks > 0 ? (
-                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                        {invBreakdown.netBooksDue === 0 ? '✓ Fully Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidBooks.toLocaleString()}`}
-                        <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.books.toLocaleString()}</span>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase font-bold">Textbooks Balance</span>
+                      <span className={`text-sm font-black font-mono mt-0.5 block ${invBreakdown.netBooksDue === 0 && invBreakdown.books > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                        GHS {invBreakdown.netBooksDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
-                    ) : (
-                      <span className="text-[9px] text-slate-400 block mt-0.5">
-                        Billed: GHS {invBreakdown.books.toLocaleString()}
-                      </span>
+                      {invBreakdown.paidBooks > 0 ? (
+                        <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                          {invBreakdown.netBooksDue === 0 ? '✓ Fully Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidBooks.toLocaleString()}`}
+                          <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.books.toLocaleString()}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[9px] text-slate-400 block mt-0.5">
+                          Billed: GHS {invBreakdown.books.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    {invBreakdown.netBooksDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => openPaystackForCategory('Books', invBreakdown.netBooksDue)}
+                        className="mt-2 text-[10px] text-[#0ba4db] hover:underline font-bold text-left cursor-pointer"
+                      >
+                        Pay Books &rarr;
+                      </button>
                     )}
                   </div>
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Accessories Balance</span>
-                    <span className={`text-sm font-black font-mono mt-0.5 block ${invBreakdown.netAccessoriesDue === 0 && invBreakdown.accessories > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
-                      GHS {invBreakdown.netAccessoriesDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
-                    {invBreakdown.paidAccessories > 0 ? (
-                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                        {invBreakdown.netAccessoriesDue === 0 ? '✓ Fully Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidAccessories.toLocaleString()}`}
-                        <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.accessories.toLocaleString()}</span>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase font-bold">Accessories Balance</span>
+                      <span className={`text-sm font-black font-mono mt-0.5 block ${invBreakdown.netAccessoriesDue === 0 && invBreakdown.accessories > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                        GHS {invBreakdown.netAccessoriesDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
-                    ) : (
-                      <span className="text-[9px] text-slate-400 block mt-0.5">
-                        Billed: GHS {invBreakdown.accessories.toLocaleString()}
-                      </span>
+                      {invBreakdown.paidAccessories > 0 ? (
+                        <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                          {invBreakdown.netAccessoriesDue === 0 ? '✓ Fully Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidAccessories.toLocaleString()}`}
+                          <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.accessories.toLocaleString()}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[9px] text-slate-400 block mt-0.5">
+                          Billed: GHS {invBreakdown.accessories.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    {invBreakdown.netAccessoriesDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => openPaystackForCategory('Accessories', invBreakdown.netAccessoriesDue)}
+                        className="mt-2 text-[10px] text-[#0ba4db] hover:underline font-bold text-left cursor-pointer"
+                      >
+                        Pay Uniforms &rarr;
+                      </button>
                     )}
                   </div>
-                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
-                    <span className="text-[10px] text-amber-800 block uppercase font-bold">Arrears Balance</span>
-                    <span className={`text-sm font-black font-mono mt-0.5 block ${invBreakdown.netArrearsDue === 0 && invBreakdown.arrears > 0 ? 'text-emerald-700' : 'text-amber-950'}`}>
-                      GHS {invBreakdown.netArrearsDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
-                    {invBreakdown.paidArrears > 0 ? (
-                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                        {invBreakdown.netArrearsDue === 0 ? '✓ Fully Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidArrears.toLocaleString()}`}
-                        <span className="text-amber-700/60 font-normal block">Prior: GHS {invBreakdown.arrears.toLocaleString()}</span>
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] text-amber-800 block uppercase font-bold">Arrears Balance</span>
+                      <span className={`text-sm font-black font-mono mt-0.5 block ${invBreakdown.netArrearsDue === 0 && invBreakdown.arrears > 0 ? 'text-emerald-700' : 'text-amber-950'}`}>
+                        GHS {invBreakdown.netArrearsDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
-                    ) : (
-                      <span className="text-[9px] text-amber-700/70 block mt-0.5">
-                        Past Arrears: GHS {invBreakdown.arrears.toLocaleString()}
-                      </span>
+                      {invBreakdown.paidArrears > 0 ? (
+                        <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                          {invBreakdown.netArrearsDue === 0 ? '✓ Fully Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidArrears.toLocaleString()}`}
+                          <span className="text-amber-700/60 font-normal block">Prior: GHS {invBreakdown.arrears.toLocaleString()}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[9px] text-amber-700/70 block mt-0.5">
+                          Past Arrears: GHS {invBreakdown.arrears.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    {invBreakdown.netArrearsDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => openPaystackForCategory('Arrears', invBreakdown.netArrearsDue)}
+                        className="mt-2 text-[10px] text-amber-800 hover:underline font-bold text-left cursor-pointer"
+                      >
+                        Pay Arrears &rarr;
+                      </button>
                     )}
                   </div>
                 </div>
@@ -738,10 +796,11 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
 
       {/* Paystack Modal Component */}
       <PaystackModal
-        isOpen={isPaystackOpen}
-        onClose={() => setIsPaystackOpen(false)}
+        isOpen={paystackConfig.isOpen}
+        onClose={() => setPaystackConfig({ isOpen: false })}
         invoice={currentInvoice.totalAmount > 0 ? currentInvoice : undefined}
-        customAmount={balanceDue > 0 ? balanceDue : 500}
+        customAmount={paystackConfig.customAmount}
+        defaultCategory={paystackConfig.category}
         studentName={`${ward.firstName} ${ward.lastName}`}
         studentId={ward.id}
       />

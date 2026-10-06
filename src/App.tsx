@@ -27,7 +27,7 @@ import { CustomReportsAnalytics } from './components/reports/CustomReportsAnalyt
 import { FinancialReportsPage } from './components/reports/FinancialReportsPage';
 import { DocumentManagement } from './components/documents/DocumentManagement';
 import { BackupSecurity } from './components/security/BackupSecurity';
-import { PaystackModal } from './components/paystack/PaystackModal';
+import { PaystackModal, FeePaymentCategory } from './components/paystack/PaystackModal';
 import { AuthPage } from './components/auth/AuthPage';
 import { AnimatePresence, motion } from 'motion/react';
 import { Invoice } from './types';
@@ -43,6 +43,7 @@ const MainContent: React.FC = () => {
     customAmount?: number;
     studentName?: string;
     studentId?: string;
+    defaultCategory?: FeePaymentCategory;
   }>({
     isOpen: false
   });
@@ -51,14 +52,16 @@ const MainContent: React.FC = () => {
     invoice?: Invoice,
     customAmount?: number,
     studentName?: string,
-    studentId?: string
+    studentId?: string,
+    defaultCategory?: FeePaymentCategory
   ) => {
     setPaystackModal({
       isOpen: true,
       invoice,
       customAmount,
       studentName,
-      studentId
+      studentId,
+      defaultCategory
     });
   };
 
@@ -253,6 +256,7 @@ const MainContent: React.FC = () => {
         customAmount={paystackModal.customAmount}
         studentName={paystackModal.studentName}
         studentId={paystackModal.studentId}
+        defaultCategory={paystackModal.defaultCategory}
       />
     </div>
   );

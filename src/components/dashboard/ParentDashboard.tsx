@@ -27,7 +27,7 @@ import {
   X,
   CheckCircle
 } from 'lucide-react';
-import { PaystackModal } from '../paystack/PaystackModal';
+import { PaystackModal, FeePaymentCategory } from '../paystack/PaystackModal';
 import { Payment, Student } from '../../types';
 import { calculateGradeForClass, isLowerPrimaryOrPreschool } from '../../utils/jhsGrading';
 import { getInvoiceFinancialBreakdown, computeWardFinancials } from '../../utils/feeBreakdown';
@@ -83,8 +83,22 @@ export const ParentDashboard: React.FC = () => {
     fallbackWard;
 
   const [selectedStudentId, setSelectedStudentId] = useState<string>(defaultStudent?.id || fallbackWard.id);
-  const [isPaystackOpen, setIsPaystackOpen] = useState(false);
+  const [paystackConfig, setPaystackConfig] = useState<{
+    isOpen: boolean;
+    customAmount?: number;
+    category?: FeePaymentCategory;
+  }>({
+    isOpen: false
+  });
   const [selectedReceipt, setSelectedReceipt] = useState<Payment | null>(null);
+
+  const openPaystack = (category?: FeePaymentCategory, amount?: number) => {
+    setPaystackConfig({
+      isOpen: true,
+      category,
+      customAmount: amount
+    });
+  };
 
   const ward = students.find((s) => s.id === selectedStudentId) || defaultStudent || fallbackWard;
   const wardFullName = `${ward.firstName} ${ward.lastName}`.toLowerCase().trim();
@@ -175,7 +189,7 @@ export const ParentDashboard: React.FC = () => {
           {/* Prompt Paystack Action Button in Top Banner */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
             <button
-              onClick={() => setIsPaystackOpen(true)}
+              onClick={() => openPaystack('Combined', balanceDue > 0 ? balanceDue : 500)}
               className="bg-[#0ba4db] hover:bg-[#0993c5] text-white font-extrabold px-5 py-3 rounded-xl text-xs flex items-center justify-center gap-2.5 shadow-lg shadow-[#0ba4db]/25 transition-all hover:scale-[1.02] cursor-pointer"
             >
               <CreditCard className="w-4 h-4" />
@@ -226,7 +240,7 @@ export const ParentDashboard: React.FC = () => {
               {isFullyCleared ? 'Fully Cleared' : currentInvoice.status}
             </span>
             <button
-              onClick={() => setIsPaystackOpen(true)}
+              onClick={() => openPaystack('Combined', balanceDue > 0 ? balanceDue : 500)}
               className="text-[11px] font-bold text-[#0ba4db] hover:underline flex items-center gap-1 cursor-pointer"
             >
               Pay Now →
@@ -540,68 +554,112 @@ export const ParentDashboard: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-1">
-                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                  <span className="text-[10px] text-slate-500 block uppercase font-bold">Tuition / Fees Balance</span>
-                  <span className={`font-bold font-mono text-xs ${invBreakdown.netTermFeesDue === 0 && invBreakdown.termFees > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
-                    GHS {invBreakdown.netTermFeesDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                  {invBreakdown.paidFees > 0 ? (
-                    <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                      {invBreakdown.netTermFeesDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidFees.toLocaleString()}`}
-                      <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.termFees.toLocaleString()}</span>
+                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Tuition / Fees Balance</span>
+                    <span className={`font-bold font-mono text-xs ${invBreakdown.netTermFeesDue === 0 && invBreakdown.termFees > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                      GHS {invBreakdown.netTermFeesDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
-                  ) : (
-                    <span className="text-[9px] text-slate-400 block mt-0.5">
-                      Billed: GHS {invBreakdown.termFees.toLocaleString()}
-                    </span>
+                    {invBreakdown.paidFees > 0 ? (
+                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                        {invBreakdown.netTermFeesDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidFees.toLocaleString()}`}
+                        <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.termFees.toLocaleString()}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-slate-400 block mt-0.5">
+                        Billed: GHS {invBreakdown.termFees.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  {invBreakdown.netTermFeesDue > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => openPaystack('Fees', invBreakdown.netTermFeesDue)}
+                      className="mt-1 text-[10px] text-[#0ba4db] hover:underline font-bold text-left cursor-pointer"
+                    >
+                      Pay Tuition &rarr;
+                    </button>
                   )}
                 </div>
-                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                  <span className="text-[10px] text-slate-500 block uppercase font-bold">Books Balance</span>
-                  <span className={`font-bold font-mono text-xs ${invBreakdown.netBooksDue === 0 && invBreakdown.books > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
-                    GHS {invBreakdown.netBooksDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                  {invBreakdown.paidBooks > 0 ? (
-                    <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                      {invBreakdown.netBooksDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidBooks.toLocaleString()}`}
-                      <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.books.toLocaleString()}</span>
+                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Books Balance</span>
+                    <span className={`font-bold font-mono text-xs ${invBreakdown.netBooksDue === 0 && invBreakdown.books > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                      GHS {invBreakdown.netBooksDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
-                  ) : (
-                    <span className="text-[9px] text-slate-400 block mt-0.5">
-                      Billed: GHS {invBreakdown.books.toLocaleString()}
-                    </span>
+                    {invBreakdown.paidBooks > 0 ? (
+                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                        {invBreakdown.netBooksDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidBooks.toLocaleString()}`}
+                        <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.books.toLocaleString()}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-slate-400 block mt-0.5">
+                        Billed: GHS {invBreakdown.books.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  {invBreakdown.netBooksDue > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => openPaystack('Books', invBreakdown.netBooksDue)}
+                      className="mt-1 text-[10px] text-[#0ba4db] hover:underline font-bold text-left cursor-pointer"
+                    >
+                      Pay Books &rarr;
+                    </button>
                   )}
                 </div>
-                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                  <span className="text-[10px] text-slate-500 block uppercase font-bold">Accessories Balance</span>
-                  <span className={`font-bold font-mono text-xs ${invBreakdown.netAccessoriesDue === 0 && invBreakdown.accessories > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
-                    GHS {invBreakdown.netAccessoriesDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                  {invBreakdown.paidAccessories > 0 ? (
-                    <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                      {invBreakdown.netAccessoriesDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidAccessories.toLocaleString()}`}
-                      <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.accessories.toLocaleString()}</span>
+                <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Accessories Balance</span>
+                    <span className={`font-bold font-mono text-xs ${invBreakdown.netAccessoriesDue === 0 && invBreakdown.accessories > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                      GHS {invBreakdown.netAccessoriesDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
-                  ) : (
-                    <span className="text-[9px] text-slate-400 block mt-0.5">
-                      Billed: GHS {invBreakdown.accessories.toLocaleString()}
-                    </span>
+                    {invBreakdown.paidAccessories > 0 ? (
+                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                        {invBreakdown.netAccessoriesDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidAccessories.toLocaleString()}`}
+                        <span className="text-slate-400 font-normal block">Billed: GHS {invBreakdown.accessories.toLocaleString()}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-slate-400 block mt-0.5">
+                        Billed: GHS {invBreakdown.accessories.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  {invBreakdown.netAccessoriesDue > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => openPaystack('Accessories', invBreakdown.netAccessoriesDue)}
+                      className="mt-1 text-[10px] text-[#0ba4db] hover:underline font-bold text-left cursor-pointer"
+                    >
+                      Pay Uniforms &rarr;
+                    </button>
                   )}
                 </div>
-                <div className="p-2 bg-amber-50 rounded-lg border border-amber-200">
-                  <span className="text-[10px] text-amber-800 block uppercase font-bold">Arrears Balance</span>
-                  <span className={`font-bold font-mono text-xs ${invBreakdown.netArrearsDue === 0 && invBreakdown.arrears > 0 ? 'text-emerald-700' : 'text-amber-950'}`}>
-                    GHS {invBreakdown.netArrearsDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                  {invBreakdown.paidArrears > 0 ? (
-                    <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                      {invBreakdown.netArrearsDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidArrears.toLocaleString()}`}
-                      <span className="text-amber-700/60 font-normal block">Prior: GHS {invBreakdown.arrears.toLocaleString()}</span>
+                <div className="p-2 bg-amber-50 rounded-lg border border-amber-200 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] text-amber-800 block uppercase font-bold">Arrears Balance</span>
+                    <span className={`font-bold font-mono text-xs ${invBreakdown.netArrearsDue === 0 && invBreakdown.arrears > 0 ? 'text-emerald-700' : 'text-amber-950'}`}>
+                      GHS {invBreakdown.netArrearsDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
-                  ) : (
-                    <span className="text-[9px] text-amber-700/70 block mt-0.5">
-                      Past: GHS {invBreakdown.arrears.toLocaleString()}
-                    </span>
+                    {invBreakdown.paidArrears > 0 ? (
+                      <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                        {invBreakdown.netArrearsDue === 0 ? '✓ Cleared & Deducted' : `Deducted: GHS ${invBreakdown.paidArrears.toLocaleString()}`}
+                        <span className="text-amber-700/60 font-normal block">Prior: GHS {invBreakdown.arrears.toLocaleString()}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-amber-700/70 block mt-0.5">
+                        Past: GHS {invBreakdown.arrears.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  {invBreakdown.netArrearsDue > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => openPaystack('Arrears', invBreakdown.netArrearsDue)}
+                      className="mt-1 text-[10px] text-amber-800 hover:underline font-bold text-left cursor-pointer"
+                    >
+                      Pay Arrears &rarr;
+                    </button>
                   )}
                 </div>
               </div>
@@ -628,7 +686,7 @@ export const ParentDashboard: React.FC = () => {
             {/* Big Paystack Button */}
             {balanceDue > 0 ? (
               <button
-                onClick={() => setIsPaystackOpen(true)}
+                onClick={() => openPaystack('Combined', balanceDue)}
                 className="w-full bg-[#0ba4db] hover:bg-[#088bbb] text-white font-extrabold py-3.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-[#0ba4db]/30 transition-all hover:scale-[1.01] cursor-pointer"
               >
                 <CreditCard className="w-4 h-4" />
@@ -727,10 +785,11 @@ export const ParentDashboard: React.FC = () => {
 
       {/* Paystack Modal Component */}
       <PaystackModal
-        isOpen={isPaystackOpen}
-        onClose={() => setIsPaystackOpen(false)}
+        isOpen={paystackConfig.isOpen}
+        onClose={() => setPaystackConfig({ isOpen: false })}
         invoice={currentInvoice.totalAmount > 0 ? currentInvoice : undefined}
-        customAmount={balanceDue > 0 ? balanceDue : 500}
+        customAmount={paystackConfig.customAmount}
+        defaultCategory={paystackConfig.category}
         studentName={`${ward.firstName} ${ward.lastName}`}
         studentId={ward.id}
       />
