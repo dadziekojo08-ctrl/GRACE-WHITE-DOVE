@@ -6,6 +6,7 @@ import {
   FeeStructure,
   Invoice,
   Payment,
+  Expense,
   Exam,
   ExamSchedule,
   MarkEntry,
@@ -36,6 +37,7 @@ import {
   initialFeeStructures,
   initialInvoices,
   initialPayments,
+  initialExpenses,
   initialExams,
   initialExamSchedules,
   initialMarks,
@@ -169,6 +171,11 @@ interface SchoolContextType {
   clearFinancialRecords: (mode?: 'all' | 'arrears-only' | 'payments-only') => void;
   clearAllArrears: () => void;
   clearTotalCollected: () => void;
+  expenses: Expense[];
+  addExpense: (expense: Omit<Expense, 'id' | 'voucherNo'> & { voucherNo?: string }) => Expense;
+  updateExpense: (id: string, expense: Partial<Expense>) => void;
+  deleteExpense: (id: string) => void;
+  clearAllExpenses: () => Promise<void>;
   reassignStudentClass: (studentId: string, newClassName: string, section?: string, autoAssignTeacher?: boolean) => void;
   bulkReassignStudentsClass: (studentIds: string[], newClassName: string, section?: string, autoAssignTeacher?: boolean) => void;
 
@@ -469,6 +476,11 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
   const [invoices, setInvoices] = useState<Invoice[]>(() => loadStorage('invoices', initialInvoices));
   const [payments, setPayments] = useState<Payment[]>(() => loadStorage('payments', initialPayments));
+  const [expenses, setExpenses] = useState<Expense[]>(() => {
+    const saved = loadStorage<Expense[]>('expenses', initialExpenses);
+    const deletedIds = loadStorage<string[]>('deleted_expense_ids', []);
+    return Array.isArray(saved) ? saved.filter(e => !deletedIds.includes(e.id)) : initialExpenses;
+  });
   const [exams, setExams] = useState<Exam[]>(() => loadStorage('exams', initialExams));
   const [examSchedules, setExamSchedules] = useState<ExamSchedule[]>(() => loadStorage('examSchedules', initialExamSchedules));
   const [marks, setMarks] = useState<MarkEntry[]>(() => loadStorage('marks', initialMarks));
@@ -604,6 +616,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           cloudSubjects,
           cloudInvoices,
           cloudPayments,
+          cloudExpenses,
           cloudAttendance,
           cloudFeeStructures,
           cloudExams,
@@ -629,6 +642,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           fetchCollectionFromFirestore<Subject>('subjects'),
           fetchCollectionFromFirestore<Invoice>('invoices'),
           fetchCollectionFromFirestore<Payment>('payments'),
+          fetchCollectionFromFirestore<Expense>('expenses'),
           fetchCollectionFromFirestore<AttendanceRecord>('attendance'),
           fetchCollectionFromFirestore<FeeStructure>('feeStructures'),
           fetchCollectionFromFirestore<Exam>('exams'),
@@ -710,6 +724,28 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
           const merged = mergeCollection(prev, cloudPayments);
           saveStorage('payments', merged);
+          return merged;
+        });
+
+        const expensesCleared = localStorage.getItem('gwd_expenses_cleared_at');
+        setExpenses(prev => {
+          if (expensesCleared && prev.length === 0) {
+            if (cloudExpenses.length > 0) {
+              clearCollectionFromFirestore('expenses');
+            }
+            saveStorage('expenses', []);
+            return [];
+          }
+          const deletedExpenseIds = loadStorage<string[]>('deleted_expense_ids', []);
+          const cleanCloud = cloudExpenses.filter(e => {
+            if (e.id && deletedExpenseIds.includes(e.id)) {
+              deleteDocumentFromFirestore('expenses', e.id);
+              return false;
+            }
+            return true;
+          });
+          const merged = mergeCollection(prev, cleanCloud);
+          saveStorage('expenses', merged);
           return merged;
         });
 
@@ -912,6 +948,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => { saveStorage('feeStructures', feeStructures); }, [feeStructures]);
   useEffect(() => { saveStorage('invoices', invoices); }, [invoices]);
   useEffect(() => { saveStorage('payments', payments); }, [payments]);
+  useEffect(() => { saveStorage('expenses', expenses); }, [expenses]);
   useEffect(() => { saveStorage('exams', exams); }, [exams]);
   useEffect(() => { saveStorage('examSchedules', examSchedules); }, [examSchedules]);
   useEffect(() => { saveStorage('marks', marks); }, [marks]);
@@ -942,6 +979,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         batchSaveCollectionToFirestore('subjects', subjects),
         batchSaveCollectionToFirestore('invoices', invoices),
         batchSaveCollectionToFirestore('payments', payments),
+        batchSaveCollectionToFirestore('expenses', expenses),
         batchSaveCollectionToFirestore('attendance', attendance),
         batchSaveCollectionToFirestore('feeStructures', feeStructures),
         batchSaveCollectionToFirestore('exams', exams),
@@ -2714,6 +2752,75 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return newPayment;
   };
 
+  // School Expenses / Expenditure Operations
+  const addExpense = (expense: Omit<Expense, 'id' | 'voucherNo'> & { voucherNo?: string }): Expense => {
+    const voucherNo =
+      expense.voucherNo?.trim() ||
+      `EXP-${new Date().getFullYear().toString().slice(-2)}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newExpense: Expense = {
+      ...expense,
+      id: `exp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      voucherNo,
+      amount: Number(expense.amount) || 0,
+      recordedBy: expense.recordedBy || currentUser?.name || 'Accounts Office',
+      term: expense.term || currentTerm,
+      academicYear: expense.academicYear || academicYear
+    };
+    localStorage.removeItem('gwd_expenses_cleared_at');
+    setExpenses(prev => {
+      const updated = [newExpense, ...prev];
+      saveStorage('expenses', updated);
+      return updated;
+    });
+    saveDocumentToFirestore('expenses', newExpense);
+    logAuditAction('EXPENSE_RECORDED', 'Financial Reports', `Recorded expenditure ${voucherNo}: "${newExpense.title}" (${newExpense.category}) - GHS ${newExpense.amount.toLocaleString()}`);
+    return newExpense;
+  };
+
+  const updateExpense = (id: string, updates: Partial<Expense>) => {
+    setExpenses(prev => {
+      const updated = prev.map(e => {
+        if (e.id === id) {
+          const merged = { ...e, ...updates, amount: updates.amount !== undefined ? Number(updates.amount) || 0 : e.amount };
+          saveDocumentToFirestore('expenses', merged);
+          return merged;
+        }
+        return e;
+      });
+      saveStorage('expenses', updated);
+      return updated;
+    });
+    logAuditAction('EXPENSE_UPDATED', 'Financial Reports', `Updated expenditure record ID: ${id}`);
+  };
+
+  const deleteExpense = (id: string) => {
+    const target = expenses.find(e => e.id === id);
+    const deletedIds = loadStorage<string[]>('deleted_expense_ids', []);
+    if (!deletedIds.includes(id)) {
+      deletedIds.push(id);
+      saveStorage('deleted_expense_ids', deletedIds);
+    }
+    setExpenses(prev => {
+      const updated = prev.filter(e => e.id !== id);
+      saveStorage('expenses', updated);
+      return updated;
+    });
+    deleteDocumentFromFirestore('expenses', id);
+    logAuditAction('EXPENSE_DELETED', 'Financial Reports', `Deleted expenditure ${target?.voucherNo || id} (${target?.title || 'Expense'})`);
+  };
+
+  const clearAllExpenses = async () => {
+    localStorage.setItem('gwd_expenses_cleared_at', Date.now().toString());
+    setExpenses([]);
+    saveStorage('expenses', []);
+    try {
+      await clearCollectionFromFirestore('expenses');
+    } catch (e) {
+      console.warn('Error clearing expenses from cloud', e);
+    }
+    logAuditAction('EXPENSES_CLEARED_ALL', 'Financial Reports', 'Cleared all school expenditure records');
+  };
+
   // Exams & Marks
   const addExam = (exam: Omit<Exam, 'id'>) => {
     const newExam: Exam = { ...exam, id: `ex-${Date.now()}` };
@@ -3180,6 +3287,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       feeStructures,
       invoices,
       payments,
+      expenses,
       exams,
       examSchedules,
       marks,
@@ -3248,6 +3356,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       if (data.invoices) setInvoices(data.invoices);
       if (data.payments) setPayments(data.payments);
+      if (data.expenses) setExpenses(data.expenses);
       if (data.exams) setExams(data.exams);
       if (data.examSchedules) setExamSchedules(data.examSchedules);
       if (data.marks) setMarks(data.marks);
@@ -3279,6 +3388,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setFeeStructures(initialFeeStructures);
     setInvoices(initialInvoices);
     setPayments(initialPayments);
+    setExpenses(initialExpenses);
     setExams(initialExams);
     setExamSchedules(initialExamSchedules);
     setMarks(initialMarks);
@@ -3309,6 +3419,7 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       feeStructures,
       invoices,
       payments,
+      expenses,
       exams,
       examSchedules,
       marks,
@@ -3441,6 +3552,11 @@ export const SchoolProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         clearFinancialRecords,
         clearAllArrears,
         clearTotalCollected,
+        expenses,
+        addExpense,
+        updateExpense,
+        deleteExpense,
+        clearAllExpenses,
         reassignStudentClass,
         bulkReassignStudentsClass,
         exams,

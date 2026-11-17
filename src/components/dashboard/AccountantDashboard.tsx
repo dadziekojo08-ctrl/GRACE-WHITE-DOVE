@@ -47,6 +47,7 @@ export const AccountantDashboard: React.FC<{
     students,
     invoices,
     payments,
+    expenses,
     feeStructures,
     createInvoice,
     recordPayment,
@@ -99,6 +100,8 @@ export const AccountantDashboard: React.FC<{
   const collectedFees = collectedBreakdown.collectedFees;
   const collectedBooks = collectedBreakdown.collectedBooks;
   const collectedAccessories = collectedBreakdown.collectedAccessories;
+  const totalExpenses = expenses.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+  const netCashSurplus = totalCollected - totalExpenses;
   const collectionRate = totalBilled > 0 ? Math.round((totalCollected / totalBilled) * 100) : 0;
 
   // Chart data computed dynamically from actual payment records
@@ -187,14 +190,22 @@ export const AccountantDashboard: React.FC<{
     csv += `--- SUMMARY TOTALS ---\n`;
     csv += `Total Billed Revenue,GHS ${totalBilled.toLocaleString()}\n`;
     csv += `Total Fees Collected,GHS ${totalCollected.toLocaleString()}\n`;
+    csv += `Total Expenditure (Expenses),GHS ${totalExpenses.toLocaleString()}\n`;
+    csv += `Net Cash Surplus (Collected - Expenses),GHS ${netCashSurplus.toLocaleString()}\n`;
     csv += `Total Outstanding Arrears,GHS ${totalArrears.toLocaleString()}\n`;
     csv += `Collection Rate,${collectionRate}%\n\n`;
 
-    csv += `--- RECENT FEE TRANSACTIONS ---\n`;
+    csv += `--- RECENT FEE TRANSACTIONS (CREDITS) ---\n`;
     csv += `Receipt #,Student ID,Student Name,Class,Amount (GHS),Payment Mode,Date,Status\n`;
     payments.forEach((p) => {
       const std = students.find((s) => s.id === p.studentId);
       csv += `"${p.receiptNo || p.reference}","${std?.admissionNo || p.studentId}","${p.studentName}","${std?.className || 'N/A'}",${p.amount},"${p.paymentMethod}","${p.date}","Verified"\n`;
+    });
+
+    csv += `\n--- SCHOOL EXPENDITURE (DEBITS) ---\n`;
+    csv += `Voucher #,Title,Category,Paid To,Amount (GHS),Method,Date,Status\n`;
+    expenses.forEach((exp) => {
+      csv += `"${exp.voucherNo}","${exp.title.replace(/"/g, '""')}","${exp.category}","${exp.paidTo.replace(/"/g, '""')}",${exp.amount},"${exp.paymentMethod}","${exp.date}","${exp.status}"\n`;
     });
 
     const encodedUri = encodeURI('data:text/csv;charset=utf-8,' + csv);
@@ -374,17 +385,23 @@ export const AccountantDashboard: React.FC<{
         {/* Total Current Term Billing */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-emerald-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Term Billing</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-bold">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Expenditure & Net Surplus</span>
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center font-bold">
               <FileSpreadsheet className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-black text-slate-900 font-['Outfit']">
-              GHS {totalBilled.toLocaleString()}
+            <div className="text-2xl font-black text-rose-700 font-['Outfit']">
+              -GHS {totalExpenses.toLocaleString()}
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
-              <span>{invoices.length} total issued invoices</span>
+            <div className="flex items-center justify-between text-[11px] text-slate-600 mt-1">
+              <span>{expenses.length} expense(s)</span>
+              <span className={`font-bold ${netCashSurplus >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                Net: GHS {netCashSurplus.toLocaleString()}
+              </span>
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1">
+              Term Billing: GHS {totalBilled.toLocaleString()} ({invoices.length} invoices)
             </div>
           </div>
         </div>

@@ -3,13 +3,14 @@ import { useSchool } from '../../context/SchoolContext';
 import { SchoolLogo } from '../common/SchoolLogo';
 import { printReportSheet } from '../../utils/printUtils';
 import { getInvoiceFinancialBreakdown, calculateAggregatedFinancials } from '../../utils/feeBreakdown';
-import { Invoice, Payment, Student, PayrollRecord } from '../../types';
+import { Invoice, Payment, Student, PayrollRecord, Expense, ExpenseCategory } from '../../types';
 import {
   BarChart3,
   FileSpreadsheet,
   Receipt,
   Printer,
   TrendingUp,
+  TrendingDown,
   AlertCircle,
   CheckCircle2,
   DollarSign,
@@ -32,7 +33,12 @@ import {
   MessageSquare,
   Smartphone,
   Mail,
-  RotateCcw
+  RotateCcw,
+  Wallet,
+  Trash2,
+  Edit3,
+  ArrowDownRight,
+  ArrowUpRight
 } from 'lucide-react';
 import {
   AreaChart,
@@ -50,6 +56,19 @@ import {
   ResponsiveContainer
 } from 'recharts';
 
+const EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  'Utilities',
+  'Maintenance & Repairs',
+  'Teaching Supplies',
+  'Stationery & Printing',
+  'Fuel & Transport',
+  'Food & Feeding',
+  'Salaries & Allowances',
+  'Equipment & ICT',
+  'Events & Sports',
+  'Miscellaneous'
+];
+
 export const FinancialReportsPage: React.FC<{
   onOpenPaystack?: (invoice?: Invoice, customAmount?: number, studentName?: string, studentId?: string) => void;
 }> = ({ onOpenPaystack }) => {
@@ -57,6 +76,11 @@ export const FinancialReportsPage: React.FC<{
     students,
     invoices,
     payments,
+    expenses,
+    addExpense,
+    updateExpense,
+    deleteExpense,
+    clearAllExpenses,
     payrolls,
     reimbursements,
     resetAllReimbursements,
@@ -69,23 +93,57 @@ export const FinancialReportsPage: React.FC<{
     updateStudentArrears,
     academicYear,
     currentTerm,
+    currentUser,
     logAuditAction,
     sendBroadcast
   } = useSchool();
 
-  // 4 Primary Sub-tabs as explicitly requested:
+  // 5 Primary Sub-tabs:
   // 1. Ledger & Summary
   // 2. Student Fees Desk
   // 3. Students Fee Tracking & Arrears
   // 4. Staff Payroll Desk
+  // 5. Expenses & Expenditure
   const [activeSubTab, setActiveSubTab] = useState<
-    'ledger-summary' | 'fees-desk' | 'tracking-arrears' | 'payroll-desk'
+    'ledger-summary' | 'fees-desk' | 'tracking-arrears' | 'payroll-desk' | 'expenses-desk'
   >('ledger-summary');
 
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClassFilter, setSelectedClassFilter] = useState('all');
   const [selectedArrearsFilter, setSelectedArrearsFilter] = useState<'all' | 'unpaid' | 'partial' | 'paid'>('all');
+  const [ledgerTypeFilter, setLedgerTypeFilter] = useState<'all' | 'credit' | 'debit'>('all');
+
+  // Expenses Filter & Modal State
+  const [expenseSearch, setExpenseSearch] = useState('');
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<string>('all');
+  const [expenseStatusFilter, setExpenseStatusFilter] = useState<'all' | 'Paid' | 'Approved' | 'Pending'>('all');
+  const [expenseMethodFilter, setExpenseMethodFilter] = useState<string>('all');
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [expenseForm, setExpenseForm] = useState<{
+    voucherNo: string;
+    title: string;
+    category: ExpenseCategory;
+    amount: string;
+    date: string;
+    paymentMethod: 'Cash' | 'Bank Transfer' | 'Mobile Money' | 'Cheque';
+    paidTo: string;
+    status: 'Paid' | 'Approved' | 'Pending';
+    receiptRef: string;
+    notes: string;
+  }>({
+    voucherNo: '',
+    title: '',
+    category: 'Utilities',
+    amount: '',
+    date: new Date().toISOString().slice(0, 10),
+    paymentMethod: 'Cash',
+    paidTo: '',
+    status: 'Paid',
+    receiptRef: '',
+    notes: ''
+  });
 
   // Selected Item for Receipt / Invoice Modal view
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
@@ -211,6 +269,149 @@ export const FinancialReportsPage: React.FC<{
   const totalCompletedPaidFees = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   const totalPendingArrears = Math.max(0, cumulativeBillable - totalCompletedPaidFees);
 
+  // 2B. Institutional Expenses & Expenditure Metrics
+  const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const paidExpenses = expenses
+    .filter((e) => e.status === 'Paid')
+    .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const pendingExpenses = expenses
+    .filter((e) => e.status !== 'Paid')
+    .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const netCashflowBalance = totalCompletedPaidFees - totalExpenses;
+
+  const filteredExpenses = expenses.filter((exp) => {
+    const q = expenseSearch.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      exp.title.toLowerCase().includes(q) ||
+      exp.voucherNo.toLowerCase().includes(q) ||
+      exp.paidTo.toLowerCase().includes(q) ||
+      exp.category.toLowerCase().includes(q) ||
+      (exp.notes || '').toLowerCase().includes(q);
+    const matchesCategory = expenseCategoryFilter === 'all' || exp.category === expenseCategoryFilter;
+    const matchesStatus = expenseStatusFilter === 'all' || exp.status === expenseStatusFilter;
+    const matchesMethod = expenseMethodFilter === 'all' || exp.paymentMethod === expenseMethodFilter;
+    return matchesSearch && matchesCategory && matchesStatus && matchesMethod;
+  });
+
+  const expenseCategorySummary = EXPENSE_CATEGORIES.map((cat) => {
+    const items = expenses.filter((e) => e.category === cat);
+    const total = items.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    return {
+      category: cat,
+      shortName: cat.split('&')[0].trim(),
+      amount: total,
+      count: items.length
+    };
+  }).filter((c) => c.amount > 0);
+
+  const handleOpenNewExpense = () => {
+    setEditingExpenseId(null);
+    setExpenseForm({
+      voucherNo: '',
+      title: '',
+      category: 'Utilities',
+      amount: '',
+      date: new Date().toISOString().slice(0, 10),
+      paymentMethod: 'Cash',
+      paidTo: '',
+      status: 'Paid',
+      receiptRef: '',
+      notes: ''
+    });
+    setIsExpenseModalOpen(true);
+  };
+
+  const handleOpenEditExpense = (exp: Expense) => {
+    setEditingExpenseId(exp.id);
+    setExpenseForm({
+      voucherNo: exp.voucherNo,
+      title: exp.title,
+      category: exp.category,
+      amount: String(exp.amount),
+      date: exp.date,
+      paymentMethod: exp.paymentMethod,
+      paidTo: exp.paidTo,
+      status: exp.status,
+      receiptRef: exp.receiptRef || '',
+      notes: exp.notes || ''
+    });
+    setIsExpenseModalOpen(true);
+  };
+
+  const handleSaveExpenseSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsedAmount = Number(expenseForm.amount);
+    if (!expenseForm.title.trim() || !parsedAmount || parsedAmount <= 0) {
+      triggerToast('Please enter a valid expense title and amount greater than GHS 0.');
+      return;
+    }
+
+    if (editingExpenseId) {
+      updateExpense(editingExpenseId, {
+        voucherNo: expenseForm.voucherNo.trim() || undefined,
+        title: expenseForm.title.trim(),
+        category: expenseForm.category,
+        amount: parsedAmount,
+        date: expenseForm.date,
+        paymentMethod: expenseForm.paymentMethod,
+        paidTo: expenseForm.paidTo.trim() || 'Vendor / Supplier',
+        status: expenseForm.status,
+        receiptRef: expenseForm.receiptRef.trim() || undefined,
+        notes: expenseForm.notes.trim() || undefined
+      });
+      triggerToast(`Updated expenditure "${expenseForm.title.trim()}" (GHS ${parsedAmount.toLocaleString()})`);
+    } else {
+      const created = addExpense({
+        voucherNo: expenseForm.voucherNo.trim() || undefined,
+        title: expenseForm.title.trim(),
+        category: expenseForm.category,
+        amount: parsedAmount,
+        date: expenseForm.date,
+        paymentMethod: expenseForm.paymentMethod,
+        paidTo: expenseForm.paidTo.trim() || 'Vendor / Supplier',
+        recordedBy: currentUser?.name || 'Accounts Office',
+        status: expenseForm.status,
+        receiptRef: expenseForm.receiptRef.trim() || undefined,
+        notes: expenseForm.notes.trim() || undefined,
+        term: currentTerm,
+        academicYear
+      });
+      triggerToast(`Recorded expenditure ${created.voucherNo}: GHS ${parsedAmount.toLocaleString()}`);
+    }
+    setIsExpenseModalOpen(false);
+  };
+
+  // Unified General Ledger entries (Credits = Fee Payments, Debits = Expenses)
+  const combinedLedgerEntries = [
+    ...payments.map((p) => ({
+      id: `cr-${p.id}`,
+      ref: p.receiptNo || p.paymentRef || p.reference || p.id,
+      accountHead: p.studentName ? `Student Fees (${p.studentName})` : 'Student Tuition & Levies',
+      category: `${p.paymentMethod}${p.feeCategory ? ` • ${p.feeCategory}` : ''}`,
+      type: 'CREDIT' as const,
+      amount: Number(p.amount) || 0,
+      date: p.paymentDate || p.date || '',
+      status: 'Posted'
+    })),
+    ...expenses.map((exp) => ({
+      id: `db-${exp.id}`,
+      ref: exp.voucherNo,
+      accountHead: `${exp.title}${exp.paidTo ? ` (${exp.paidTo})` : ''}`,
+      category: `${exp.category} • ${exp.paymentMethod}`,
+      type: 'DEBIT' as const,
+      amount: Number(exp.amount) || 0,
+      date: exp.date,
+      status: exp.status
+    }))
+  ]
+    .filter((entry) => {
+      if (ledgerTypeFilter === 'credit') return entry.type === 'CREDIT';
+      if (ledgerTypeFilter === 'debit') return entry.type === 'DEBIT';
+      return true;
+    })
+    .sort((a, b) => new Date(b.date || '').getTime() - new Date(a.date || '').getTime());
+
   // 3. Staff Payroll Desk Metrics
   const monthlyPayrollCommitment =
     payrolls.reduce((sum, p) => {
@@ -319,11 +520,16 @@ export const FinancialReportsPage: React.FC<{
       csv += `Total Arrears (Manual Previous Debt),GHS ${totalArrears.toLocaleString()}\n`;
       csv += `Cumulative Billable (Current + Arrears),GHS ${cumulativeBillable.toLocaleString()}\n`;
       csv += `Total Completed / Paid,GHS ${totalCompletedPaidFees.toLocaleString()}\n`;
-      csv += `Net Outstanding Balance,GHS ${totalPendingArrears.toLocaleString()}\n\n`;
+      csv += `Net Outstanding Balance,GHS ${totalPendingArrears.toLocaleString()}\n`;
+      csv += `Total Expenditure (Expenses),GHS ${totalExpenses.toLocaleString()}\n`;
+      csv += `Net Cash Surplus / Balance (Collected - Expenses),GHS ${netCashflowBalance.toLocaleString()}\n\n`;
       csv += `--- GENERAL LEDGER TRANSACTIONS ---\n`;
-      csv += `Reference,Account,Category,Debit/Credit,Amount (GHS),Date\n`;
+      csv += `Reference,Account,Category,Debit/Credit,Amount (GHS),Date,Status\n`;
       payments.forEach((p) => {
-        csv += `"${p.receiptNo || p.reference}","Student Fees","Tuition Revenue","CREDIT",${p.amount},"${p.date}"\n`;
+        csv += `"${p.receiptNo || p.reference || p.paymentRef}","Student Fees (${p.studentName})","${p.paymentMethod}","CREDIT",${p.amount},"${p.paymentDate || p.date}","Posted"\n`;
+      });
+      expenses.forEach((exp) => {
+        csv += `"${exp.voucherNo}","${exp.title} (${exp.paidTo})","${exp.category} • ${exp.paymentMethod}","DEBIT",${exp.amount},"${exp.date}","${exp.status}"\n`;
       });
     } else if (activeSubTab === 'tracking-arrears') {
       csv += `--- STUDENT FEES TRACKING & ARREARS ---\n`;
@@ -341,6 +547,16 @@ export const FinancialReportsPage: React.FC<{
       payrolls.forEach((pr) => {
         const allowVal = typeof pr.allowances === 'number' ? pr.allowances : (pr.allowances?.housing || 0) + (pr.allowances?.transport || 0) + (pr.allowances?.medical || 0);
         csv += `"${pr.staffName}","Faculty/Staff",${pr.basicSalary},${allowVal},${pr.deductions.pension + pr.deductions.tax},${pr.netSalary},"${pr.paymentStatus || pr.status}"\n`;
+      });
+    } else if (activeSubTab === 'expenses-desk') {
+      csv += `--- INSTITUTIONAL EXPENDITURE LEDGER ---\n`;
+      csv += `Total Expenditure,GHS ${totalExpenses.toLocaleString()}\n`;
+      csv += `Paid Expenditure,GHS ${paidExpenses.toLocaleString()}\n`;
+      csv += `Pending / Approved Unpaid,GHS ${pendingExpenses.toLocaleString()}\n`;
+      csv += `Net Cash Surplus (Revenue Collected - Expenditure),GHS ${netCashflowBalance.toLocaleString()}\n\n`;
+      csv += `Voucher #,Date,Expense Title,Category,Paid To (Vendor),Payment Method,Receipt Ref,Recorded By,Amount (GHS),Status,Notes\n`;
+      filteredExpenses.forEach((exp) => {
+        csv += `"${exp.voucherNo}","${exp.date}","${exp.title.replace(/"/g, '""')}","${exp.category}","${exp.paidTo.replace(/"/g, '""')}","${exp.paymentMethod}","${exp.receiptRef || ''}","${exp.recordedBy}",${exp.amount},"${exp.status}","${(exp.notes || '').replace(/"/g, '""')}"\n`;
       });
     }
 
@@ -437,6 +653,25 @@ export const FinancialReportsPage: React.FC<{
           <Briefcase className={`w-4 h-4 ${activeSubTab === 'payroll-desk' ? 'text-amber-400' : 'text-emerald-700'}`} />
           4. Staff Payroll Desk
         </button>
+
+        <button
+          onClick={() => setActiveSubTab('expenses-desk')}
+          className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
+            activeSubTab === 'expenses-desk'
+              ? 'bg-emerald-900 text-white shadow-md'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+          }`}
+        >
+          <Wallet className={`w-4 h-4 ${activeSubTab === 'expenses-desk' ? 'text-amber-400' : 'text-rose-600'}`} />
+          <span>5. Expenses & Expenditure</span>
+          {expenses.length > 0 && (
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+              activeSubTab === 'expenses-desk' ? 'bg-amber-400 text-emerald-950' : 'bg-rose-100 text-rose-800'
+            }`}>
+              {expenses.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* ========================================================================= */}
@@ -518,6 +753,66 @@ export const FinancialReportsPage: React.FC<{
             </div>
           </div>
 
+          {/* Expenditure & Net Cashflow Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <div className="bg-white rounded-2xl p-4 border border-emerald-200 shadow-xs flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">Total Revenue Collected</span>
+                <div className="text-xl font-black text-emerald-900 font-['Outfit'] mt-1">
+                  +GHS {totalCompletedPaidFees.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </div>
+                <span className="text-[10px] text-slate-500">{payments.length} verified credit entries</span>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                <ArrowUpRight className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div
+              onClick={() => setActiveSubTab('expenses-desk')}
+              className="bg-white rounded-2xl p-4 border-2 border-rose-200 hover:border-rose-400 shadow-xs flex items-center justify-between cursor-pointer transition-all"
+              title="Click to open School Expenses & Expenditure Desk"
+            >
+              <div>
+                <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider block">Total Expenditure (Expenses)</span>
+                <div className="text-xl font-black text-rose-700 font-['Outfit'] mt-1">
+                  -GHS {totalExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </div>
+                <span className="text-[10px] text-rose-700 font-semibold">
+                  {expenses.length} voucher(s) • Click to record or manage →
+                </span>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center">
+                <ArrowDownRight className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className={`rounded-2xl p-4 border-2 shadow-xs flex items-center justify-between ${
+              netCashflowBalance >= 0
+                ? 'bg-emerald-50/40 border-emerald-300'
+                : 'bg-red-50/60 border-red-400'
+            }`}>
+              <div>
+                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                  Net Cash Position (Revenue − Expenses)
+                </span>
+                <div className={`text-xl font-black font-['Outfit'] mt-1 ${
+                  netCashflowBalance >= 0 ? 'text-emerald-950' : 'text-red-700'
+                }`}>
+                  {netCashflowBalance >= 0 ? '' : '-'}GHS {Math.abs(netCashflowBalance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </div>
+                <span className={`text-[10px] font-bold ${netCashflowBalance >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                  {netCashflowBalance >= 0 ? 'Operating Surplus' : 'Operating Deficit (Expenses Exceed Revenue)'}
+                </span>
+              </div>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                netCashflowBalance >= 0 ? 'bg-emerald-800 text-amber-300' : 'bg-red-600 text-white'
+              }`}>
+                {netCashflowBalance >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+              </div>
+            </div>
+          </div>
+
           {/* Audit Reconciliation Formula Strip */}
           <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
             <div className="flex items-center gap-3">
@@ -526,7 +821,7 @@ export const FinancialReportsPage: React.FC<{
               </div>
               <div>
                 <h4 className="font-bold text-sm font-['Outfit'] text-amber-300">Financial Audit & Reconciliation Formula</h4>
-                <p className="text-[11px] text-slate-300">Total Arrears is strictly separated from Current Term Total Amount:</p>
+                <p className="text-[11px] text-slate-300">Revenue, Arrears & Institutional Expenditure Reconciliation:</p>
               </div>
             </div>
 
@@ -537,30 +832,62 @@ export const FinancialReportsPage: React.FC<{
               <span className="text-amber-400 font-bold">=</span>
               <span className="bg-amber-400 text-emerald-950 px-2.5 py-1 rounded-lg font-bold">Cumulative: GHS {Math.round(cumulativeBillable).toLocaleString()}</span>
               <span className="text-slate-400">|</span>
-              <span className="bg-emerald-800 text-emerald-100 px-2.5 py-1 rounded-lg">Paid: GHS {Math.round(totalCompletedPaidFees).toLocaleString()}</span>
-              <span className="bg-rose-900/80 text-rose-200 px-2.5 py-1 rounded-lg">Net Balance: GHS {Math.round(totalPendingArrears).toLocaleString()}</span>
+              <span className="bg-emerald-800 text-emerald-100 px-2.5 py-1 rounded-lg">Collected: GHS {Math.round(totalCompletedPaidFees).toLocaleString()}</span>
+              <span className="bg-rose-800 text-rose-100 px-2.5 py-1 rounded-lg">Expenses: -GHS {Math.round(totalExpenses).toLocaleString()}</span>
+              <span className={`px-2.5 py-1 rounded-lg font-bold ${netCashflowBalance >= 0 ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+                Net Surplus: GHS {Math.round(netCashflowBalance).toLocaleString()}
+              </span>
             </div>
           </div>
 
           {/* General Ledger stream */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">Institutional General Ledger</h3>
-                <p className="text-xs text-slate-500">Double-entry audit reconciliation stream</p>
+                <p className="text-xs text-slate-500">Double-entry audit reconciliation stream (Fee Credits & Expenditure Debits)</p>
               </div>
-              <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full">
-                Ledger Balance: Reconciled
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setLedgerTypeFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg cursor-pointer transition-all ${ledgerTypeFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}
+                  >
+                    All ({payments.length + expenses.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLedgerTypeFilter('credit')}
+                    className={`px-2.5 py-1 rounded-lg cursor-pointer transition-all ${ledgerTypeFilter === 'credit' ? 'bg-emerald-700 text-white shadow-xs' : 'text-slate-500'}`}
+                  >
+                    Credits ({payments.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLedgerTypeFilter('debit')}
+                    className={`px-2.5 py-1 rounded-lg cursor-pointer transition-all ${ledgerTypeFilter === 'debit' ? 'bg-rose-700 text-white shadow-xs' : 'text-slate-500'}`}
+                  >
+                    Debits / Expenses ({expenses.length})
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenNewExpense}
+                  className="px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Record Expense
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4">Transaction Ref</th>
-                    <th className="py-3 px-4">Account Head</th>
-                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4">Transaction / Voucher Ref</th>
+                    <th className="py-3 px-4">Account Head / Description</th>
+                    <th className="py-3 px-4">Category & Channel</th>
                     <th className="py-3 px-4">Type</th>
                     <th className="py-3 px-4">Amount</th>
                     <th className="py-3 px-4">Date</th>
@@ -568,27 +895,49 @@ export const FinancialReportsPage: React.FC<{
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {payments.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50/80">
-                      <td className="py-3 px-4 font-mono font-bold text-slate-900">{p.receiptNo || p.reference}</td>
-                      <td className="py-3 px-4 font-semibold text-emerald-950">Student Tuition & Levies</td>
-                      <td className="py-3 px-4 text-slate-600">{p.paymentMethod}</td>
-                      <td className="py-3 px-4">
-                        <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">
-                          CREDIT
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-black text-emerald-800 font-mono">
-                        +GHS {p.amount.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-slate-500">{p.date}</td>
-                      <td className="py-3 px-4 text-right">
-                        <span className="text-emerald-700 font-semibold inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Posted
-                        </span>
+                  {combinedLedgerEntries.length > 0 ? (
+                    combinedLedgerEntries.map((entry) => (
+                      <tr key={entry.id} className="hover:bg-slate-50/80">
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">{entry.ref}</td>
+                        <td className={`py-3 px-4 font-semibold ${entry.type === 'CREDIT' ? 'text-emerald-950' : 'text-rose-950'}`}>
+                          {entry.accountHead}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600">{entry.category}</td>
+                        <td className="py-3 px-4">
+                          {entry.type === 'CREDIT' ? (
+                            <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">
+                              CREDIT
+                            </span>
+                          ) : (
+                            <span className="bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded text-[10px]">
+                              DEBIT (EXPENSE)
+                            </span>
+                          )}
+                        </td>
+                        <td className={`py-3 px-4 font-black font-mono ${entry.type === 'CREDIT' ? 'text-emerald-800' : 'text-rose-700'}`}>
+                          {entry.type === 'CREDIT' ? '+' : '-'}GHS {entry.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500">{entry.date}</td>
+                        <td className="py-3 px-4 text-right">
+                          <span className={`font-semibold inline-flex items-center gap-1 ${
+                            entry.type === 'CREDIT'
+                              ? 'text-emerald-700'
+                              : entry.status === 'Paid'
+                              ? 'text-rose-700'
+                              : 'text-amber-700'
+                          }`}>
+                            <CheckCircle2 className="w-3.5 h-3.5" /> {entry.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="py-10 text-center text-slate-400">
+                        No fee receipts or expenditure entries recorded yet.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1013,6 +1362,320 @@ export const FinancialReportsPage: React.FC<{
       )}
 
       {/* ========================================================================= */}
+      {/* 5. SUB-TAB: SCHOOL EXPENSES & EXPENDITURE DESK */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'expenses-desk' && (
+        <div className="space-y-6">
+          {/* Top 4 Expenditure KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-2xl p-5 border-2 border-rose-200 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-rose-800 uppercase tracking-wider">Total Expenditure</span>
+                <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center">
+                  <Wallet className="w-5 h-5" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-rose-950 font-['Outfit'] mt-2">
+                GHS {totalExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-xs text-rose-700 font-medium">{expenses.length} recorded voucher(s)</span>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Paid Outflows</span>
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-slate-900 font-['Outfit'] mt-2">
+                GHS {paidExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-xs text-emerald-700 font-medium">Disbursed & settled expenses</span>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Pending / Unpaid</span>
+                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+                  <Clock className="w-5 h-5" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-amber-950 font-['Outfit'] mt-2">
+                GHS {pendingExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-xs text-amber-700 font-medium">Awaiting payment settlement</span>
+            </div>
+
+            <div className={`rounded-2xl p-5 border-2 shadow-xs ${
+              netCashflowBalance >= 0 ? 'bg-emerald-50/40 border-emerald-300' : 'bg-red-50/60 border-red-400'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Net Surplus Balance</span>
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                  netCashflowBalance >= 0 ? 'bg-emerald-800 text-amber-300' : 'bg-red-600 text-white'
+                }`}>
+                  {netCashflowBalance >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                </div>
+              </div>
+              <div className={`text-2xl font-black font-['Outfit'] mt-2 ${
+                netCashflowBalance >= 0 ? 'text-emerald-950' : 'text-red-700'
+              }`}>
+                {netCashflowBalance >= 0 ? '' : '-'}GHS {Math.abs(netCashflowBalance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-xs text-slate-600 font-medium">Revenue Collected − Expenditure</span>
+            </div>
+          </div>
+
+          {/* Category Breakdown Chart & Summary (Shown when expenses exist) */}
+          {expenseCategorySummary.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">Expenditure Breakdown by Category</h3>
+                    <p className="text-xs text-slate-500">Visual distribution of school operating expenses (GHS)</p>
+                  </div>
+                </div>
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={expenseCategorySummary} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="shortName" stroke="#64748b" fontSize={10} />
+                      <YAxis stroke="#64748b" fontSize={10} tickFormatter={(v) => `₵${v}`} />
+                      <Tooltip
+                        formatter={(val: number) => [`GHS ${Number(val).toLocaleString()}`, 'Expenditure']}
+                        contentStyle={{ backgroundColor: '#064e3b', borderRadius: '12px', color: '#fff', fontSize: '11px', border: 'none' }}
+                      />
+                      <Bar dataKey="amount" fill="#be123c" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
+                <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">Category Totals</h3>
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                  {expenseCategorySummary
+                    .slice()
+                    .sort((a, b) => b.amount - a.amount)
+                    .map((item) => {
+                      const pct = totalExpenses > 0 ? Math.round((item.amount / totalExpenses) * 100) : 0;
+                      return (
+                        <div key={item.category} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-800">{item.category}</span>
+                            <span className="font-mono font-black text-rose-800">
+                              GHS {item.amount.toLocaleString()} <span className="text-[10px] text-slate-400 font-normal">({pct}%)</span>
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-rose-600 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Filter & Action Toolbar */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 font-['Outfit']">School Expenditure & Expense Vouchers</h3>
+                <p className="text-xs text-slate-500">
+                  Record, categorize, and audit every school operating expense for accurate financial statements.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {expenses.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await clearAllExpenses();
+                      triggerToast('All expenditure records cleared from ledger.');
+                    }}
+                    className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Clear Expenses
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleOpenNewExpense}
+                  className="px-4 py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 text-amber-300" />
+                  <span>Record New Expense</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="relative lg:col-span-2">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={expenseSearch}
+                  onChange={(e) => setExpenseSearch(e.target.value)}
+                  placeholder="Search voucher #, title, vendor, notes..."
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                />
+              </div>
+              <select
+                value={expenseCategoryFilter}
+                onChange={(e) => setExpenseCategoryFilter(e.target.value)}
+                className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700"
+              >
+                <option value="all">All Categories</option>
+                {EXPENSE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <select
+                value={expenseMethodFilter}
+                onChange={(e) => setExpenseMethodFilter(e.target.value)}
+                className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700"
+              >
+                <option value="all">All Methods</option>
+                <option value="Cash">Cash</option>
+                <option value="Mobile Money">Mobile Money</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Cheque">Cheque</option>
+              </select>
+              <select
+                value={expenseStatusFilter}
+                onChange={(e) => setExpenseStatusFilter(e.target.value as 'all' | 'Paid' | 'Approved' | 'Pending')}
+                className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700"
+              >
+                <option value="all">All Statuses</option>
+                <option value="Paid">Paid</option>
+                <option value="Approved">Approved</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Expenses Ledger Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">Voucher #</th>
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4">Expense Description</th>
+                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4">Paid To (Vendor)</th>
+                    <th className="py-3 px-4">Method</th>
+                    <th className="py-3 px-4">Amount (GHS)</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredExpenses.length > 0 ? (
+                    filteredExpenses.map((exp) => (
+                      <tr key={exp.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">{exp.voucherNo}</td>
+                        <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{exp.date}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-slate-900">{exp.title}</div>
+                          {(exp.notes || exp.receiptRef) && (
+                            <div className="text-[10px] text-slate-500">
+                              {exp.receiptRef ? `Ref: ${exp.receiptRef}` : ''}
+                              {exp.receiptRef && exp.notes ? ' • ' : ''}
+                              {exp.notes || ''}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-semibold text-[10px]">
+                            {exp.category}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-medium text-slate-700">{exp.paidTo}</td>
+                        <td className="py-3 px-4 text-slate-600">{exp.paymentMethod}</td>
+                        <td className="py-3 px-4 font-mono font-black text-rose-700">
+                          -GHS {Number(exp.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            exp.status === 'Paid'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : exp.status === 'Approved'
+                              ? 'bg-sky-100 text-sky-800'
+                              : 'bg-amber-100 text-amber-900'
+                          }`}>
+                            {exp.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5">
+                            {exp.status !== 'Paid' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateExpense(exp.id, { status: 'Paid' });
+                                  triggerToast(`Marked voucher ${exp.voucherNo} as Paid.`);
+                                }}
+                                className="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-[10px] cursor-pointer"
+                                title="Mark as Paid"
+                              >
+                                Mark Paid
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditExpense(exp)}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                              title="Edit Expense"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                deleteExpense(exp.id);
+                                triggerToast(`Deleted expenditure voucher ${exp.voucherNo}.`);
+                              }}
+                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 cursor-pointer"
+                              title="Delete Expense"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={9} className="py-12 text-center">
+                        <Wallet className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-xs font-bold text-slate-700">No Expenditure Records Found</p>
+                        <p className="text-[11px] text-slate-400 mt-1 mb-3">
+                          Record utility bills, teaching supplies, maintenance, fuel, and other school expenses for accurate reporting.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleOpenNewExpense}
+                          className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-amber-300" /> Record First Expense
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* OFFICIAL INVOICE MODAL VIEW (Grace White Dove School Complex) */}
       {/* ========================================================================= */}
       {viewingInvoice && (() => {
@@ -1427,6 +2090,180 @@ export const FinancialReportsPage: React.FC<{
                 >
                   <Send className="w-3.5 h-3.5 text-amber-300" />
                   <span>Send Reminder ({reminderForm.channel})</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ADD / EDIT SCHOOL EXPENSE MODAL */}
+      {/* ========================================================================= */}
+      {isExpenseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150 my-8">
+            <div className="bg-gradient-to-r from-emerald-950 via-emerald-900 to-emerald-800 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-bold">
+                  <Wallet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold font-['Outfit']">
+                    {editingExpenseId ? 'Edit School Expenditure Voucher' : 'Record New School Expense'}
+                  </h3>
+                  <p className="text-xs text-emerald-200">
+                    {academicYear} • {currentTerm} Expenditure Ledger
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsExpenseModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveExpenseSubmit} className="p-6 space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Expense Title / Description <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={expenseForm.title}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, title: e.target.value })}
+                  placeholder="e.g., ECG Prepaid Electricity Top-up / Whiteboard Markers"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Expense Category <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={expenseForm.category}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value as ExpenseCategory })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 font-semibold focus:ring-2 focus:ring-emerald-600 outline-none"
+                  >
+                    {EXPENSE_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Amount (GHS) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0.01"
+                    step="any"
+                    value={expenseForm.amount}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 font-mono font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Paid To (Vendor / Payee) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={expenseForm.paidTo}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, paidTo: e.target.value })}
+                    placeholder="e.g., ECG / Melcom / Fuel Station"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Expense Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={expenseForm.date}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 font-mono focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Payment Method</label>
+                  <select
+                    value={expenseForm.paymentMethod}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, paymentMethod: e.target.value as 'Cash' | 'Bank Transfer' | 'Mobile Money' | 'Cheque' })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 font-semibold"
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Mobile Money">Mobile Money</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Cheque">Cheque</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Status</label>
+                  <select
+                    value={expenseForm.status}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, status: e.target.value as 'Paid' | 'Approved' | 'Pending' })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 font-semibold"
+                  >
+                    <option value="Paid">Paid</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Pending">Pending</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Receipt / Ref #</label>
+                  <input
+                    type="text"
+                    value={expenseForm.receiptRef}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, receiptRef: e.target.value })}
+                    placeholder="Optional"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Notes / Justification</label>
+                <textarea
+                  rows={2}
+                  value={expenseForm.notes}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, notes: e.target.value })}
+                  placeholder="Optional details about purpose or items purchased..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-slate-900 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsExpenseModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-amber-300" />
+                  <span>{editingExpenseId ? 'Save Changes' : 'Record Expense'}</span>
                 </button>
               </div>
             </form>

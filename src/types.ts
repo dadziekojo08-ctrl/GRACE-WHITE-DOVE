@@ -266,6 +266,36 @@ export interface Payment {
   admissionNo?: string;
 }
 
+export type ExpenseCategory =
+  | 'Utilities'
+  | 'Maintenance & Repairs'
+  | 'Teaching Supplies'
+  | 'Stationery & Printing'
+  | 'Fuel & Transport'
+  | 'Food & Feeding'
+  | 'Salaries & Allowances'
+  | 'Equipment & ICT'
+  | 'Events & Sports'
+  | 'Miscellaneous';
+
+export interface Expense {
+  id: string;
+  voucherNo: string;
+  title: string;
+  category: ExpenseCategory;
+  amount: number;
+  date: string;
+  paymentMethod: 'Cash' | 'Bank Transfer' | 'Mobile Money' | 'Cheque';
+  paidTo: string;
+  recordedBy: string;
+  approvedBy?: string;
+  status: 'Paid' | 'Pending' | 'Approved';
+  receiptRef?: string;
+  notes?: string;
+  term: string;
+  academicYear: string;
+}
+
 export interface Exam {
   id: string;
   title: string;

@@ -5,6 +5,7 @@ import {
   FeeStructure,
   Invoice,
   Payment,
+  Expense,
   Exam,
   ExamSchedule,
   MarkEntry,
@@ -55,6 +56,11 @@ export const initialInvoices: Invoice[] = [];
 // 6. PAYMENTS (Empty for fresh entries)
 // ==========================================
 export const initialPayments: Payment[] = [];
+
+// ==========================================
+// 6B. EXPENSES / EXPENDITURE (Empty for fresh entries)
+// ==========================================
+export const initialExpenses: Expense[] = [];
 
 // ==========================================
 // 7. EXAMINATIONS (Empty for fresh entries)

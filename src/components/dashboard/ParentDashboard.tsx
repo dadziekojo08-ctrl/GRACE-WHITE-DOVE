@@ -12,6 +12,7 @@ import {
   Printer,
   Download,
   AlertCircle,
+  AlertTriangle,
   FileText,
   Award,
   BookOpen,
@@ -209,39 +210,98 @@ export const ParentDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* 1B. RED ALERT BANNER FOR PARENTS OWING SCHOOL FEES */}
+      {balanceDue > 0 && (
+        <div
+          role="alert"
+          className="rounded-2xl bg-red-50 border-2 border-red-500 p-4 sm:p-5 shadow-md shadow-red-100/80 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-200"
+        >
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                  Red Alert • Fee Arrears Notice
+                </span>
+                <span className="text-xs font-bold text-red-800">
+                  {ward.firstName} {ward.lastName} ({ward.className})
+                </span>
+              </div>
+              <h3 className="text-sm sm:text-base font-black text-red-950 font-['Outfit'] mt-1">
+                Outstanding School Fees Owing: GHS {balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </h3>
+              <p className="text-xs text-red-800 mt-0.5 leading-relaxed">
+                Kindly note that your ward currently has an unpaid fee balance of{' '}
+                <strong className="font-mono text-red-950">GHS {balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>{' '}
+                for {academicYear} ({currentTerm}). Please make a payment to clear this balance.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => openPaystack('Combined', balanceDue)}
+              className="bg-red-600 hover:bg-red-700 text-white font-extrabold px-5 py-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-red-600/25 transition-all hover:scale-[1.02] cursor-pointer whitespace-nowrap"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>Pay Owing Fees Now</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 2. SUMMARY METRICS TILES */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Outstanding Fees */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+        <div
+          className={`p-5 rounded-2xl shadow-xs flex flex-col justify-between border-2 transition-all ${
+            balanceDue > 0
+              ? 'bg-red-50/40 border-red-400'
+              : 'bg-white border-slate-200'
+          }`}
+        >
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">School Fees Balance</span>
-              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                <DollarSign className="w-4 h-4" />
+              <span className={`text-xs font-bold uppercase tracking-wider ${balanceDue > 0 ? 'text-red-800' : 'text-slate-400'}`}>
+                School Fees Balance
+              </span>
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                  balanceDue > 0
+                    ? 'bg-red-600 text-white'
+                    : 'bg-emerald-50 text-emerald-700'
+                }`}
+              >
+                {balanceDue > 0 ? <AlertTriangle className="w-4 h-4" /> : <DollarSign className="w-4 h-4" />}
               </div>
             </div>
             <div className="mt-3">
-              <span className="text-2xl font-black text-slate-900 font-['Outfit']">
+              <span className={`text-2xl font-black font-['Outfit'] ${balanceDue > 0 ? 'text-red-700' : 'text-slate-900'}`}>
                 GHS {balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </span>
-              <p className="text-[11px] text-slate-500 mt-1">
+              <p className={`text-[11px] mt-1 ${balanceDue > 0 ? 'text-red-800 font-medium' : 'text-slate-500'}`}>
                 Total Bill: GHS {totalBilled.toLocaleString()} • Paid & Deducted: GHS {totalPaid.toLocaleString()}
               </p>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+          <div className={`mt-4 pt-3 border-t flex items-center justify-between ${balanceDue > 0 ? 'border-red-200' : 'border-slate-100'}`}>
             <span
               className={`text-[10px] font-extrabold px-2 py-0.5 rounded ${
                 isFullyCleared
                   ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-amber-100 text-amber-900'
+                  : 'bg-red-600 text-white'
               }`}
             >
-              {isFullyCleared ? 'Fully Cleared' : currentInvoice.status}
+              {isFullyCleared ? 'Fully Cleared' : `Owing • ${currentInvoice.status}`}
             </span>
             <button
               onClick={() => openPaystack('Combined', balanceDue > 0 ? balanceDue : 500)}
-              className="text-[11px] font-bold text-[#0ba4db] hover:underline flex items-center gap-1 cursor-pointer"
+              className={`text-[11px] font-bold hover:underline flex items-center gap-1 cursor-pointer ${
+                balanceDue > 0 ? 'text-red-700' : 'text-[#0ba4db]'
+              }`}
             >
               Pay Now →
             </button>

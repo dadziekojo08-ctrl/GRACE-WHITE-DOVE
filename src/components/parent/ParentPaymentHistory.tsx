@@ -17,7 +17,8 @@ import {
   ExternalLink,
   ChevronRight,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { useSchool } from '../../context/SchoolContext';
 import { Payment, Student } from '../../types';
@@ -245,6 +246,53 @@ export const ParentPaymentHistory: React.FC<ParentPaymentHistoryProps> = ({ onOp
         </div>
       </div>
 
+      {/* 1B. RED ALERT BANNER FOR OUTSTANDING SCHOOL FEES */}
+      {outstandingBalance > 0 && (
+        <div
+          role="alert"
+          className="rounded-2xl bg-red-50 border-2 border-red-500 p-4 sm:p-5 shadow-md shadow-red-100/80 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-200"
+        >
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                  Red Alert • Fee Arrears Owing
+                </span>
+                <span className="text-xs font-bold text-red-800">
+                  {academicYear} • {currentTerm}
+                </span>
+              </div>
+              <h3 className="text-sm sm:text-base font-black text-red-950 font-['Outfit'] mt-1">
+                Unpaid School Fees Balance: GHS {outstandingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </h3>
+              <p className="text-xs text-red-800 mt-0.5 leading-relaxed">
+                Your account currently has an outstanding school fees balance. Please pay via Paystack or the school accounts office to avoid arrears penalties.
+              </p>
+            </div>
+          </div>
+          {onOpenPaystack && (
+            <button
+              type="button"
+              onClick={() =>
+                onOpenPaystack(
+                  undefined,
+                  outstandingBalance,
+                  activeWard ? `${activeWard.firstName} ${activeWard.lastName}` : 'Ward',
+                  activeWard?.id
+                )
+              }
+              className="bg-red-600 hover:bg-red-700 text-white font-extrabold px-5 py-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-red-600/25 cursor-pointer shrink-0"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>Pay Owing Fees Now</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 2. Top Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center gap-4">
@@ -281,25 +329,33 @@ export const ParentPaymentHistory: React.FC<ParentPaymentHistoryProps> = ({ onOp
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center gap-4">
+        <div className={`rounded-2xl p-5 shadow-xs flex items-center gap-4 border-2 ${
+          outstandingBalance === 0
+            ? 'bg-white border-slate-200'
+            : 'bg-red-50/50 border-red-400'
+        }`}>
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border ${
             outstandingBalance === 0
               ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-              : 'bg-amber-50 text-amber-700 border-amber-200'
+              : 'bg-red-600 text-white border-red-600'
           }`}>
-            <Clock className="w-6 h-6" />
+            {outstandingBalance === 0 ? <Clock className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
           </div>
           <div>
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+            <span className={`text-[11px] font-bold uppercase tracking-wider block ${
+              outstandingBalance === 0 ? 'text-slate-400' : 'text-red-800'
+            }`}>
               Outstanding Balance
             </span>
             <span className={`text-xl sm:text-2xl font-black font-mono ${
-              outstandingBalance === 0 ? 'text-emerald-700' : 'text-amber-900'
+              outstandingBalance === 0 ? 'text-emerald-700' : 'text-red-700'
             }`}>
               GHS {outstandingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </span>
-            <span className="text-[10px] font-semibold block mt-0.5 text-slate-500">
-              {outstandingBalance === 0 ? '✓ Fully Cleared' : 'Due for term settlement'}
+            <span className={`text-[10px] font-bold block mt-0.5 ${
+              outstandingBalance === 0 ? 'text-slate-500' : 'text-red-700'
+            }`}>
+              {outstandingBalance === 0 ? '✓ Fully Cleared' : 'RED ALERT: Owing School Fees'}
             </span>
           </div>
         </div>

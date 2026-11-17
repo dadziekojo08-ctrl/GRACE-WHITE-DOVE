@@ -83,6 +83,29 @@
         "assignedClass": { "type": "string" }
       },
       "required": ["id", "name", "role"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Institutional expenditure and operating expense record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "voucherNo": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "paidTo": { "type": "string" },
+        "recordedBy": { "type": "string" },
+        "approvedBy": { "type": "string" },
+        "status": { "type": "string" },
+        "receiptRef": { "type": "string" },
+        "notes": { "type": "string" },
+        "term": { "type": "string" },
+        "academicYear": { "type": "string" }
+      },
+      "required": ["id", "voucherNo", "title", "category", "amount", "date", "status"]
     }
   },
   "firestore": {
@@ -101,6 +124,10 @@
     "/authUsers/{userId}": {
       "schema": "AuthUser",
       "description": "User profiles and credentials"
+    },
+    "/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "School operating expenditure records"
     }
   }
 }

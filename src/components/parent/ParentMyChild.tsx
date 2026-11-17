@@ -11,6 +11,7 @@ import {
   Calendar,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   FileText,
   User,
   BookOpen,
@@ -215,6 +216,55 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
         </div>
       </div>
 
+      {/* 1B. RED ALERT BANNER FOR PARENTS OWING SCHOOL FEES */}
+      {balanceDue > 0 && (
+        <div
+          role="alert"
+          className="rounded-2xl bg-red-50 border-2 border-red-500 p-4 sm:p-5 shadow-md shadow-red-100/80 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-200"
+        >
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                  Red Alert • Fee Balance Owing
+                </span>
+                <span className="text-xs font-bold text-red-800">
+                  {ward.firstName} {ward.lastName} • {ward.className}
+                </span>
+              </div>
+              <h3 className="text-sm sm:text-base font-black text-red-950 font-['Outfit'] mt-1">
+                Amount Owing: GHS {balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </h3>
+              <p className="text-xs text-red-800 mt-0.5 leading-relaxed">
+                School fees are outstanding for {academicYear} ({currentTerm}). Kindly settle the owing balance via Paystack or the school accounts desk.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {currentTab !== 'school-fees' && (
+              <button
+                type="button"
+                onClick={() => setCurrentTab('school-fees')}
+                className="bg-white hover:bg-red-100 text-red-800 border border-red-300 font-bold px-3.5 py-2.5 rounded-xl text-xs cursor-pointer"
+              >
+                View Fee Breakdown
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => openPaystackForCategory('Combined', balanceDue)}
+              className="bg-red-600 hover:bg-red-700 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md shadow-red-600/25 cursor-pointer"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>Pay Owing Fees</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 2. SUB-MENU TABS: ACADEMIC REPORT & SCHOOL FEES */}
       <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl w-fit border border-slate-200">
         <button
@@ -232,12 +282,16 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
           onClick={() => setCurrentTab('school-fees')}
           className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
             currentTab === 'school-fees'
-              ? 'bg-emerald-950 text-amber-400 shadow-xs'
+              ? balanceDue > 0
+                ? 'bg-red-600 text-white shadow-xs'
+                : 'bg-emerald-950 text-amber-400 shadow-xs'
+              : balanceDue > 0
+              ? 'bg-red-50 text-red-800 border border-red-300 hover:bg-red-100'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
           }`}
         >
           <CreditCard className="w-4 h-4" />
-          School Fees ({isFullyCleared ? 'Fully Cleared • GHS 0.00' : `Balance: GHS ${balanceDue.toLocaleString()}`})
+          School Fees ({isFullyCleared ? 'Fully Cleared • GHS 0.00' : `Owing: GHS ${balanceDue.toLocaleString()}`})
         </button>
       </div>
 
@@ -477,10 +531,14 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                   <ShieldCheck className="w-6 h-6 text-emerald-600" />
                 </div>
 
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className={`p-4 rounded-xl border-2 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  balanceDue > 0 ? 'bg-red-50/70 border-red-400' : 'bg-white border-slate-200'
+                }`}>
                   <div>
-                    <span className="text-xs font-semibold text-slate-500">Outstanding Balance:</span>
-                    <div className="text-3xl font-black text-slate-900 font-['Outfit'] mt-0.5">
+                    <span className={`text-xs font-bold ${balanceDue > 0 ? 'text-red-800' : 'text-slate-500'}`}>
+                      {balanceDue > 0 ? 'Outstanding School Fees Owing:' : 'Outstanding Balance:'}
+                    </span>
+                    <div className={`text-3xl font-black font-['Outfit'] mt-0.5 ${balanceDue > 0 ? 'text-red-700' : 'text-slate-900'}`}>
                       GHS {balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </div>
                     {totalPaid > 0 && (
@@ -493,10 +551,10 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                   {balanceDue > 0 ? (
                     <button
                       onClick={() => openPaystackForCategory('Combined', balanceDue)}
-                      className="bg-[#0ba4db] hover:bg-[#088bbb] text-white font-extrabold px-6 py-3.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#0ba4db]/30 transition-all hover:scale-[1.02] cursor-pointer"
+                      className="bg-red-600 hover:bg-red-700 text-white font-extrabold px-6 py-3.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 transition-all hover:scale-[1.02] cursor-pointer"
                     >
                       <CreditCard className="w-4 h-4" />
-                      <span>Pay with Paystack Now</span>
+                      <span>Pay Owing Fees Now</span>
                     </button>
                   ) : (
                     <div className="bg-emerald-100 text-emerald-800 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2">
@@ -518,8 +576,8 @@ export const ParentMyChild: React.FC<{ initialTab?: ChildTab }> = ({ initialTab 
                     <h3 className="font-bold text-sm text-slate-900">Official Fee Statement & Category Allocation</h3>
                     <p className="text-xs text-slate-400">Invoice Number: <strong className="text-slate-700">{currentInvoice.invoiceNo}</strong></p>
                   </div>
-                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${isFullyCleared ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
-                    {isFullyCleared ? 'Fully Cleared' : currentInvoice.status}
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${isFullyCleared ? 'bg-emerald-100 text-emerald-800' : 'bg-red-600 text-white'}`}>
+                    {isFullyCleared ? 'Fully Cleared' : `Owing • ${currentInvoice.status}`}
                   </span>
                 </div>
 

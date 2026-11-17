@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { NavigationTab } from '../../types';
+import { computeWardFinancials } from '../../utils/feeBreakdown';
 import {
   LayoutDashboard,
   Users,
@@ -140,7 +141,7 @@ export const Sidebar: React.FC<{
   isMobileOpen?: boolean;
   onCloseMobile: () => void;
 }> = ({ isOpenMobile, isMobileOpen, onCloseMobile }) => {
-  const { activeTab, setActiveTab, activeRole, currentUser, logout } = useSchool();
+  const { activeTab, setActiveTab, activeRole, currentUser, logout, students, invoices, payments, academicYear, currentTerm } = useSchool();
   const mobileOpen = isOpenMobile ?? isMobileOpen ?? false;
 
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
@@ -159,6 +160,21 @@ export const Sidebar: React.FC<{
   const isParentRole = !isSuperAdmin && activeRole === 'Parent';
   const isAccountantRole = !isSuperAdmin && activeRole === 'Accountant';
   const categories = ['Core Academic', 'Financial & Admin', 'Logistics & Comms', 'System & Reports'] as const;
+
+  const parentWardBalance = useMemo(() => {
+    if (!isParentRole || !students || students.length === 0) return 0;
+    const ward =
+      (currentUser?.studentId &&
+        students.find((s) => s.id === currentUser.studentId || s.admissionNo === currentUser.studentId)) ||
+      students.find(
+        (s) =>
+          (currentUser?.email && s.guardianEmail?.toLowerCase() === currentUser.email.toLowerCase()) ||
+          (currentUser?.phone && s.guardianPhone === currentUser.phone)
+      ) ||
+      students[0];
+    if (!ward) return 0;
+    return computeWardFinancials(ward, invoices, payments, academicYear, currentTerm).balanceDue;
+  }, [isParentRole, currentUser, students, invoices, payments, academicYear, currentTerm]);
 
   return (
     <>
@@ -239,7 +255,14 @@ export const Sidebar: React.FC<{
                           )}
                         </div>
                       </div>
-                      {isActive && <ChevronRight className="w-3.5 h-3.5 text-emerald-950 shrink-0" />}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {parentWardBalance > 0 && item.id === 'my-child' && (
+                          <span className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                            Owing
+                          </span>
+                        )}
+                        {isActive && <ChevronRight className="w-3.5 h-3.5 text-emerald-950 shrink-0" />}
+                      </div>
                     </button>
                   );
                 })}
